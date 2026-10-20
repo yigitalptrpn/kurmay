@@ -109,6 +109,26 @@ function composeSystemPrompt(
   return parts.join("\n\n");
 }
 
+/**
+ * Kullanıcı talimatını (Ayarlar → config.userPrompt) system prompt'un sonuna ekler.
+ * Ajan başına derlenmiş prompt'a gömülmez, koşu anında eklenir — böylece değişiklik
+ * ajanlar yeniden yüklenmeden sıradaki görevde geçerli olur. Talimat yalnızca
+ * kullanıcıya yazılan metinlere uygulanır; şema alan adları/enum değerleri ve koda
+ * yazılanlar etkilenmemeli (Türkçe enum structured output'u bozar).
+ */
+export function withUserPrompt(systemPrompt: string, userPrompt: string | undefined): string {
+  const text = userPrompt?.trim();
+  if (!text) return systemPrompt;
+  return (
+    systemPrompt +
+    "\n\n## Kullanıcının talimatları (her zaman geçerli)\n\n" +
+    text +
+    "\n\nBu talimatları kullanıcıya yazdığın metinlerde (özet, cevap, açıklama, varsayım) uygula. " +
+    "Çıktı şemasının alan adlarını ve sabit değerlerini (ör. route, action) değiştirmez; " +
+    "kod, kod yorumu ve dosya içeriği yazarken yalnızca kodla ilgili talimatlar geçerlidir."
+  );
+}
+
 function validateEdges(
   key: string,
   config: AgentNodeConfig,

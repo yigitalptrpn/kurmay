@@ -89,6 +89,16 @@ input.sw:disabled { opacity:.5; cursor:default; }
 .chkl { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
 .rfoot { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
 #rMsg, #xMsg { font-size:13px; }
+.rmodes { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px; margin-top:4px; }
+.rmode { position:relative; display:block; padding:10px 12px; border:1px solid var(--border); border-radius:var(--md-shape-md); background:var(--bg); cursor:pointer; transition:border-color var(--md-motion), background var(--md-motion); }
+.rmode input { position:absolute; opacity:0; pointer-events:none; }
+.rmode b { display:block; font-size:13.5px; }
+.rmode span { display:block; font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.35; }
+.rmode:hover { border-color:var(--teal); }
+.rmode:has(input:checked) { border-color:var(--teal); background:var(--tealBg); box-shadow:inset 0 0 0 1px var(--teal); }
+.rmode:has(input:focus-visible) { outline:2px solid var(--md-primary); outline-offset:2px; }
+#rSummary { font-size:12.5px; margin-top:10px; }
+#resCard:not(.custom) .rcustom { display:none; }
 .mtab { width:100%; max-width:460px; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
 .mtab td { padding:4px 8px 4px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
 .mtab td.n { text-align:right; white-space:nowrap; font-family:var(--font-mono); }
@@ -135,6 +145,24 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="fhint" style="font-size:12.5px">Açıkken Analist'in planı hazır olunca onay kartı açılmaz, plan düğmeye basmadan Saha Timi'ne geçer. Plan boş ya da okunamaz gelirse onayın yine sorulur. Sıradaki görevde geçerli.</div>
   </div>
   <input type="checkbox" role="switch" class="sw" id="fwdSw" aria-label="Planı Saha Timi'ne otomatik ilet">
+</div>
+
+<!-- Kullanıcı talimatı: her ajanın talimatının sonuna eklenen kişisel tercih (hitap, üslup).
+     config.json'daki userPrompt — Kaydet'e basınca anında uygulanır, üstteki Kaydet'i beklemez. -->
+<div class="card" id="upCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Kullanıcı talimatı <span id="upState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Buraya yazdığın her ajanın talimatına eklenir — sana nasıl hitap etsinler, nasıl cevap versinler. Örnek: <i>Bana "gardaşım" diye hitap et.</i> Sıradaki görevde geçerli.</div>
+    </div>
+  </div>
+  <textarea id="upText" rows="3" maxlength="4000" spellcheck="false" aria-label="Kullanıcı talimatı" placeholder="Bana &quot;gardaşım&quot; diye hitap et." style="width:100%;margin-top:12px;resize:vertical;min-height:72px"></textarea>
+  <div class="rfoot" style="margin-top:8px">
+    <button class="primary" id="upSave" type="button" disabled>Kaydet</button>
+    <span class="hint" id="upCount"></span>
+    <span id="upMsg"></span>
+  </div>
 </div>
 
 <div class="card" style="margin-bottom:14px">
@@ -197,16 +225,18 @@ input.sw:disabled { opacity:.5; cursor:default; }
   <div class="fhint" style="margin-top:8px">Kaydettikten sonra servisi yeniden başlat. Anahtar ayar dosyasına düz metin olarak yazılır — dosyayı git'e gönderirken dikkat et.</div>
 </div>
 
-<div class="card" style="margin-bottom:14px">
+<div class="card" id="resCard" style="margin-bottom:14px">
   <div class="label">Bağlantı dayanıklılığı</div>
   <div class="intro">Model sunucusu meşgul olduğunda (503), yanıt vermediğinde (zaman aşımı) ya da yanıt akışı yarıda kesildiğinde ajan durmaz:
-    bekler, aynı konuşmayı sürdürerek yeniden dener, görevi baştan göndermez. <b>Uygula</b> ile hemen geçerli olur — yeniden başlatma
-    gerekmez, o an bekleyen ajanlar da sıradaki denemeden itibaren yeni ayarı kullanır.</div>
-  <div class="gbar">
+    bekler, aynı konuşmayı sürdürerek yeniden dener, görevi baştan göndermez. Bir mod seç — hemen geçerli olur, yeniden başlatma
+    gerekmez, o an bekleyen ajanlar da sıradaki denemeden itibaren yeni ayarı kullanır. Ayarları tek tek vermek için <b>Özel</b>.</div>
+  <div class="rmodes" role="radiogroup" aria-label="Yeniden deneme modu" id="rModes"></div>
+  <div class="fhint" id="rSummary"></div>
+  <div class="gbar rcustom" style="margin-top:12px">
     <label class="chkl"><input type="checkbox" id="rEnabled"> Hata olunca yeniden dene</label>
     <label class="chkl" title="Aynı anda kopan çok sayıda kullanıcı sunucuya aynı saniyede geri yüklenmesin"><input type="checkbox" id="rJitter"> Bekleme sürelerini rastgele dağıt</label>
   </div>
-  <div class="rgrid">
+  <div class="rgrid rcustom">
     <div><label class="minl" for="rInitial">İlk bekleme (saniye)</label><input type="number" id="rInitial" min="0" step="1" placeholder="5">
       <div class="fhint">Her denemede ikiye katlanır. Ajan ilerleyince baştan başlar.</div></div>
     <div><label class="minl" for="rMax">En uzun bekleme (saniye)</label><input type="number" id="rMax" min="0" step="1" placeholder="60">
@@ -223,8 +253,8 @@ input.sw:disabled { opacity:.5; cursor:default; }
       <div class="fhint">Tek istek, ajan kapanmadan kaç kez yeniden denensin (en fazla 15). Bitince yukarıdaki beklemeli deneme devreye girer.</div></div>
   </div>
   <div class="rfoot">
-    <button class="primary" id="rApply" type="button">Uygula</button>
-    <button id="rDefaults" type="button" title="Alanları varsayılana döndürür — Uygula'ya basınca geçerli olur">Varsayılanlar</button>
+    <button class="primary rcustom" id="rApply" type="button">Uygula</button>
+    <button class="rcustom" id="rDefaults" type="button" title="Alanları varsayılana döndürür — Uygula'ya basınca geçerli olur">Varsayılanlar</button>
     <span id="rMsg"></span>
   </div>
 </div>
@@ -679,6 +709,40 @@ $("fwdSw").addEventListener("change", async ()=>{
   renderFwdCard();
 });
 
+// Kullanıcı talimatı kartı: config.userPrompt (POST /user-prompt, canlı)
+function fillUserPrompt(){
+  $("upText").value = (cfg && cfg.userPrompt) || "";
+  renderUpCard();
+}
+function renderUpCard(){
+  const saved = (cfg && cfg.userPrompt) || "", cur = $("upText").value;
+  const on = !!saved.trim();
+  $("upState").textContent = on ? "tanımlı" : "boş"; $("upState").className = "secc-st" + (on ? " on" : "");
+  $("upSave").disabled = cur.trim() === saved.trim();
+  $("upCount").textContent = cur.length > 3000 ? `${cur.length} / 4000` : "";
+}
+$("upText").addEventListener("input", ()=>{ $("upMsg").textContent = ""; renderUpCard(); });
+$("upText").addEventListener("keydown", (e)=>{
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !$("upSave").disabled){ e.preventDefault(); $("upSave").click(); }
+});
+$("upSave").addEventListener("click", async ()=>{
+  if (!cfg) return;
+  const text = $("upText").value;
+  $("upSave").disabled = true;
+  try {
+    const res = await fetch("/user-prompt", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ text }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "kaydedilemedi");
+    // Sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa talimat geri dönmesin
+    if (data.text) cfg.userPrompt = data.text; else delete cfg.userPrompt;
+    $("upText").value = data.text || "";
+    $("upMsg").innerHTML = `<span style="color:var(--teal)">✓ ${data.text ? "Talimat kaydedildi" : "Talimat kaldırıldı"} — sıradaki görevde geçerli</span>`;
+  } catch (err){
+    $("upMsg").innerHTML = `<span style="color:var(--red)">✗ ${esc(err.message)}</span>`;
+  }
+  renderUpCard();
+});
+
 function render(){
   drawGraph();
   renderSecCard();
@@ -949,7 +1013,91 @@ const RES_FIELDS = [
   ["rTimeout", "limits", "apiTimeoutMs", 60000, false],
   ["rInner", "limits", "apiMaxRetries", 1, true],
 ];
+// Hazır modlar: her biri tüm alanları verir (dosya birimiyle, ms). "dengeli" = varsayılanlar,
+// dosyaya hiçbir alan yazılmaz. Seçili mod ayrıca saklanmaz — değerlerden çıkarılır
+// (varsayılanlar doldurularak karşılaştırılır); hiçbirine uymuyorsa "Özel".
+const RES_DEFAULTS = { enabled:true, jitter:true, initialDelayMs:5000, maxDelayMs:60000, maxAttempts:0,
+  permanentMaxAttempts:5, stallTimeoutMs:300000, apiTimeoutMs:600000, apiMaxRetries:10 };
+const RES_MODES = [
+  { id:"dengeli", ad:"Dengeli", alt:"Varsayılan. Sınırsız dener, bekleme 5 sn'den 1 dk'ya kadar uzar.", v:null },
+  { id:"surekli", ad:"Sürekli dene", alt:"Hiç bırakmaz, kısa aralıkla hemen yeniden dener. Takılan yanıtı 2 dk'da keser.",
+    v:{ enabled:true, jitter:true, initialDelayMs:2000, maxDelayMs:20000, maxAttempts:0, permanentMaxAttempts:20, stallTimeoutMs:120000, apiTimeoutMs:600000, apiMaxRetries:15 } },
+  { id:"sakin", ad:"Sakince dene", alt:"Sunucuyu yormaz: uzun aralıkla, sabırla dener. Uzun kuyruğu bekler.",
+    v:{ enabled:true, jitter:true, initialDelayMs:15000, maxDelayMs:300000, maxAttempts:0, permanentMaxAttempts:5, stallTimeoutMs:600000, apiTimeoutMs:1800000, apiMaxRetries:3 } },
+  { id:"cabuk", ad:"Çabuk vazgeç", alt:"Birkaç denemeden sonra durur, hatayı hemen gösterir.",
+    v:{ enabled:true, jitter:true, initialDelayMs:3000, maxDelayMs:15000, maxAttempts:3, permanentMaxAttempts:1, stallTimeoutMs:300000, apiTimeoutMs:300000, apiMaxRetries:2 } },
+  { id:"ozel", ad:"Özel", alt:"Bekleme, sınır ve zaman aşımı ayarlarını tek tek ver.", v:null },
+];
+const RES_KEYS = Object.keys(RES_DEFAULTS);
+const resLimitKey = (k) => k === "apiTimeoutMs" || k === "apiMaxRetries";
+/** Dosyadaki ayarların varsayılanlarla doldurulmuş hali */
+function resEffective(){
+  const r = cfg.retry || {}, l = cfg.limits || {}, out = {};
+  for (const k of RES_KEYS){ const v = (resLimitKey(k) ? l : r)[k]; out[k] = v ?? RES_DEFAULTS[k]; }
+  return out;
+}
+function resDetect(){
+  const e = resEffective();
+  const m = RES_MODES.find((m)=> m.id !== "ozel" && RES_KEYS.every((k)=> e[k] === (m.v || RES_DEFAULTS)[k]));
+  return m ? m.id : "ozel";
+}
+const fmtSure = (ms) => ms >= 60000 ? `${+(ms/60000).toFixed(1)} dk` : `${+(ms/1000).toFixed(1)} sn`;
+function resSummaryText(e){
+  if (!e.enabled) return "Yeniden deneme kapalı — ilk hatada akış durur.";
+  return [
+    e.maxAttempts ? `en fazla ${e.maxAttempts} deneme` : "sınırsız deneme",
+    `bekleme ${fmtSure(e.initialDelayMs)} → en fazla ${fmtSure(e.maxDelayMs)}`,
+    e.permanentMaxAttempts ? `kalıcı hatada üst üste ${e.permanentMaxAttempts} kez` : "kalıcı hatada da sınırsız",
+    e.stallTimeoutMs ? `takılan yanıt ${fmtSure(e.stallTimeoutMs)} sonra kesilir` : "takılma bekçisi yerleşik (5 dk)",
+    `zaman aşımı ${fmtSure(e.apiTimeoutMs)}`,
+    `sunucu içi ${e.apiMaxRetries} deneme`,
+  ].join(" · ");
+}
+let resMode = null; // kullanıcının seçtiği mod (Özel'e geçince değerler bir moda uysa da Özel'de kalır)
+function renderResModes(){
+  const box = $("rModes");
+  if (!box.children.length){
+    box.innerHTML = RES_MODES.map((m)=>`<label class="rmode"><input type="radio" name="rMode" value="${m.id}"><b>${esc(m.ad)}</b><span>${esc(m.alt)}</span></label>`).join("");
+    box.addEventListener("change", (ev)=> chooseResMode(ev.target.value));
+  }
+  const mode = resMode || resDetect();
+  for (const i of box.querySelectorAll("input")) i.checked = i.value === mode;
+  $("resCard").classList.toggle("custom", mode === "ozel");
+  $("rSummary").textContent = mode === "ozel" ? "" : "Bu modda: " + resSummaryText(resEffective()) + ".";
+}
+async function chooseResMode(id){
+  resMsg("");
+  if (id === "ozel"){ resMode = "ozel"; renderResModes(); return; }
+  const m = RES_MODES.find((x)=> x.id === id);
+  const body = { retry:{}, limits:{} };
+  for (const k of RES_KEYS) body[resLimitKey(k) ? "limits" : "retry"][k] = m.v ? m.v[k] : null;
+  if (!m.v){ body.retry.enabled = true; body.retry.jitter = true; }
+  if (await postResilience(body, `✓ ${m.ad} modu uygulandı — yeniden başlatma gerekmez`)) resMode = null;
+  renderResModes();
+}
+/** POST /resilience; başarılıysa sayfadaki kopyayı ve alanları günceller */
+async function postResilience(body, okText){
+  resMsg("uygulanıyor…");
+  for (const i of document.querySelectorAll("#rModes input, #rApply")) i.disabled = true;
+  try {
+    const res = await fetch("/resilience", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+    const d = await res.json().catch(()=>({}));
+    if (!d.ok){ resMsg(`<span style="color:var(--red)">✗ ${esc(d.error || "uygulanamadı")}</span>`); return false; }
+    // Sayfadaki kopya da güncellensin — üstteki Kaydet eski değerleri geri yazmasın
+    if (d.retry && Object.keys(d.retry).length) cfg.retry = d.retry; else delete cfg.retry;
+    if (d.limits && Object.keys(d.limits).length) cfg.limits = d.limits; else delete cfg.limits;
+    fillResilience();
+    resMsg(`<span style="color:var(--teal)">${esc(okText)}</span>`);
+    return true;
+  } catch {
+    resMsg(`<span style="color:var(--red)">✗ servise ulaşılamadı</span>`);
+    return false;
+  } finally {
+    for (const i of document.querySelectorAll("#rModes input, #rApply")) i.disabled = false;
+  }
+}
 function fillResilience(){
+  renderResModes();
   const r = cfg.retry || {}, l = cfg.limits || {};
   $("rEnabled").checked = r.enabled !== false;
   $("rJitter").checked = r.jitter !== false;
@@ -976,21 +1124,8 @@ $("rApply").addEventListener("click", async ()=>{
     if (id === "rInner" && n > 15) return resMsg(`<span style="color:var(--red)">✗ ${esc(ad)}: en fazla 15</span>`);
     body[bolum][alan] = Math.round(n * carpan);
   }
-  $("rApply").disabled = true; resMsg("uygulanıyor…");
-  try {
-    const res = await fetch("/resilience", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
-    const d = await res.json().catch(()=>({}));
-    if (!d.ok) return resMsg(`<span style="color:var(--red)">✗ ${esc(d.error || "uygulanamadı")}</span>`);
-    // Sayfadaki kopya da güncellensin — üstteki Kaydet eski değerleri geri yazmasın
-    if (d.retry && Object.keys(d.retry).length) cfg.retry = d.retry; else delete cfg.retry;
-    if (d.limits && Object.keys(d.limits).length) cfg.limits = d.limits; else delete cfg.limits;
-    fillResilience();
-    resMsg(`<span style="color:var(--teal)">✓ uygulandı — yeniden başlatma gerekmez</span>`);
-  } catch {
-    resMsg(`<span style="color:var(--red)">✗ servise ulaşılamadı</span>`);
-  } finally {
-    $("rApply").disabled = false;
-  }
+  resMode = "ozel"; // değerler bir moda denk gelse de Özel görünümde kal
+  await postResilience(body, "✓ uygulandı — yeniden başlatma gerekmez");
 });
 
 // ── Bağlam penceresi: aynı uç (POST /resilience, yalnızca sınırlar), hemen geçerli ──
@@ -1099,6 +1234,7 @@ async function load(){
   $("dir").textContent = cfg.targetDir || "(çalışılan dizin)";
   $("tdir").value = cfg.targetDir || "";
   fillConn();
+  fillUserPrompt();
   fillResilience();
   fillContext();
   loadContextModels();

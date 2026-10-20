@@ -351,6 +351,9 @@ export interface ProviderConfig {
   limits?: LimitsConfig;
   /** Bağlantı koptuğunda yeniden deneme (opsiyonel) — verilmezse sınırsız denenir */
   retry?: RetryConfig;
+  /** Kullanıcı talimatı (Ayarlar): her ajanın system prompt'unun sonuna eklenir —
+   *  hitap şekli, cevap üslubu gibi kişisel tercihler. Sıradaki görevde geçerli. */
+  userPrompt?: string;
 }
 
 /** Tek config dosyasının tamamı: bağlantı bilgileri + iş akışı grafı */

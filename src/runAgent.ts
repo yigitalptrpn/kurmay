@@ -6,6 +6,7 @@ import { mcpStatus, toLights } from "./mcpStatus.js";
 import { refreshModelContext } from "./models.js";
 import { compactPercent, contextInfo, FORCE_NEW_PERCENT, tokensOfUsage, type ContextInfo } from "./context.js";
 import { buildHooks } from "./hooks.js";
+import { withUserPrompt } from "./agents.js";
 import {
   apiErrorReason,
   backoffDelay,
@@ -258,7 +259,7 @@ async function compactSession(
         cwd,
         resume: sessionId,
         abortController: ac,
-        systemPrompt: { type: "preset", preset: "claude_code", append: agent.systemPrompt },
+        systemPrompt: { type: "preset", preset: "claude_code", append: withUserPrompt(agent.systemPrompt, cfg.userPrompt) },
         allowedTools: [],
         permissionMode: "acceptEdits",
         strictMcpConfig: true,
@@ -488,7 +489,7 @@ async function executeQuery(
       ...(resume ? { resume } : {}),
       // Claude Code'un varsayılan system prompt'u korunur, md içeriği eklenir —
       // böylece araç kullanımı davranışı bozulmaz.
-      systemPrompt: { type: "preset", preset: "claude_code", append: agent.systemPrompt },
+      systemPrompt: { type: "preset", preset: "claude_code", append: withUserPrompt(agent.systemPrompt, cfg.userPrompt) },
       allowedTools: agent.config.tools.filter((t) => !isOffMcpTool(t, offMcp)),
       permissionMode: "acceptEdits",
       ...(useSchema && agent.outputSchema
