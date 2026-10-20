@@ -1,6 +1,6 @@
 {
   "name": "kurmay-ai",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Md tanımlı ajanları (Analist / Saha Timi / Teftiş) deterministik bir iş akışıyla koordine eden orkestratör",
   "type": "module",
   "bin": {

@@ -6,22 +6,7 @@
 <title>Kurmay</title>
 <link rel="icon" href="data:,"><!-- logo yok: tarayıcı /favicon.ico istemesin -->
 <link rel="stylesheet" href="/theme.css">
-<script>
-// Kayıtlı tema tercihini stil hesaplanmadan önce uygula (config.html ile aynı)
-(function () {
-  try {
-    var t;
-    try { t = localStorage.getItem("kurmay-theme") || localStorage.getItem("yaver-theme"); } catch (e) {}
-    // Lacivert kaldırıldı (2026-10-13): eski koyu kayıtlar Radar'a düşer
-    if (t === "dark" || t === "teskilat" || t === "lacivert") t = "radar"; // eski adlar
-    if (t === "light") t = "evrak";
-    if (t !== "evrak" && t !== "radar") {
-      t = matchMedia("(prefers-color-scheme: dark)").matches ? "radar" : "evrak";
-    }
-    document.documentElement.dataset.theme = t;
-  } catch (e) {}
-})();
-</script>
+<script src="/theme.js"></script><!-- tema: stil hesaplanmadan önce uygulanır -->
 <style>
 body { padding:24px 16px; }
 a { color:var(--blue); }
@@ -38,13 +23,16 @@ a { color:var(--blue); }
 .sec-h { font:var(--md-type-label-sm); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 16px 7px; }
 .sec-f { font-size:12.5px; color:var(--muted); line-height:1.45; margin:7px 16px 0; }
 .group { background:var(--md-surface-container-lowest); border-radius:var(--md-shape-md); overflow:hidden; box-shadow:var(--md-elev-1); }
-[data-theme="radar"] .group { box-shadow:none; border:1px solid var(--md-outline-variant); }
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"]) .group { box-shadow:none; border:1px solid var(--md-outline-variant); }
+:is([data-theme="harita"], [data-theme="sade"]) .group { border:1px solid var(--md-outline-variant); }
 .row { display:flex; align-items:center; gap:13px; padding:11px 16px; min-height:56px; position:relative; cursor:pointer; }
 /* Ayırıcı çizgi simgenin hizasından başlar (iPhone'daki gibi) */
 .row + .row::before { content:""; position:absolute; top:0; right:0; left:60px; border-top:1px solid var(--md-outline-variant); }
 .row.off .txt { opacity:.55; }
 .icon { flex:none; width:31px; height:31px; border-radius:8px; display:grid; place-items:center; font-size:15px; font-weight:700;
   color:#fff; font-family:system-ui,"Segoe UI",sans-serif; }
+/* Koyu temalarda rol renkleri açık ton — simge beyaz kalınca okunmuyordu, zeminin koyusu */
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"]) .icon { color:var(--md-surface); }
 .txt { flex:1; min-width:0; transition:opacity 200ms; }
 .ttl { font:var(--md-type-title-md); display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .sub { display:block; font-size:12.5px; color:var(--muted); line-height:1.4; margin-top:2px; overflow-wrap:anywhere; }
@@ -59,7 +47,7 @@ a { color:var(--blue); }
 .sw::after { content:""; position:absolute; top:2px; left:2px; width:27px; height:27px; border-radius:50% !important; background:#fff;
   box-shadow:0 3px 8px rgba(0,0,0,.18), 0 1px 1px rgba(0,0,0,.16); transition:transform 220ms cubic-bezier(.3,.7,.4,1); }
 /* Koyu temalarda ince çizgi rengi zemine çok yakın — kapalı anahtar seçilsin diye bir ton açık */
-[data-theme="radar"] .sw { background:var(--md-outline); }
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"]) .sw { background:var(--md-outline); }
 .sw:checked, [data-theme] .sw:checked { background:var(--md-secondary); }
 .sw:checked::after { transform:translateX(20px); }
 .sw:active::after { width:31px; } /* basılıyken topuz uzar */
@@ -80,10 +68,7 @@ a { color:var(--blue); }
 <div class="hdr">
   <span class="brand">Kurmay</span>
   <span class="sp"></span>
-  <div class="tswitch" role="radiogroup" aria-label="Tema">
-    <button class="tsw" data-t="evrak" aria-label="Gizli Evrak"></button>
-    <button class="tsw" data-t="radar" aria-label="Radar"></button>
-  </div>
+  <div class="tswitch" role="radiogroup" aria-label="Tema"></div>
   <a class="ic" href="/config" title="Ayarlar" aria-label="Ayarlar">⚙</a>
   <a href="/">← izleme paneli</a>
 </div>
@@ -97,19 +82,6 @@ a { color:var(--blue); }
 <script>
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-
-// Tema: yalnızca renk örnekleri (adlar görünmez) — panel ve ayar sayfasıyla ortak kayıt
-function applyThemeUI() {
-  for (const b of document.querySelectorAll(".tsw")) b.classList.toggle("on", b.dataset.t === document.documentElement.dataset.theme);
-}
-for (const b of document.querySelectorAll(".tsw")) {
-  b.addEventListener("click", () => {
-    document.documentElement.dataset.theme = b.dataset.t;
-    try { localStorage.setItem("kurmay-theme", b.dataset.t); } catch (e) {}
-    applyThemeUI();
-  });
-}
-applyThemeUI();
 
 // Görünen adlar — config anahtarları teknik kalır, ekranda Türkçe ad (panel/ayarlar ile aynı)
 const NODE_NAMES = { analist:"Analist", saha:"Saha ajanı", teftis:"Teftiş", guvenlik:"Güvenlik Denetçisi" };

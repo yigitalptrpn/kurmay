@@ -133,7 +133,13 @@ export type OrchestratorEvent =
       endsFlow?: boolean;
       /** structured yoksa neden — kart bunu açıkça yazar */
       miss?: StructuredMiss;
+      /** Planı otomatik iletme açıkken yine de onay soruluyorsa neden:
+       *  empty = plan boş, unreadable = plan yapılandırılmış olarak okunamadı */
+      autoForward?: "empty" | "unreadable";
     }
+  /** Planı otomatik iletme açık: plan onay beklemeden sonraki adıma geçti
+   *  (onay kartı açılmadı). to = devam edilen düğüm, files = plandaki dosya sayısı */
+  | { type: "plan_forwarded"; agent: string; to: string | null; files: number }
   | {
       type: "approval_resolved";
       agent: string;

@@ -106,6 +106,10 @@ export function loadAppConfig(configPath: string): AppConfig {
     throw new Error(`config: workflow.entry "${cfg.workflow.entry}" agents içinde tanımlı değil`);
   }
   if (!cfg.workflow.maxCycles) cfg.workflow.maxCycles = 5;
+  const autoForward = cfg.workflow.autoForwardPlan;
+  if (autoForward !== undefined && typeof autoForward !== "boolean") {
+    throw new Error(`config: "workflow.autoForwardPlan" true/false olmalı (verilen: ${JSON.stringify(autoForward)})`);
+  }
 
   // Ajanların tools listesindeki mcp__ araçları tanımlı bir sunucuya işaret etmeli
   for (const [key, node] of Object.entries(cfg.workflow.agents)) {

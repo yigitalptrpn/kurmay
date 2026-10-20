@@ -12,7 +12,7 @@
 .dp-in { display:flex; flex-direction:column; gap:10px; padding:18px 20px; max-height:calc(100vh - 48px); }
 .dp-h { font:var(--md-type-title-md); }
 .dp-addr { display:flex; gap:6px; }
-.dp-addr input { flex:1; min-width:0; font-family:ui-monospace,Consolas,monospace !important; font-size:13px; }
+.dp-addr input { flex:1; min-width:0; font-family:var(--font-mono) !important; font-size:13px; }
 .dp-addr button, .dp-roots button { min-height:auto; padding:6px 12px; font-size:13px; }
 .dp-roots { display:flex; gap:6px; flex-wrap:wrap; }
 .dp-list { flex:1; min-height:160px; max-height:min(52vh, 420px); overflow:auto; border:1px solid var(--border);
@@ -25,7 +25,7 @@
 .dp-empty { padding:14px; font-size:13px; color:var(--muted); }
 .dp-err { font-size:12.5px; color:var(--red); min-height:0; }
 .dp-foot { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
-.dp-cur { flex:1 1 100%; min-width:0; font:12.5px ui-monospace,Consolas,monospace; color:var(--muted); overflow-wrap:anywhere; }
+.dp-cur { flex:1 1 100%; min-width:0; font:12.5px var(--font-mono); color:var(--muted); overflow-wrap:anywhere; }
 `;
   let dlg, state, done;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

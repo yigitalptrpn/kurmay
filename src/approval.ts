@@ -117,8 +117,10 @@ export async function askUserApproval(
   runSignal?: AbortSignal,
   endsFlow = false,
   miss?: StructuredMiss,
+  /** Otomatik iletme açık ama plan iletilemedi — kart nedenini yazar */
+  autoForward?: "empty" | "unreadable",
 ): Promise<ApprovalResult> {
-  bus.emit({ type: "approval_required", agent: agentName, output, structured, endsFlow, miss });
+  bus.emit({ type: "approval_required", agent: agentName, output, structured, endsFlow, miss, autoForward });
 
   // Kaybeden taraf sessizce beklemede kalsın diye hatalar asla-çözülmeyen
   // bir promise'e çevrilir (kapalı stdin, abort vb. yarışı düşürmesin)

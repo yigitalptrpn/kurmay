@@ -123,9 +123,16 @@ export interface UiServerOptions {
   /** Eklentinin araçları açıklama + parametreleriyle (GET /mcp-tools?name=) — eklentiye doğrudan sorulur */
   getMcpTools?: (name: string) => Promise<{ ok: boolean; tools?: McpToolInfo[]; error?: string }>;
   /** Akışın ana yolu + düğümlerin açık/kapalı durumu (GET /workflow) — görev kartı çipleri */
-  getWorkflow?: () => { entry: string; nodes: Array<{ key: string; type: string; disabled: boolean; agent?: string }> };
+  getWorkflow?: () => {
+    entry: string;
+    /** Analist planı onay beklemeden Saha Timi'ne geçer mi (görev kartı bunu yazar) */
+    autoForwardPlan: boolean;
+    nodes: Array<{ key: string; type: string; disabled: boolean; agent?: string }>;
+  };
   /** Düğümü devre dışı bırakır/açar: çalışan sürece uygular, config.json'a yazar */
   setNodeDisabled?: (key: string, disabled: boolean) => { ok: boolean; error?: string };
+  /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
+  setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
   /** Güvenlik denetçisini açar; config'te düğümü yoksa Teftiş onayından sonraya ekler */
   addSecurityAudit?: () => { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string };
   /** Aç/Kapat sayfası verisi (GET /toggles-data): ajanlar, beceriler, MCP sunucuları */
@@ -143,6 +150,8 @@ export interface UiServerOptions {
  *
  *   GET  /          panel sayfası (ui/index.html)
  *   GET  /theme.css paylaşılan Material 3 tema (ui/theme.css)
+ *   GET  /theme.js  tema seçimi: kayıtlı temayı uygular, renk örneklerini kurar (ui/theme.js)
+ *   GET  /fonts/<ad>.woff2  gömülü yazı tipleri (ui/fonts) — çevrimdışı çalışır
  *   GET  /events?session=ID  SSE: o oturumun geçmişi (diskteki kayıtlar dahil) + canlı akışı
  *   GET  /lobby     SSE: oturum listesi + durumları, her değişiklikte tam liste
  *   POST /approval  { session, approved, comment?, runAt? } — o oturumun bekleyen onayını çözer
@@ -157,8 +166,9 @@ export interface UiServerOptions {
  *   GET  /models      { current, effort, models[], error? } — modelsUrl'den çekilen model listesi
  *   POST /model       { model: string, session? } — oturumun ya da genel modeli değiştirir
  *   POST /effort      { effort: string, session? } — oturumun ya da genel akıl yürütme derinliği
- *   GET  /workflow      { entry, nodes[] } — ana yol sırasıyla düğümler ve açık/kapalı durumları
+ *   GET  /workflow      { entry, autoForwardPlan, nodes[] } — ana yol sırasıyla düğümler ve açık/kapalı durumları
  *   POST /node-disabled { key: string, disabled: boolean } — düğümü kapatır/açar (canlı + config.json)
+ *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
@@ -176,6 +186,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const togglesUiPath = path.join(uiDir, "toggles.html");
   const securityUiPath = path.join(uiDir, "guvenlik.html");
   const themeCssPath = path.join(uiDir, "theme.css");
+  const themeJsPath = path.join(uiDir, "theme.js");
   const dirPickerPath = path.join(uiDir, "dirpicker.js");
   const sseClients = new Set<http.ServerResponse>();
   const json = (res: http.ServerResponse, code: number, payload: unknown) => {
@@ -219,6 +230,27 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.method === "GET" && req.url === "/theme.css") {
       res.writeHead(200, { "content-type": "text/css; charset=utf-8" });
       res.end(fs.readFileSync(themeCssPath));
+      return;
+    }
+
+    // Tema seçimi (panel + Ayarlar + Aç/Kapat ortak): kayıtlı temayı sayfa çizilmeden uygular
+    if (req.method === "GET" && req.url === "/theme.js") {
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+      res.end(fs.readFileSync(themeJsPath));
+      return;
+    }
+
+    // Gömülü yazı tipleri (ui/fonts): çevrimdışı ortamda dış kaynağa gidilmez
+    if (req.method === "GET" && url.pathname.startsWith("/fonts/")) {
+      const name = url.pathname.slice("/fonts/".length);
+      const file = /^[\w-]+\.woff2$/.test(name) ? path.join(uiDir, "fonts", name) : "";
+      if (!file || !fs.existsSync(file)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "font/woff2", "cache-control": "public, max-age=86400" });
+      res.end(fs.readFileSync(file));
       return;
     }
 
@@ -503,6 +535,15 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         const r = options.setNodeDisabled ? options.setNodeDisabled(key, disabled) : { ok: false, error: "kapalı" };
         res.writeHead(r.ok ? 200 : 400, { "content-type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(r));
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/auto-forward") {
+      readJson(req, (parsed) => {
+        if (!parsed || typeof parsed.enabled !== "boolean") return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = options.setAutoForward ? options.setAutoForward(parsed.enabled) : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
       });
       return;
     }

@@ -221,6 +221,11 @@ export interface WorkflowConfig {
   entry: string;
   /** Reject döngüsünün üst sınırı (sonsuz döngü koruması) */
   maxCycles: number;
+  /** true ise onay isteyen düğümün PLANI (dolu file_plan) onay beklemeden sonraki
+   *  adıma (Saha Timi) iletilir — Analist planı bitince düğmeye basmak gerekmez.
+   *  Plan okunamazsa ya da boşsa, veya rota akışı bitiriyorsa onay yine sorulur.
+   *  Ayarlar sayfasından canlı değişir; sıradaki görevde geçerli. Varsayılan kapalı. */
+  autoForwardPlan?: boolean;
   agents: Record<string, WorkflowNode>;
 }
 

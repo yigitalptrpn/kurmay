@@ -300,6 +300,26 @@ async function main() {
     }
   };
 
+  /** Planı otomatik iletme (Ayarlar): config.json'a yazar, sıradaki görev görür */
+  const setAutoForward = (enabled: boolean): { ok: boolean; error?: string; enabled?: boolean } => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      if (!parsed.workflow) return { ok: false, error: "ayar dosyasında akış (workflow) bölümü yok" };
+      if (enabled) parsed.workflow.autoForwardPlan = true;
+      else delete parsed.workflow.autoForwardPlan;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      loadAppConfig(resolvedConfigPath); // yapı doğrulaması
+      // Çalışan koşu kendi workflow kopyasıyla devam eder
+      if (enabled) cfg.workflow.autoForwardPlan = true;
+      else delete cfg.workflow.autoForwardPlan;
+      return { ok: true, enabled };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   /**
    * Güvenlik denetçisini akışa ekler ve açar (Ayarlar'daki "Güvenlik denetimi" anahtarı).
    * Denetçi sonradan geldi: daha önce oluşturulmuş config.json'larda (kurmay init /
@@ -730,6 +750,7 @@ async function main() {
       },
       getWorkflow: () => ({
         entry: cfg.workflow.entry,
+        autoForwardPlan: !!cfg.workflow.autoForwardPlan,
         nodes: mainPath(cfg.workflow).map((key) => {
           const n = cfg.workflow.agents[key];
           return {
@@ -741,6 +762,7 @@ async function main() {
         }),
       }),
       setNodeDisabled,
+      setAutoForward,
       addSecurityAudit,
       getToggles,
       listSecurityReports: () => securityReports.list(),

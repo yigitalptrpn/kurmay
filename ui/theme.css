@@ -1,8 +1,55 @@
 /* Kurmay — Material Design 3 tema (paylaşılan): renk rolleri, tipografi, şekil,
    elevation ve temel bileşenler (buton/alan/pill/kart). Kütüphanesiz — düz CSS
-   custom property + seçici. Her iki panel (index.html, config.html) bunu
-   <link> ile kullanır; sayfaya özgü kurallar (diff/hunk, graf SVG, sidebar…)
-   kendi <style> bloklarında kalır. */
+   custom property + seçici. Panel (index.html), Ayarlar (config.html) ve Aç/Kapat
+   (toggles.html) bunu <link> ile kullanır; sayfaya özgü kurallar (diff/hunk, graf
+   SVG, sidebar…) kendi <style> bloklarında kalır. Tema seçimi: /theme.js.
+
+   Temalar (<html data-theme>): evrak (Gizli Evrak, açık), radar (Radar, koyu),
+   harita (Harita, açık), karargah (Karargâh, koyu), sade (Sade, açık), gece (Gece, koyu).
+   Her tema renk rolleri + yazı tipleri (--font-ui/--font-display/--font-mono) +
+   köşe ölçeği (--md-shape-*, --r-btn) + color-scheme taşır. */
+
+/* — Gömülü yazı tipleri (ui/fonts, /fonts/…): proje çevrimdışı ortamda çalışıyor, dış
+   kaynağa (Google Fonts/CDN) gidilmez. Her ailede iki alt küme: latin (ı dahil) ve
+   latin-ext (ğ, ş, İ…) — tarayıcı yalnızca sayfadaki karakterlerin dosyasını indirir,
+   kullanılmayan temaların yazı tipleri hiç inmez. Lisanslar: ui/fonts/lisans (SIL OFL 1.1). — */
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(/fonts/courier-prime-latin-400.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(/fonts/courier-prime-latin-ext-400.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(/fonts/courier-prime-latin-700.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(/fonts/courier-prime-latin-ext-700.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:italic; font-weight:400; font-display:swap; src:url(/fonts/courier-prime-latin-400-italic.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:italic; font-weight:400; font-display:swap; src:url(/fonts/courier-prime-latin-ext-400-italic.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(/fonts/jetbrains-mono-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(/fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Geist"; font-style:normal; font-weight:100 900; font-display:swap; src:url(/fonts/geist-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Geist"; font-style:normal; font-weight:100 900; font-display:swap; src:url(/fonts/geist-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Geist Mono"; font-style:normal; font-weight:100 900; font-display:swap; src:url(/fonts/geist-mono-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Geist Mono"; font-style:normal; font-weight:100 900; font-display:swap; src:url(/fonts/geist-mono-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+/* Archivo ve Saira genişlik ekseni de taşır (font-stretch) — dar başlık/etiket, normal gövde */
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(/fonts/archivo-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(/fonts/archivo-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Saira"; font-style:normal; font-weight:100 900; font-stretch:50% 125%; font-display:swap; src:url(/fonts/saira-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Saira"; font-style:normal; font-weight:100 900; font-stretch:50% 125%; font-display:swap; src:url(/fonts/saira-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(/fonts/saira-stencil-one-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(/fonts/saira-stencil-one-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 
 :root {
   /* — Renk rolleri: varsayılan tema "Gizli Evrak" (açık). Diğer tema "Radar"
@@ -22,14 +69,19 @@
   --md-surface-container:#EFE8D6;
   --md-surface-container-high:#E7DFC9;
   --md-surface-container-highest:#DDD3BA;
-  --md-on-surface:#1F1D18; --md-on-surface-variant:#6B6555;
+  --md-on-surface:#1F1D18; --md-on-surface-variant:#57513F;
   --md-outline:#968D74; --md-outline-variant:#CFC6AE;
   --md-shadow:#3C280A;
   /* Ajan rolleri (panel): Analist bordo, Saha Timi lacivert, Teftiş yeşil */
   --arch:#8B1E1E; --archBg:#F3D9D2; --dev:#24476B; --devBg:#DCE5EF;
   --rev:#2F5D3A; --revBg:#DCE9D6; --oth:#8A5A0B; --othBg:#F1E0B8;
   --bubble:#FFFDF7; --chatBg:#E6E0CF;
-  --font-ui:"Courier New",Courier,ui-monospace,monospace;
+  /* Yazı tipleri: arayüz, başlık/marka, kod (diff, yol, ölçüm). Courier New Linux/Mac'te
+     çoğu zaman yok ve ince — gömülü Courier Prime aynı daktilo karakteri, her yerde aynı */
+  --font-ui:"Courier Prime","Courier New",Courier,ui-monospace,monospace;
+  --font-display:var(--font-ui);
+  --font-mono:var(--font-ui);
+  color-scheme:light;
 
   /* — Geriye dönük takma adlar: iki dosyanın JS'i (string/inline style
      içinde) bu değişken adlarını doğrudan kullanıyor. Değerleri M3 rollerine
@@ -45,6 +97,8 @@
      kimliği" hissedilsin diye kart/buton yarıçapları büyütüldü. — */
   --md-shape-xs:4px; --md-shape-sm:8px; --md-shape-md:12px; --md-shape-lg:20px;
   --md-shape-xl:28px; --md-shape-full:999px;
+  /* Düğme köşesi ayrı: temalar düğmeyi köşeli ister ama hap/rozetler (--md-shape-full) yuvarlak kalabilir */
+  --r-btn:var(--md-shape-full);
 
   /* — Elevation (M3 gölge katmanları) — önceki sürümden belirgin şekilde
      daha güçlü: soluk kartlar "kağıt üstünde kağıt" hissi vermiyordu. — */
@@ -52,11 +106,11 @@
   --md-elev-2:0 1px 2px rgba(20,30,50,.20), 0 3px 8px 2px rgba(20,30,50,.14);
   --md-elev-3:0 2px 3px rgba(20,30,50,.24), 0 6px 12px 4px rgba(20,30,50,.16);
 
-  /* — Tipografi ölçeği (system-ui — Google Fonts/CDN yok, bağımlılıksız).
+  /* — Tipografi ölçeği (gömülü yazı tipleri — Google Fonts/CDN yok, bağımlılıksız).
      Önceki sürüm her yerde 11-15px kullanıyordu ("sıkışık" şikâyeti büyük
      ölçüde buydu); başlıklar belirgin büyütüldü, gövde metni 16px'e çekildi. — */
-  --md-type-display-sm:600 clamp(28px,2.2vw + 18px,34px)/40px var(--font-ui);
-  --md-type-headline-sm:700 clamp(20px,1.4vw + 14px,24px)/30px var(--font-ui);
+  --md-type-display-sm:600 clamp(28px,2.2vw + 18px,34px)/40px var(--font-display);
+  --md-type-headline-sm:700 clamp(20px,1.4vw + 14px,24px)/30px var(--font-display);
   --md-type-title-lg:600 20px/26px var(--font-ui);
   --md-type-title-md:600 16px/22px var(--font-ui);
   --md-type-body-lg:400 16px/25px var(--font-ui);
@@ -68,12 +122,14 @@
   --md-motion:180ms cubic-bezier(.2,0,0,1);
 }
 
-/* Temalar: <html data-theme="evrak|radar">. Sayfa başındaki betik
+/* Temalar: <html data-theme="evrak|radar|harita|karargah|sade|gece">. /theme.js
    kayıtlı seçimi (yoksa OS tercihine göre radar/evrak) data-theme'e yazar;
    betik çalışmazsa OS koyu tercihinde Radar değerleri devreye girer. Takma
    adlar (--blue, --bg…) :root'ta bir kez tanımlı — aynı öğede hesaplandıkları için
-   temanın renklerini kendiliğinden alır. Tema karakteri (yazı tipi, köşe, doku)
-   sayfaya özgü kurallarda [data-theme=…] seçicileriyle. */
+   temanın renklerini kendiliğinden alır. Tema karakteri (doku, damga, şerit)
+   panelde index.html sonundaki [data-theme=…] kurallarında. */
+
+/* Gizli Evrak: manila kâğıt, daktilo (Courier Prime), bordo mürekkep, keskin köşe */
 :root[data-theme="evrak"] {
   --md-primary:#8B1E1E; --md-on-primary:#FFF8EE;
   --md-primary-container:#F3D9D2; --md-on-primary-container:#3A0606;
@@ -89,14 +145,19 @@
   --md-surface-container:#EFE8D6;
   --md-surface-container-high:#E7DFC9;
   --md-surface-container-highest:#DDD3BA;
-  --md-on-surface:#1F1D18; --md-on-surface-variant:#6B6555;
+  /* İkincil yazı #6B6555 idi: kenar çubuğunun koyu manilası üstünde 3,4:1 kalıyordu — bir ton koyu */
+  --md-on-surface:#1F1D18; --md-on-surface-variant:#57513F;
   --md-outline:#968D74; --md-outline-variant:#CFC6AE;
   --md-shadow:#3C280A;
   /* Ajan rolleri (panel): Analist bordo, Saha Timi lacivert, Teftiş yeşil */
   --arch:#8B1E1E; --archBg:#F3D9D2; --dev:#24476B; --devBg:#DCE5EF;
   --rev:#2F5D3A; --revBg:#DCE9D6; --oth:#8A5A0B; --othBg:#F1E0B8;
   --bubble:#FFFDF7; --chatBg:#E6E0CF;
-  --font-ui:"Courier New",Courier,ui-monospace,monospace;
+  --font-ui:"Courier Prime","Courier New",Courier,ui-monospace,monospace;
+  --font-display:var(--font-ui); --font-mono:var(--font-ui);
+  /* Panelde zaten keskin (2-3px) — Ayarlar/Aç-Kapat sayfaları da aynı köşeyi alsın */
+  --md-shape-xs:2px; --md-shape-sm:2px; --md-shape-md:3px; --md-shape-lg:3px; --md-shape-xl:4px; --r-btn:3px;
+  color-scheme:light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -121,9 +182,14 @@
     --arch:#4BE38A; --archBg:#0F3320; --dev:#6FD3FF; --devBg:#0B2B38;
     --rev:#FFC857; --revBg:#3A2C08; --oth:#FF9F6B; --othBg:#3A1E0B;
     --bubble:#07120C; --chatBg:#040805;
-    --font-ui:ui-monospace,"Cascadia Code",Consolas,monospace;
+    --font-ui:"JetBrains Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+    --font-display:var(--font-ui); --font-mono:var(--font-ui);
+    --md-shape-xs:2px; --md-shape-sm:2px; --md-shape-md:2px; --md-shape-lg:2px; --md-shape-xl:2px; --r-btn:2px;
+    color-scheme:dark;
   }
 }
+/* Radar: gece görüşü — fosfor yeşili, her yer terminal yazısı (gömülü JetBrains Mono:
+   Cascadia/Consolas her makinede yok, Linux'ta yazı genişleyip taşıyordu) */
 :root[data-theme="radar"] {
   --md-primary:#4BE38A; --md-on-primary:#03140A;
   --md-primary-container:#0F3320; --md-on-primary-container:#B9F7D0;
@@ -146,7 +212,145 @@
   --arch:#4BE38A; --archBg:#0F3320; --dev:#6FD3FF; --devBg:#0B2B38;
   --rev:#FFC857; --revBg:#3A2C08; --oth:#FF9F6B; --othBg:#3A1E0B;
   --bubble:#07120C; --chatBg:#040805;
-  --font-ui:ui-monospace,"Cascadia Code",Consolas,monospace;
+  --font-ui:"JetBrains Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --font-display:var(--font-ui); --font-mono:var(--font-ui);
+  --md-shape-xs:2px; --md-shape-sm:2px; --md-shape-md:2px; --md-shape-lg:2px; --md-shape-xl:2px; --r-btn:2px;
+  /* Koyu tema: kaydırma çubuğu, açılır liste, tarih seçici de koyu çizilsin (eskiden açık geliyordu) */
+  color-scheme:dark;
+}
+
+/* Harita: topografik pafta — yeşilimsi gri kâğıt, eş yükselti kahvesi, su mavisi, orman
+   yeşili; vurgu askerî paftaların mor-pembe bindirme (overprint) mürekkebi. Yazı Archivo:
+   gövde normal genişlikte, başlıklar harita etiketi gibi dar (font-stretch) */
+:root[data-theme="harita"] {
+  --md-primary:#9B1B5A; --md-on-primary:#FFF6FA;
+  --md-primary-container:#F5DCE8; --md-on-primary-container:#3D0622;
+  --md-secondary:#2F6B3A; --md-on-secondary:#FFFFFF;
+  --md-secondary-container:#D5E8D0; --md-on-secondary-container:#0D2A13;
+  --md-tertiary:#8A5418; --md-on-tertiary:#FFFFFF;
+  --md-tertiary-container:#F1E0C6; --md-on-tertiary-container:#2E1A04;
+  --md-error:#B42318; --md-on-error:#FFFFFF;
+  --md-error-container:#F8DAD5; --md-on-error-container:#4A0B05;
+  --md-surface:#E6EADF;
+  --md-surface-container-lowest:#FBFCF8;
+  --md-surface-container-low:#F2F4EC;
+  --md-surface-container:#ECEFE5;
+  --md-surface-container-high:#E2E6D9;
+  --md-surface-container-highest:#D5DBCA;
+  --md-on-surface:#1A201B; --md-on-surface-variant:#4C574D;
+  --md-outline:#86917F; --md-outline-variant:#C3CBBA;
+  --md-shadow:#1A2A1E;
+  /* Ajan rolleri: Analist bindirme moru (planı çizen), Saha Timi su mavisi, Teftiş orman yeşili */
+  --arch:#9B1B5A; --archBg:#F5DCE8; --dev:#1D5C8A; --devBg:#D8E6F1;
+  --rev:#2F6B3A; --revBg:#D5E8D0; --oth:#8A5418; --othBg:#F1E0C6;
+  --bubble:#FBFCF8; --chatBg:#E6EADF;
+  --font-ui:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --font-display:var(--font-ui);
+  --font-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --md-shape-xs:2px; --md-shape-sm:4px; --md-shape-md:6px; --md-shape-lg:8px; --md-shape-xl:10px; --r-btn:4px;
+  --md-elev-1:0 1px 2px rgba(26,42,30,.14), 0 1px 3px rgba(26,42,30,.08);
+  --md-elev-2:0 1px 2px rgba(26,42,30,.16), 0 3px 8px rgba(26,42,30,.10);
+  --md-elev-3:0 2px 4px rgba(26,42,30,.18), 0 8px 18px rgba(26,42,30,.14);
+  color-scheme:light;
+}
+
+/* Karargâh: harekât çadırı — zeytin yeşili zemin, haki yazı, pirinç (rütbe) vurgu, işaret
+   turuncusu uyarı. Yazı Saira; marka/başlık sandık üstü şablon yazısı (Saira Stencil One) */
+:root[data-theme="karargah"] {
+  --md-primary:#D9AE45; --md-on-primary:#1F1803;
+  --md-primary-container:#4A3D16; --md-on-primary-container:#F6E4AE;
+  --md-secondary:#9DCB7B; --md-on-secondary:#10200A;
+  --md-secondary-container:#2E4421; --md-on-secondary-container:#D7EFC4;
+  --md-tertiary:#F09A4E; --md-on-tertiary:#2A1300;
+  --md-tertiary-container:#4D2D12; --md-on-tertiary-container:#FFDAB9;
+  --md-error:#FF7B6C; --md-on-error:#3A0700;
+  --md-error-container:#4D1B15; --md-on-error-container:#FFD7D1;
+  --md-surface:#262B1E;
+  --md-surface-container-lowest:#1A1E14;
+  --md-surface-container-low:#1F2419;
+  --md-surface-container:#2C3223;
+  --md-surface-container-high:#353C2A;
+  --md-surface-container-highest:#404833;
+  --md-on-surface:#E9E2C8; --md-on-surface-variant:#B3AD8F;
+  --md-outline:#737B5B; --md-outline-variant:#454C37;
+  --md-shadow:#000000;
+  /* Ajan rolleri: Analist pirinç, Saha Timi çelik mavisi, Teftiş adaçayı yeşili */
+  --arch:#D9AE45; --archBg:#4A3D16; --dev:#92BEDF; --devBg:#22384A;
+  --rev:#9DCB7B; --revBg:#2E4421; --oth:#F09A4E; --othBg:#4D2D12;
+  --bubble:#2C3223; --chatBg:#22271A;
+  --font-ui:"Saira",system-ui,"Segoe UI",sans-serif;
+  --font-display:"Saira Stencil One","Saira",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --md-shape-xs:2px; --md-shape-sm:3px; --md-shape-md:3px; --md-shape-lg:4px; --md-shape-xl:4px; --r-btn:3px;
+  --md-elev-1:0 1px 2px rgba(0,0,0,.35);
+  --md-elev-2:0 2px 6px rgba(0,0,0,.40);
+  --md-elev-3:0 8px 22px rgba(0,0,0,.50);
+  color-scheme:dark;
+}
+/* Saira geniş bir yazı — gövde bir tık dar; şablon yazısının tek kalınlığı var, sahte kalınlık üretilmesin */
+:root[data-theme="karargah"] body { font-stretch:94%; font-synthesis-weight:none; }
+
+/* Sade (açık) ve Gece (koyu): nötr çinko tonları, ince kenarlıklar, 8px köşe, Geist —
+   modern bileşen kitaplarının (shadcn vb.) sade görünümü, düz CSS ile */
+:root[data-theme="sade"] {
+  --md-primary:#18181B; --md-on-primary:#FAFAFA;
+  --md-primary-container:#F4F4F5; --md-on-primary-container:#18181B;
+  --md-secondary:#15803D; --md-on-secondary:#FFFFFF;
+  --md-secondary-container:#DCFCE7; --md-on-secondary-container:#14532D;
+  --md-tertiary:#B45309; --md-on-tertiary:#FFFFFF;
+  --md-tertiary-container:#FEF3C7; --md-on-tertiary-container:#78350F;
+  --md-error:#DC2626; --md-on-error:#FFFFFF;
+  --md-error-container:#FEE2E2; --md-on-error-container:#7F1D1D;
+  --md-surface:#F4F4F5;
+  --md-surface-container-lowest:#FFFFFF;
+  --md-surface-container-low:#FAFAFA;
+  --md-surface-container:#FFFFFF;
+  --md-surface-container-high:#F4F4F5;
+  --md-surface-container-highest:#E4E4E7;
+  --md-on-surface:#09090B; --md-on-surface-variant:#63636C;
+  --md-outline:#D4D4D8; --md-outline-variant:#E4E4E7;
+  --md-shadow:#000000;
+  /* Ajan rolleri: Analist mavi, Saha Timi mor, Teftiş yeşil */
+  --arch:#2563EB; --archBg:#DBEAFE; --dev:#7C3AED; --devBg:#EDE9FE;
+  --rev:#15803D; --revBg:#DCFCE7; --oth:#B45309; --othBg:#FEF3C7;
+  --bubble:#FFFFFF; --chatBg:#FFFFFF;
+  --font-ui:"Geist",system-ui,"Segoe UI",sans-serif;
+  --font-display:var(--font-ui);
+  --font-mono:"Geist Mono",ui-monospace,Consolas,monospace;
+  --md-shape-xs:4px; --md-shape-sm:6px; --md-shape-md:8px; --md-shape-lg:12px; --md-shape-xl:16px; --r-btn:8px;
+  --md-elev-1:0 1px 2px rgba(0,0,0,.05);
+  --md-elev-2:0 1px 3px rgba(0,0,0,.08), 0 1px 2px -1px rgba(0,0,0,.08);
+  --md-elev-3:0 10px 15px -3px rgba(0,0,0,.10), 0 4px 6px -4px rgba(0,0,0,.10);
+  color-scheme:light;
+}
+:root[data-theme="gece"] {
+  --md-primary:#FAFAFA; --md-on-primary:#18181B;
+  --md-primary-container:#27272A; --md-on-primary-container:#FAFAFA;
+  --md-secondary:#4ADE80; --md-on-secondary:#052E16;
+  --md-secondary-container:#0F2E1C; --md-on-secondary-container:#BBF7D0;
+  --md-tertiary:#FBBF24; --md-on-tertiary:#2A1C00;
+  --md-tertiary-container:#3A2A08; --md-on-tertiary-container:#FDE68A;
+  --md-error:#F87171; --md-on-error:#450A0A;
+  --md-error-container:#3F1414; --md-on-error-container:#FECACA;
+  --md-surface:#09090B;
+  --md-surface-container-lowest:#0E0E10;
+  --md-surface-container-low:#0C0C0E;
+  --md-surface-container:#111113;
+  --md-surface-container-high:#1C1C1F;
+  --md-surface-container-highest:#27272A;
+  --md-on-surface:#FAFAFA; --md-on-surface-variant:#A1A1AA;
+  --md-outline:#3F3F46; --md-outline-variant:#27272A;
+  --md-shadow:#000000;
+  /* Ajan rolleri: Analist mavi, Saha Timi mor, Teftiş yeşil (koyu zemine göre açık tonlar) */
+  --arch:#60A5FA; --archBg:#172554; --dev:#A78BFA; --devBg:#2E1065;
+  --rev:#4ADE80; --revBg:#0F2E1C; --oth:#FBBF24; --othBg:#3A2A08;
+  --bubble:#111113; --chatBg:#09090B;
+  --font-ui:"Geist",system-ui,"Segoe UI",sans-serif;
+  --font-display:var(--font-ui);
+  --font-mono:"Geist Mono",ui-monospace,Consolas,monospace;
+  --md-shape-xs:4px; --md-shape-sm:6px; --md-shape-md:8px; --md-shape-lg:12px; --md-shape-xl:16px; --r-btn:8px;
+  --md-elev-1:none; --md-elev-2:0 1px 2px rgba(0,0,0,.6); --md-elev-3:0 16px 40px rgba(0,0,0,.65);
+  color-scheme:dark;
 }
 
 /* — Temel sıfırlama + tipografi — */
@@ -155,6 +359,19 @@ body { margin:0; font:var(--md-type-body-lg); font-family:var(--font-ui); backgr
 /* Tema yazı tipi: düğme/alan/etiket de temanın yazısını alsın (Evrak: daktilo, Radar: terminal) */
 button, input, select, textarea, .label, .pill { font-family:var(--font-ui) !important; }
 h1,h2 { font:var(--md-type-headline-sm); margin:0; }
+/* Kod (diff, yol, komut): temanın kod yazısı — eskiden her yerde ayrı ayrı yazılmış
+   sistem yazısı yığınıydı (Cascadia/Consolas), makineden makineye değişiyordu */
+pre, code, kbd, samp { font-family:var(--font-mono); }
+/* Yazı bitişikleri kapalı: JetBrains Mono "!=" yazısını "≠", "->" yazısını oka çeviriyor —
+   diff/kod incelemesinde kodun gerçekte ne yazdığı görünmeli. Her öğeye ve !important:
+   sayfalardaki "font:" kısaltmaları bu ayarı sıfırlıyor, kökten miras yetmiyor. */
+*, ::before, ::after { font-variant-ligatures:none !important; }
+
+/* — Tema ayrıntıları: seçim rengi, kaydırma çubuğu (koyu temada açık çubuk göze batıyordu),
+   klavye odağı (düğme/bağlantılarda odak yalnızca soluk bir gölgeydi, görünmüyordu) — */
+::selection { background:color-mix(in srgb, var(--md-primary) 28%, transparent); }
+html { scrollbar-color:color-mix(in srgb, var(--md-outline) 80%, transparent) transparent; }
+:where(button, a, summary, [tabindex]):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
 
 /* — Kart: M3 elevated card. Nötr yüzeyler artık ayrı tonlarda olduğundan
    kart, sayfa zemininden gölgeye ihtiyaç duymadan da ayrışıyor; gölge
@@ -170,13 +387,16 @@ h1,h2 { font:var(--md-type-headline-sm); margin:0; }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]) .card { border-color:var(--md-outline-variant); box-shadow:none; }
 }
-[data-theme="radar"] .card { border-color:var(--md-outline-variant); box-shadow:none; }
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"]) .card { border-color:var(--md-outline-variant); box-shadow:none; }
+/* Açık ve sade temalarda kart ince kenarlıkla ayrışır (gölge yalnızca derinlik ipucu) */
+:is([data-theme="harita"], [data-theme="sade"]) .card { border-color:var(--md-outline-variant); }
 
 /* Marka — yalnızca yazı ("Kurmay"), logo kullanılmıyor. Bilerek headline'dan küçük:
    index.html'de yanındaki görev metni, config.html'de h1 sayfanın asıl
    başlığıdır; marka kimlik işareti olarak durur, onlarla yarışmaz. */
 .brand { display:inline-flex; align-items:center; gap:8px; flex:none;
-  font:var(--md-type-title-md); letter-spacing:-.01em; color:var(--text); }
+  font:var(--md-type-title-md); font-family:var(--font-display); letter-spacing:-.01em; color:var(--text); }
+[data-theme="karargah"] .brand { font-weight:400; letter-spacing:.06em; text-transform:uppercase; }
 .label { font:var(--md-type-label-sm); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
 
 /* — Pill / chip / badge: M3 assist-chip görünümü (tam yuvarlak, tonal renk,
@@ -193,7 +413,7 @@ button {
   position:relative; overflow:hidden;
   font:var(--md-type-label-lg);
   padding:10px 24px; min-height:44px;
-  border-radius:var(--md-shape-full);
+  border-radius:var(--r-btn);
   border:1px solid var(--md-outline);
   background:transparent; color:var(--text);
   cursor:pointer;
@@ -235,7 +455,7 @@ input[type=text], input[type=password], input[type=number], input[type=datetime-
   color:var(--text);
   transition:border-color var(--md-motion), box-shadow var(--md-motion);
 }
-input[type=text]:focus, input[type=password]:focus, input[type=datetime-local]:focus, textarea:focus, select:focus {
+input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, input[type=datetime-local]:focus, textarea:focus, select:focus {
   outline:none; border-color:var(--md-primary);
   box-shadow:0 0 0 1px var(--md-primary);
 }
@@ -255,4 +475,8 @@ button.icon { padding:6px 10px; min-height:36px; font-size:16px; line-height:1; 
   border:2px solid var(--md-outline-variant); flex:none; }
 .tsw[data-t="evrak"] { background:linear-gradient(135deg, #E8DAB2 0 55%, #8B1E1E 55%); }
 .tsw[data-t="radar"] { background:linear-gradient(135deg, #050A07 0 55%, #4BE38A 55%); }
+.tsw[data-t="harita"] { background:linear-gradient(135deg, #E6EADF 0 55%, #9B1B5A 55%); }
+.tsw[data-t="karargah"] { background:linear-gradient(135deg, #2C3223 0 55%, #D9AE45 55%); }
+.tsw[data-t="sade"] { background:linear-gradient(135deg, #FFFFFF 0 55%, #18181B 55%); }
+.tsw[data-t="gece"] { background:linear-gradient(135deg, #09090B 0 55%, #FAFAFA 55%); }
 .tsw.on { border-color:var(--md-surface); box-shadow:0 0 0 2px var(--md-primary); }

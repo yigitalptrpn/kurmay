@@ -88,7 +88,7 @@ npm start -- "görev" --config config.ollama.json
 
 Akış:
 
-1. **Analist** (`analist`) planı üretir → **senin onayın** beklenir (h dersen yorumunla yeniden planlar)
+1. **Analist** (`analist`) planı üretir → **senin onayın** beklenir (h dersen yorumunla yeniden planlar). Ayarlar sayfasındaki **"Planı Saha Timi'ne otomatik ilet"** anahtarı açıksa (`workflow.autoForwardPlan`, varsayılan kapalı) dolu plan onay beklemeden Saha Timi'ne geçer; plan boş ya da okunamaz gelirse onay yine sorulur
 2. **Saha Timi** (`saha-timi` → her mıntıkada bir `saha` ajanı) planı koda döker
 3. **Teftiş** (`teftis`) kodu inceler → `REDDEDİLDİ` ise sorun listesi saha timine geri gider (en fazla `maxCycles` tur), `ONAYLANDI` ise akış biter
 
@@ -101,6 +101,7 @@ Akış başlarken `http://localhost:4141` adresinde bir izleme paneli açılır 
 - **Olay akışı** — ajan metinleri, araç kullanımları, kararlar (zaman damgalı)
 - **Teftiş kararı** — onay/red + sorun listesi (önem dereceleriyle)
 - **Onay kartı** — plan hazır olunca panelde belirir; **Onayla/Reddet** düğmeleri terminaldeki `e/h` sorusuyla yarışır, hangisi önce cevap verirse o geçerli olur. Red gerekçesi Analist'e geri döner.
+- **Temalar** — sağ üstteki renk örnekleriyle altı tema: Gizli Evrak, Radar, Harita, Karargâh, Sade, Gece. Yazı tipleri pakete gömülüdür (`ui/fonts`, SIL OFL lisanslı) — internetsiz ortamda da aynı görünür.
 
 Her koşunun tüm olayları ayrı bir `runs/<tarih>.jsonl` dosyasına da yazılır — geçmiş koşuları incelemek için.
 

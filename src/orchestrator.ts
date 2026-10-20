@@ -67,6 +67,12 @@ function changedFilesOf(result: AgentRunResult): string[] | null {
   return files;
 }
 
+/** Ajanın çıktı şemasında plan (file_plan) var mı — otomatik iletme yalnızca planlara uygulanır */
+function producesPlan(agent: AgentDefinition): boolean {
+  const props = (agent.outputSchema as { properties?: Record<string, unknown> } | undefined)?.properties;
+  return !!props && "file_plan" in props;
+}
+
 /** Onay/aktarım için görünüm: yapılandırılmış çıktı varsa okunur JSON, yoksa metin */
 function outputView(result: AgentRunResult): string {
   return result.structured !== undefined
@@ -480,7 +486,23 @@ export async function runWorkflow(
     //    Onay = bitir; red = gerekçeyle aynı ajanı yeniden koştur (ör. "bu bir
     //    değişiklik talebi, planla") — böylece saha timine boş planla gidilmez.
     const endsFlow = routeTarget === null;
-    if (agent.config.requiresUserApproval) {
+    // Planı otomatik iletme (Ayarlar): plan üreten düğümün DOLU planı onay beklemeden
+    // sonraki adıma geçer. Plan okunamadıysa ya da boşsa onay yine sorulur (kart nedenini
+    // yazar) — saha timi plansız koşmasın. Akışı bitiren rotada (bilgi cevabı) onay sorulur.
+    let autoBlocked: "empty" | "unreadable" | undefined;
+    let forwarded = false;
+    if (agent.config.requiresUserApproval && workflow.autoForwardPlan && !endsFlow && producesPlan(agent)) {
+      const plan = (result.structured as { file_plan?: unknown } | undefined)?.file_plan;
+      if (Array.isArray(plan) && plan.length > 0) {
+        const to = routeTarget !== undefined ? routeTarget : agent.config.next ?? null;
+        bus.emit({ type: "plan_forwarded", agent: agent.key, to, files: plan.length });
+        console.log(`\n⏩ ${agent.name} planı (${plan.length} dosya) onay beklemeden iletildi → ${to ?? "akış biter"}`);
+        forwarded = true;
+      } else {
+        autoBlocked = Array.isArray(plan) ? "empty" : "unreadable";
+      }
+    }
+    if (agent.config.requiresUserApproval && !forwarded) {
       const approval = await askUserApproval(
         agent.name,
         outputView(result),
@@ -490,6 +512,7 @@ export async function runWorkflow(
         abortController.signal,
         endsFlow,
         result.miss,
+        autoBlocked,
       );
       if (!approval.approved) {
         ctx.feedback = approval.comment || "Kullanıcı çıktıyı reddetti, gözden geçir.";

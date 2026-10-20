@@ -7,24 +7,7 @@
 <link rel="icon" href="data:,"><!-- logo yok: tarayıcı /favicon.ico istemesin -->
 <link rel="stylesheet" href="/theme.css">
 <script src="/dirpicker.js" defer></script>
-<script>
-// Kayıtlı tema tercihini stil hesaplanmadan önce uygula — aksi halde açık/koyu
-// bir an için yanlış gelip (flash) sonra düzelir.
-(function () {
-  try {
-    var t;
-    try { t = localStorage.getItem("kurmay-theme") || localStorage.getItem("yaver-theme"); } catch (e) {}
-    // Eski açık/koyu kayıtları yeni temalara eşle; kayıt yoksa OS tercihine göre
-    // Lacivert kaldırıldı (2026-10-13): eski koyu kayıtlar Radar'a düşer
-    if (t === "dark" || t === "teskilat" || t === "lacivert") t = "radar"; // eski adlar
-    if (t === "light") t = "evrak";
-    if (t !== "evrak" && t !== "radar") {
-      t = matchMedia("(prefers-color-scheme: dark)").matches ? "radar" : "evrak";
-    }
-    document.documentElement.dataset.theme = t;
-  } catch (e) {}
-})();
-</script>
+<script src="/theme.js"></script><!-- tema: stil hesaplanmadan önce uygulanır -->
 <style>
 body { padding:24px; max-width:1400px; margin-inline:auto; }
 a { color:var(--blue); }
@@ -68,23 +51,24 @@ input[type=text], input[type=number], select { width:100%; }
 #msg { font-size:13px; }
 /* Güvenlik denetimi kartı + iPhone tarzı anahtar (Aç/Kapat sayfasıyla aynı görünüm) */
 .secc { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-.secc-ic { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; flex:none; background:var(--tealBg); color:var(--teal); }
+.secc-ic { width:42px; height:42px; border-radius:var(--md-shape-md); display:grid; place-items:center; flex:none; background:var(--tealBg); color:var(--teal); }
 .secc-ic svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .secc-t { flex:1; min-width:220px; }
 .secc-h { font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .secc-st { font:600 11.5px/1 var(--font-ui); padding:4px 9px; border-radius:999px; background:var(--bg); color:var(--muted); }
 .secc-st.on { background:var(--tealBg); color:var(--teal); }
 .secc-a { font-size:13px; white-space:nowrap; }
-.sw { appearance:none; -webkit-appearance:none; flex:none; position:relative; width:51px !important; height:31px; min-height:0 !important; margin:0; cursor:pointer;
+/* input.sw: göstergedeki çizgi örnekleri (.legend .sw) de "sw" sınıfını taşıyor — topuz onlara çizilmesin */
+input.sw { appearance:none; -webkit-appearance:none; flex:none; position:relative; width:51px !important; height:31px; min-height:0 !important; margin:0; cursor:pointer;
   border-radius:999px !important; background:var(--md-outline-variant); transition:background-color 220ms ease; }
-[data-theme="radar"] .sw { background:var(--md-outline); }
-.sw::after { content:""; position:absolute; top:2px; left:2px; width:27px; height:27px; border-radius:50% !important; background:#fff;
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"]) input.sw { background:var(--md-outline); }
+input.sw::after { content:""; position:absolute; top:2px; left:2px; width:27px; height:27px; border-radius:50% !important; background:#fff;
   box-shadow:0 3px 8px rgba(0,0,0,.18), 0 1px 1px rgba(0,0,0,.16); transition:transform 220ms cubic-bezier(.3,.7,.4,1); }
-.sw:checked, [data-theme] .sw:checked { background:var(--md-secondary); }
-.sw:checked::after { transform:translateX(20px); }
-.sw:focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
-.sw:disabled { opacity:.5; cursor:default; }
-.mono { font-family:ui-monospace,Consolas,monospace; }
+input.sw:checked, [data-theme] input.sw:checked { background:var(--md-secondary); }
+input.sw:checked::after { transform:translateX(20px); }
+input.sw:focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
+input.sw:disabled { opacity:.5; cursor:default; }
+.mono { font-family:var(--font-mono); }
 /* Rol tanımı düzenleyicisi (persona .md) — büyük pencere */
 .mdd { border:none; padding:0; width:min(1000px, calc(100vw - 32px)); max-height:calc(100vh - 32px);
   background:var(--md-surface-container); color:var(--text); border-radius:var(--md-shape-lg); box-shadow:var(--md-elev-3); }
@@ -93,7 +77,7 @@ input[type=text], input[type=number], select { width:100%; }
 .mdd-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font:var(--md-type-title-md); }
 .mdd-h .sp, .mdd-foot .sp { flex:1; }
 .mdd-adv { display:flex; align-items:center; gap:6px; font:var(--md-type-body-md); color:var(--muted); cursor:pointer; }
-#mdText { width:100%; height:min(58vh, 640px); resize:vertical; font:13px/1.55 ui-monospace,Consolas,monospace !important; tab-size:2; white-space:pre-wrap; }
+#mdText { width:100%; height:min(58vh, 640px); resize:vertical; font:13px/1.55 var(--font-mono) !important; tab-size:2; white-space:pre-wrap; }
 #mdDesc { width:100%; }
 .mdd-foot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 #mdErr { font-size:12.5px; color:var(--red); overflow-wrap:anywhere; }
@@ -107,7 +91,7 @@ input[type=text], input[type=number], select { width:100%; }
 #rMsg, #xMsg { font-size:13px; }
 .mtab { width:100%; max-width:460px; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
 .mtab td { padding:4px 8px 4px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
-.mtab td.n { text-align:right; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
+.mtab td.n { text-align:right; white-space:nowrap; font-family:var(--font-mono); }
 
 /* Dar ekran: graf + özellik paneli yan yana sığmaz, alt alta akar */
 @media (max-width:900px) {
@@ -126,10 +110,7 @@ input[type=text], input[type=number], select { width:100%; }
   <span class="sp"></span>
   <span id="msg"></span>
   <button class="primary" id="btnSave" disabled>Kaydet</button>
-  <div class="tswitch" role="radiogroup" aria-label="Tema">
-    <button class="tsw" data-t="evrak" aria-label="Gizli Evrak"></button>
-    <button class="tsw" data-t="radar" aria-label="Radar"></button>
-  </div>
+  <div class="tswitch" role="radiogroup" aria-label="Tema"></div>
   <a href="/">← izleme paneli</a>
 </div>
 
@@ -143,6 +124,17 @@ input[type=text], input[type=number], select { width:100%; }
   </div>
   <a href="/guvenlik" class="secc-a">Raporlar →</a>
   <input type="checkbox" role="switch" class="sw" id="secSw" aria-label="Güvenlik denetimi">
+</div>
+
+<!-- Planı otomatik iletme: Analist'in planı onay kartında beklemeden Saha Timi'ne geçer.
+     Akışın autoForwardPlan ayarı — anında uygulanır, Kaydet beklemez. Varsayılan kapalı. -->
+<div class="card secc" id="fwdCard" style="margin-bottom:14px">
+  <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5v14l8-7z"/><path d="M12 5v14l8-7z"/><path d="M21 5v14"/></svg></div>
+  <div class="secc-t">
+    <div class="secc-h">Planı Saha Timi'ne otomatik ilet <span id="fwdState" class="secc-st"></span></div>
+    <div class="fhint" style="font-size:12.5px">Açıkken Analist'in planı hazır olunca onay kartı açılmaz, plan düğmeye basmadan Saha Timi'ne geçer. Plan boş ya da okunamaz gelirse onayın yine sorulur. Sıradaki görevde geçerli.</div>
+  </div>
+  <input type="checkbox" role="switch" class="sw" id="fwdSw" aria-label="Planı Saha Timi'ne otomatik ilet">
 </div>
 
 <div class="card" style="margin-bottom:14px">
@@ -297,20 +289,6 @@ input[type=text], input[type=number], select { width:100%; }
 
 <script>
 const $ = (id) => document.getElementById(id);
-
-// Tema: yalnızca renk örnekleri (adlar görünmez). Seçim <html data-theme>'e uygulanır,
-// localStorage'a yazılır (sayfa başındaki betik okur; panel ve şema ortak)
-function applyThemeUI() {
-  for (const b of document.querySelectorAll(".tsw")) b.classList.toggle("on", b.dataset.t === document.documentElement.dataset.theme);
-}
-for (const b of document.querySelectorAll(".tsw")) {
-  b.addEventListener("click", () => {
-    document.documentElement.dataset.theme = b.dataset.t;
-    try { localStorage.setItem("kurmay-theme", b.dataset.t); } catch (e) {}
-    applyThemeUI();
-  });
-}
-applyThemeUI();
 
 function esc(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -677,9 +655,34 @@ $("secSw").addEventListener("change", async ()=>{
   render();
 });
 
+// Planı otomatik iletme kartı: akışın autoForwardPlan ayarı (POST /auto-forward, canlı)
+function renderFwdCard(){
+  const on = !!(cfg && cfg.workflow.autoForwardPlan);
+  $("fwdSw").checked = on;
+  $("fwdState").textContent = on ? "açık" : "kapalı"; $("fwdState").className = "secc-st" + (on ? " on" : "");
+}
+$("fwdSw").addEventListener("change", async ()=>{
+  if (!cfg) return;
+  const want = $("fwdSw").checked;
+  $("fwdSw").disabled = true;
+  try {
+    const res = await fetch("/auto-forward", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ enabled: want }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "uygulanamadı");
+    // Sayfadaki kopya da güncellenir — sonradan Kaydet'e basılırsa ayar geri dönmesin
+    if (want) cfg.workflow.autoForwardPlan = true; else delete cfg.workflow.autoForwardPlan;
+    $("msg").innerHTML = `<span style="color:var(--teal)">✓ ${want ? "Plan onay beklemeden Saha Timi'ne iletilecek" : "Plan yine onayına sunulacak"} — sıradaki görevde geçerli</span>`;
+  } catch (err){
+    $("msg").innerHTML = `<span style="color:var(--red)">✗ ${esc(err.message)}</span>`;
+  }
+  $("fwdSw").disabled = false;
+  renderFwdCard();
+});
+
 function render(){
   drawGraph();
   renderSecCard();
+  renderFwdCard();
   const panel = $("panel");
   panel.innerHTML = "";
   if (!selected){ panel.innerHTML = `<div class="hint">Düzenlemek için bir düğüm seç.</div>`; return; }
