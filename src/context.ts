@@ -50,7 +50,14 @@ export function tokensOfUsage(usage: unknown): number | undefined {
   return total > 0 ? total : undefined;
 }
 
-/** Sunucunun "bağlam doldu" hatası mı (vLLM, Anthropic, OpenAI biçimleri) */
+/**
+ * Sunucunun "bağlam doldu" hatası mı. vLLM iki biçimde yazar: "This model's maximum
+ * context length is …" (girdi + istenen yanıt sığmıyor) ve "The decoder prompt (length …)
+ * is longer than the maximum model length of …" (girdi tek başına sığmıyor). Anthropic
+ * "prompt is too long" / "exceed context limit", OpenAI "context_length_exceeded".
+ * Gevşek ifadeler ("too many tokens", yalın "context window") istek sınırı ya da başka
+ * hata metinlerinde de geçtiği için YOK — yanlış eşleşme konuşmayı boşuna özetletiyordu.
+ */
 export function isContextFullError(message: string): boolean {
-  return /maximum context length|context length|context window|prompt is too long|input is too long|too many tokens|context_length_exceeded/i.test(message);
+  return /maximum context length|maximum model length|context length|context[ _-]?(?:window|limit)[ _-]?exceeded|exceeds? (?:the )?(?:available )?context (?:window|limit|size)|prompt is too long|input is too long|context_length_exceeded/i.test(message);
 }

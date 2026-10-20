@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseRunAt } from "./approval.js";
+import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -72,7 +73,11 @@ export interface UiServerOptions {
     task: string,
     session?: string,
     runAt?: number,
+    /** Görevle yapıştırılan/sürüklenen dosyalar (src/attachments.ts) */
+    files?: FileInput[],
   ) => { ok: boolean; error?: string; session?: string; warning?: string };
+  /** Görev eklerinin klasörü (runs/) — GET /ekler/<oturum>/<dosya> */
+  runsDir?: string;
   /** Oturum listesi + canlı durumları (GET /sessions ve /lobby SSE) */
   getSessions: () => unknown[];
   /** Oturum biliniyorsa runtime'ını verir (geçmişi diskten yükleyerek); yoksa undefined */
@@ -251,6 +256,25 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       res.writeHead(200, { "content-type": "font/woff2", "cache-control": "public, max-age=86400" });
       res.end(fs.readFileSync(file));
+      return;
+    }
+
+    // Görev ekleri — panel görev balonunda görseli küçük resim, diğerlerini indirme bağlantısı olarak gösterir
+    if (req.method === "GET" && url.pathname.startsWith("/ekler/")) {
+      const [sessionId = "", name = ""] = url.pathname.slice("/ekler/".length).split("/");
+      const found = options.runsDir ? resolveAttachment(options.runsDir, sessionId, name) : undefined;
+      if (!found) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": found.type,
+        "cache-control": "private, max-age=86400",
+        "x-content-type-options": "nosniff",
+        ...(found.inline ? {} : { "content-disposition": `attachment; filename="${name}"` }),
+      });
+      res.end(fs.readFileSync(found.file));
       return;
     }
 
@@ -671,7 +695,9 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
             return json(res, 400, { ok: false, error: `başlangıç zamanı anlaşılamadı: ${parsed.runAt}` });
           }
         }
-        const result = options.onTask(task, session, runAt);
+        const { files, error: fileError } = parseFiles(parsed.files);
+        if (fileError) return json(res, 400, { ok: false, error: fileError });
+        const result = options.onTask(task, session, runAt, files);
         json(res, result.ok ? 202 : 409, result);
       });
       return;

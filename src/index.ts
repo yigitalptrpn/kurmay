@@ -15,7 +15,8 @@ import { runWorkflow } from "./orchestrator.js";
 import { RuntimeRegistry, type SessionRuntime } from "./runtime.js";
 import { startUiServer, type ToggleKind, type UiServer } from "./server.js";
 import { SecurityReportStore, watchSecurityReports } from "./securityReport.js";
-import { SessionStore, type SessionEntry } from "./sessions.js";
+import { SessionStore, sessionRecap, type SessionEntry } from "./sessions.js";
+import { attachmentSection, saveFiles, type Attachment, type FileInput } from "./attachments.js";
 import { isFanoutNode, mainPath, type AgentDefinition, type AppConfig } from "./types.js";
 
 function parseArgs(argv: string[]): {
@@ -68,6 +69,8 @@ function snapshotConfig(cfg: AppConfig): AppConfig {
  */
 async function executeRun(o: {
   task: string;
+  /** Görevle verilen dosyalar (kaydedilmiş) — ajanlara görev metninin sonunda yollarıyla gider */
+  attachments?: Attachment[];
   cfg: AppConfig;
   agents: Map<string, AgentDefinition>;
   cwd: string;
@@ -97,9 +100,13 @@ async function executeRun(o: {
     label: entry.name,
   });
   // entrySessionId: analistin SDK oturumu — varsa sürdürülür, koşu boyunca güncellenir
-  const sessionStore: { entrySessionId?: string; entryContext?: number } = {
+  // Bu koşudan önceki olaylar (oturumun eski görevleri) — konuşma kaybolursa özet buradan
+  const priorEvents = bus.history.length;
+  const sessionStore: NonNullable<Parameters<typeof runWorkflow>[8]> = {
     entrySessionId: entry.sdkSessionId,
     entryContext: entry.contextTokens,
+    recap: () => sessionRecap(bus.history.slice(0, priorEvents), cfg.workflow.entry),
+    onSession: (id) => o.sessions.setSdkSession(entry.id, id),
   };
 
   console.log(`\n🎯 [${entry.name}] Görev: ${task}`);
@@ -115,6 +122,7 @@ async function executeRun(o: {
       maxCycles: cfg.workflow.maxCycles,
       agents: [...agents.keys()],
       resumed,
+      ...(o.attachments?.length ? { attachments: o.attachments.map(({ name, original }) => ({ name, original })) } : {}),
       fanouts: Object.fromEntries(
         Object.entries(cfg.workflow.agents)
           .filter(([, n]) => isFanoutNode(n))
@@ -124,7 +132,7 @@ async function executeRun(o: {
         .filter(([, n]) => n.disabled)
         .map(([key]) => key),
     });
-    await runWorkflow(cfg.workflow, agents, task, cwd, cfg, bus, abortController, runtime.web, sessionStore, o.startAt);
+    await runWorkflow(cfg.workflow, agents, task + attachmentSection(o.attachments ?? []), cwd, cfg, bus, abortController, runtime.web, sessionStore, o.startAt);
   } catch (err) {
     bus.emit({ type: "workflow_failed", error: err instanceof Error ? err.message : String(err) });
     throw err;
@@ -241,7 +249,7 @@ async function main() {
     });
 
   /** Bir oturumda görev başlatır (oturum yoksa açar); arka planda koşar */
-  const launch = (task: string, entry: SessionEntry | undefined, runAt?: number) => {
+  const launch = (task: string, entry: SessionEntry | undefined, runAt?: number, files: FileInput[] = []) => {
     // Yeni oturum o anki genel model/derinlik/dizinle açılır; sonra panelden yalnızca kendisi için değişebilir
     const e = entry ?? sessions.create(task, cfg.model, cfg.effort, cwd);
     // Eski kayıt (dizinsiz): o anki genel dizine sabitlenir — konuşması da o dizinde
@@ -253,6 +261,7 @@ async function main() {
     const runtime = runtimes.get(e.id, e.runLogs);
     const run = executeRun({
       task,
+      attachments: saveFiles(runsDir, e.id, files),
       // Kopya: panelden model/düğüm değişirse çalışan koşunun kalan adımları etkilenmesin
       cfg: runCfg,
       agents,
@@ -533,6 +542,7 @@ async function main() {
   let server: UiServer | undefined;
   if (!noUi) {
     server = await startUiServer(portFlag ?? cfg.uiPort ?? 4141, {
+      runsDir,
       runtimes,
       getSessions: sessionList,
       openSession: (id) => {
@@ -785,7 +795,7 @@ async function main() {
       },
       onTask: task
         ? undefined // CLI görevli modda panelden görev alınmaz
-        : (t, sessionId, runAt) => {
+        : (t, sessionId, runAt, files) => {
             const existing = sessionId ? sessions.get(sessionId) : undefined;
             if (modelMissing({ ...cfg, model: existing?.model || cfg.model })) {
               return { ok: false, error: "Model seçilmedi — üst çubuktaki model listesinden bir model seç" };
@@ -809,7 +819,7 @@ async function main() {
             // Aynı dizine iki akış aynı anda yazarsa birbirini ezer — engellemiyoruz
             // (salt okunur bilgi soruları zararsız) ama açıkça uyarıyoruz
             const clash = busy.find((r) => r.cwd === dir);
-            const { entry: e, run } = launch(t, entry, runAt);
+            const { entry: e, run } = launch(t, entry, runAt, files);
             run.catch((err) => console.error(`💥 [${e.name}] Koşu hatası:`, err instanceof Error ? err.message : err));
             return {
               ok: true,

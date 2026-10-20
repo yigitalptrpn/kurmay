@@ -15,6 +15,8 @@ export type OrchestratorEvent =
       agents: string[];
       /** true ise entry ajan önceki oturumu sürdürüyor — panel akışı temizlenmez */
       resumed?: boolean;
+      /** Görevle verilen dosyalar: diskteki ad (runs/ekler/<oturum>/, GET /ekler/…) + kullanıcının verdiği ad */
+      attachments?: Array<{ name: string; original: string }>;
       /** Devre dışı düğümler — panel hatta soluk/üstü çizili gösterir */
       disabled?: string[];
       /** Fanout düğümü → çoğalttığı ajan. Kopyalar fanout_started'da belli olur */
@@ -47,13 +49,16 @@ export type OrchestratorEvent =
       error: string;
       /** Türkçe sebep ("sunucu meşgul (503)", "akış takıldı …") — eski kayıtlarda yok */
       reason?: string;
-      /** transient | permanent | lost_session (src/resilience.ts) */
+      /** transient | permanent | lost_session | context_full (src/resilience.ts) */
       kind?: string;
       delayMs: number;
       /** true ise deneme resume ile yapılacak (ajan baştan başlamaz) */
       resumed: boolean;
       /** true ise görev tekrar gönderilmez, kısa devam mesajı gider */
       continued?: boolean;
+      /** Sıradaki denemenin nasıl yapılacağı, Türkçe ("yeni konuşmayla başlanacak",
+       *  "özetleme yeniden denenecek"…) — varsa panel resumed/continued yerine bunu yazar */
+      note?: string;
     }
   | {
       /** Ajanın konuşma boyutu (son model yanıtından) — paneldeki bağlam göstergesi */
@@ -92,6 +97,12 @@ export type OrchestratorEvent =
       sessionId: string;
       cwd: string;
       foundDir?: string;
+      /** Claude Code'un konuşma kayıtlarının arandığı klasör (~/.claude/projects) */
+      projectsDir?: string;
+      /** Kayıt aranırken çıkan hata (varsa "bulunamadı" kesin değil) */
+      searchError?: string;
+      /** Yeni konuşmaya oturumun önceki görevlerinin özeti verildi */
+      recap?: boolean;
     }
   | {
       /** Claude Code isteği kendi içinde yeniden deniyor (süreç kapanmadan) */

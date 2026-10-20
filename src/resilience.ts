@@ -109,7 +109,17 @@ export interface ClassifiedError {
   /** Panelde görünen Türkçe sebep */
   reason: string;
   status?: number;
+  /** Altyapı kaynaklı (sunucu meşgul, ağ, zaman aşımı): isteğin içeriğiyle ilgisi
+   *  yok, beklemek yeter. Yoksa hata bu isteğe/konuşmaya özgü olabilir (500, 400,
+   *  tanınmayan) — tekrarlıyorsa konuşma bozuk sayılır (runAgent) */
+  infra?: boolean;
 }
+
+/** Sunucunun "meşgulüm / zaman aşımı" kodları — metinleri bağlam hatası sayılmaz
+ *  (ör. 429 "too many tokens per minute") */
+const BUSY_STATUSES = [408, 429, 503, 529];
+/** İsteğin içeriğinden bağımsız, altyapı kaynaklı durum kodları */
+const INFRA_STATUSES = [408, 409, 429, 502, 503, 504, 529];
 
 /** Claude Code'un hata kodu (assistant.error / api_retry.error) → Türkçe sebep */
 const API_ERROR_NAMES: Record<string, string> = {
@@ -160,38 +170,52 @@ export function apiErrorReason(status: number | null | undefined, apiError?: str
  * devam etmesi — yanlışlıkla kalıcı saymak akışı düşürür.
  */
 export function classifyError(err: unknown, apiError?: string): ClassifiedError {
-  if (err instanceof StallError) return { kind: "transient", reason: `akış takıldı (${Math.round(err.ms / 1000)} sn veri gelmedi)` };
+  if (err instanceof StallError) {
+    return { kind: "transient", infra: true, reason: `akış takıldı (${Math.round(err.ms / 1000)} sn veri gelmedi)` };
+  }
   const msg = err instanceof Error ? err.message : String(err);
 
   if (/No conversation found/i.test(msg)) {
     return { kind: "lost_session", reason: "sürdürülecek konuşma bulunamadı" };
   }
-  // vLLM "This model's maximum context length is …" (400) — Claude Code bunu tanımıyor,
-  // sıradan 400 sanıyor; aynı konuşmayı tekrar göndermek hep aynı hatayı verir
-  if (isContextFullError(msg)) return { kind: "context_full", reason: "bağlam penceresi doldu" };
 
   // Durum kodu: "API Error: 503 …", "Request rejected (429)", "API Error: 401 …"
   const m = /API Error:\s*(\d{3})\b/.exec(msg) ?? /\((\d{3})\)/.exec(msg);
-  const status = m ? Number(m[1]) : undefined;
-  if (status && status >= 100 && status < 600) {
-    const permanent = [400, 401, 403, 404, 413, 422].includes(status);
-    return { kind: permanent ? "permanent" : "transient", reason: statusReason(status), status };
+  const code = m ? Number(m[1]) : undefined;
+  const status = code && code >= 100 && code < 600 ? code : undefined;
+
+  // vLLM "This model's maximum context length is …" (400) — Claude Code bunu tanımıyor,
+  // sıradan 400 sanıyor; aynı konuşmayı tekrar göndermek hep aynı hatayı verir.
+  // Meşgul kodlarında aranmaz: istek sınırı metni bağlam doldu sanılıp konuşma özetlenmesin
+  if (!(status && BUSY_STATUSES.includes(status)) && isContextFullError(msg)) {
+    return { kind: "context_full", reason: "bağlam penceresi doldu" };
   }
 
-  if (/timed? ?out|timeout|ETIMEDOUT/i.test(msg)) return { kind: "transient", reason: "zaman aşımı (yanıt gelmedi)" };
+  if (status) {
+    const permanent = [400, 401, 403, 404, 413, 422].includes(status);
+    return {
+      kind: permanent ? "permanent" : "transient",
+      reason: statusReason(status),
+      status,
+      ...(INFRA_STATUSES.includes(status) ? { infra: true } : {}),
+    };
+  }
+
+  if (/timed? ?out|timeout|ETIMEDOUT/i.test(msg)) return { kind: "transient", infra: true, reason: "zaman aşımı (yanıt gelmedi)" };
   // Önce kopma: Claude Code ECONNRESET'i de "Unable to connect to API (ECONNRESET)" diye yazıyor
   if (/ECONNRESET|socket hang up|EPIPE|terminated|premature|aborted|Connection error|network/i.test(msg)) {
-    return { kind: "transient", reason: "bağlantı koptu" };
+    return { kind: "transient", infra: true, reason: "bağlantı koptu" };
   }
   if (/ECONNREFUSED|Unable to connect|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH/i.test(msg)) {
-    return { kind: "transient", reason: "sunucuya bağlanılamadı" };
+    return { kind: "transient", infra: true, reason: "sunucuya bağlanılamadı" };
   }
-  if (/overloaded/i.test(msg)) return { kind: "transient", reason: "sunucu aşırı yüklü" };
+  if (/overloaded/i.test(msg)) return { kind: "transient", infra: true, reason: "sunucu aşırı yüklü" };
 
   if (apiError) {
     return {
       kind: PERMANENT_API_ERRORS.has(apiError) ? "permanent" : "transient",
       reason: API_ERROR_NAMES[apiError] ?? "bağlantı hatası",
+      ...(apiError === "rate_limit" || apiError === "overloaded" ? { infra: true } : {}),
     };
   }
   // Bütçe/tur sınırı gibi ajanın kendi sınırları — tekrar denemek aynı yere çıkar
