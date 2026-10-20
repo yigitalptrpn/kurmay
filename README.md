@@ -97,6 +97,7 @@ Akış:
 Akış başlarken `http://localhost:4141` adresinde bir izleme paneli açılır (`--port` ile değiştir, `--no-ui` ile kapat; config'de `uiPort` alanı da var). Panel SSE ile canlı beslenir:
 
 - **Yeni görev kartı** — sunucu modunda görevleri buradan girersin; koşu sürerken gizlenir, bitince geri gelir (aynı anda tek koşu, meşgulken 409)
+- **Dosya ekleme** — görev kutusuna ekran görüntüsü/dosya yapıştır (Ctrl+V) ya da görev kartına sürükle-bırak (en fazla 10 dosya, her biri 20 MB). Dosyalar `runs/ekler/<oturum>/` altına kaydedilir, ajanlara yollarıyla bildirilir, ajan Read ile açar. PDF ve Word (.docx) belgelerinin metni yüklenirken çıkarılıp yanına `.txt` yazılır — ajan onu okur (model sunucusu PDF'i doğrudan anlamayabilir). Görseller yalnızca **görsel destekli** bir modelde işe yarar.
 - **Ajan hattı** — hangi ajan bekliyor/çalışıyor/bitti/reddetti
 - **Olay akışı** — ajan metinleri, araç kullanımları, kararlar (zaman damgalı)
 - **Teftiş kararı** — onay/red + sorun listesi (önem dereceleriyle)
@@ -105,7 +106,7 @@ Akış başlarken `http://localhost:4141` adresinde bir izleme paneli açılır 
 
 Her koşunun tüm olayları ayrı bir `runs/<tarih>.jsonl` dosyasına da yazılır — geçmiş koşuları incelemek için.
 
-HTTP arayüzü: `GET /` panel, `GET /events` SSE, `POST /approval` onay, `POST /task` yeni görev (sadece sunucu modunda).
+HTTP arayüzü: `GET /` panel, `GET /events` SSE, `POST /approval` onay, `POST /task` yeni görev (sadece sunucu modunda; `files: [{name, data}]` ile ek), `GET /ekler/<oturum>/<dosya>` görev ekleri.
 
 ## config.json
 

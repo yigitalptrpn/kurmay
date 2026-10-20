@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { getSessionInfo, getSessionMessages, query, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type McpServerStatus } from "@anthropic-ai/claude-agent-sdk";
 import { activeMcpServers, buildAgentEnv, disabledMcpServers, isOffMcpTool } from "./config.js";
@@ -9,6 +10,7 @@ import {
   apiErrorReason,
   backoffDelay,
   classifyError,
+  type ClassifiedError,
   CONTINUE_PROMPT,
   CONTINUE_PROMPT_SHORT,
   retrySettings,
@@ -181,12 +183,39 @@ export interface RunAgentOptions {
   /** Sürdürülen konuşmanın (resume) bilinen boyutu, token — eşiği geçmişse ajan
    *  çalışmadan önce konuşma özetlenir */
   contextTokens?: number;
+  /** Sürdürülen konuşma bırakılıp yenisi açılırsa (kaydı kayıp, bozuk, bağlam doldu)
+   *  yeni konuşmanın başına konacak önceki görevler özeti — oturumun kendi koşu
+   *  kayıtlarından; Analist oturumdaki eski işleri tamamen unutmasın */
+  recap?: () => string | undefined;
+  /** Konuşma kimliği öğrenilince (ilk mesajda) çağrılır — servis iş ortasında
+   *  durdurulsa da oturum bu konuşmadan sürsün diye hemen kaydedilir */
+  onSession?: (id: string) => void;
 }
+
+/**
+ * Altyapı dışı hata (400, 500, tanınmayan) ajan arada hiç ilerlemeden bu kadar kez
+ * üst üste gelirse konuşma bozuk sayılır ve yenisi açılır. Sorunlu proxy'de görüldüğü
+ * gibi: geçmişteki bir mesajı (görsel, düşünme bloğu…) çeviremeyen sunucu aynı
+ * konuşmanın HER sürdürülüşünü reddeder; eskiden 5 denemede koşu düşüyor, oturumun
+ * sonraki görevleri de aynı konuşmayla açılıp yine düşüyordu.
+ */
+const SUSPECT_SWITCH = 2;
 
 /** Ajanın ortam değişkenleri: canlı ayarlar + modelin gerçek bağlam penceresi */
 function agentEnv(cfg: ProviderConfig, info: ContextInfo | undefined): Record<string, string> | undefined {
   const live = withLiveResilience(cfg);
   return buildAgentEnv(info ? { ...live, limits: { ...live.limits, contextTokens: info.window } } : live);
+}
+
+/** Özetleme denemesinin sonucu */
+interface CompactResult {
+  ok: boolean;
+  pre?: number;
+  post?: number;
+  error?: string;
+  /** Özetleme isteği sunucu hatasıyla düştüyse hatanın türü (yalnızca geçiciler yeniden
+   *  denenir); "özetlenecek mesaj yok" gibi hallerde yok */
+  failure?: ClassifiedError;
 }
 
 /**
@@ -195,21 +224,22 @@ function agentEnv(cfg: ProviderConfig, info: ContextInfo | undefined): Record<st
  * Sahte API ile doğrulandı (50.002 → 675 token; sonraki görev aynı oturumdan,
  * kısalmış konuşmayla devam etti). Tek mesajlık konuşmada Claude Code "Not enough
  * messages to compact" deyip bir şey yapmaz.
+ *
+ * DİKKAT — başarısız özetleme HATA OLARAK GELMEZ (sahte proxy ile ölçüldü, CLI
+ * 2.1.201): sonuç `success` + `is_error:false`, metni "Error during compaction:
+ * API Error: 503 …"; asıl bilgi `system/status` mesajında `compact_result:"failed"`
+ * + `compact_error`. Eskiden bu "özetleme yapılmadı" sayılıyordu → 503 yüzünden
+ * Analist'in konuşması çöpe gidiyordu.
  */
 async function compactSession(
   agent: AgentDefinition,
   sessionId: string,
   cwd: string,
   cfg: ProviderConfig,
-  bus: EventBus,
   abortController: AbortController,
-  reason: "esik" | "dolu",
-  tokens: number | undefined,
-): Promise<{ ok: boolean; pre?: number; post?: number; error?: string }> {
+): Promise<CompactResult> {
   const model = agent.config.model ?? cfg.model;
   const info = contextInfo(model, withLiveResilience(cfg));
-  console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : "bağlam doldu"})…`);
-  bus.emit({ type: "context_compacting", agent: agent.key, tokens: tokens ?? 0, limit: info?.limit, reason });
   const env = agentEnv(cfg, info);
   const ac = new AbortController();
   const relay = () => ac.abort();
@@ -217,6 +247,9 @@ async function compactSession(
   let pre: number | undefined;
   let post: number | undefined;
   let error: string | undefined;
+  /** Hata sunucudan mı geldi (yeniden denenebilir) */
+  let apiFailed = false;
+  let apiError: string | undefined;
   let text = "";
   try {
     const q = query({
@@ -237,27 +270,94 @@ async function compactSession(
       if (m.type === "system" && m.subtype === "compact_boundary") {
         pre = m.compact_metadata.pre_tokens;
         post = m.compact_metadata.post_tokens;
+      } else if (m.type === "system" && m.subtype === "status") {
+        const s = m as { compact_result?: string; compact_error?: string };
+        if (s.compact_result === "failed") {
+          error = s.compact_error || "özetleme isteği başarısız";
+          apiFailed = true;
+        }
+      } else if (m.type === "assistant" && m.error) {
+        apiError = m.error;
       } else if (m.type === "result") {
         if (m.subtype !== "success") error = "errors" in m && m.errors?.length ? m.errors.join("; ") : m.subtype;
         else if (m.is_error) error = m.result;
         else text = m.result;
+        if (error) apiFailed = true;
       }
     }
   } catch (e) {
     if (abortController.signal.aborted) throw new RunCancelledError();
     error = e instanceof Error ? e.message : String(e);
+    apiFailed = true;
   } finally {
     abortController.signal.removeEventListener("abort", relay);
   }
   if (abortController.signal.aborted) throw new RunCancelledError();
   if (!error && pre === undefined) {
-    error = /Not enough messages/i.test(text) ? "özetlenecek yeterli mesaj yok" : "özetleme yapılmadı";
+    if (/^Error during compaction/i.test(text)) {
+      error = text; // eski/farklı sürüm durum mesajını vermezse metinden
+      apiFailed = true;
+    } else {
+      error = /Not enough messages/i.test(text) ? "özetlenecek yeterli mesaj yok" : "özetleme yapılmadı";
+    }
   }
   const ok = !error;
-  console.log(ok
-    ? `  📦 ${agent.name}: konuşma özetlendi (${pre ?? "?"} → ${post ?? "?"} token)`
-    : `  ⚠ ${agent.name}: konuşma özetlenemedi (${error})`);
-  return { ok, pre, post, error };
+  return { ok, pre, post, error, ...(!ok && apiFailed ? { failure: classifyError(new Error(error), apiError) } : {}) };
+}
+
+/**
+ * Özetlemeyi model sunucusu hatalarına karşı yeniden dener — sorunlu proxy'de en
+ * çok düşen istek bu (konuşmanın tamamını okuyan uzun istek) ve düşerse Analist'in
+ * konuşması bırakılıyordu. Altyapı hatası (503, zaman aşımı, kopma) bekleyerek ajanla
+ * aynı kuralla (sınırsız, canlı ayar) denenir; isteğe özgü görünen hata (500, 400,
+ * tanınmayan) SUSPECT_SWITCH kez tekrarlarsa, bağlam/kayıt hatası hemen pes edilir.
+ */
+async function compactWithRetry(
+  agent: AgentDefinition,
+  sessionId: string,
+  cwd: string,
+  cfg: ProviderConfig,
+  bus: EventBus,
+  abortController: AbortController,
+  reason: "esik" | "dolu",
+  tokens: number | undefined,
+): Promise<CompactResult> {
+  const info = contextInfo(agent.config.model ?? cfg.model, withLiveResilience(cfg));
+  console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : "bağlam doldu"})…`);
+  bus.emit({ type: "context_compacting", agent: agent.key, tokens: tokens ?? 0, limit: info?.limit, reason });
+  let step = 0;
+  let suspect = 0;
+  for (let attempt = 1; ; attempt++) {
+    const r = await compactSession(agent, sessionId, cwd, cfg, abortController);
+    const f = r.failure;
+    const s = retrySettings(cfg.retry);
+    const giveUp =
+      r.ok || !f || f.kind === "context_full" || f.kind === "lost_session" ||
+      (!f.infra && ++suspect >= SUSPECT_SWITCH) ||
+      !s.enabled || (s.maxAttempts > 0 && attempt >= s.maxAttempts);
+    if (giveUp) {
+      console.log(r.ok
+        ? `  📦 ${agent.name}: konuşma özetlendi (${r.pre ?? "?"} → ${r.post ?? "?"} token)`
+        : `  ⚠ ${agent.name}: konuşma özetlenemedi (${r.error})`);
+      return r;
+    }
+    const delay = backoffDelay(step++, s);
+    console.warn(`  🔌 ${agent.name}: özetleme — ${f.reason}, ${(delay / 1000).toFixed(1)}sn sonra yeniden [${(r.error ?? "").slice(0, 200)}]`);
+    bus.emit({
+      type: "agent_retrying",
+      agent: agent.key,
+      attempt,
+      maxAttempts: s.maxAttempts,
+      error: r.error ?? "",
+      reason: f.reason,
+      kind: f.kind,
+      delayMs: delay,
+      resumed: true,
+      continued: false,
+      note: "özetleme yeniden denenecek",
+    });
+    await abortableSleep(delay, abortController.signal);
+  }
 }
 
 /**
@@ -436,6 +536,7 @@ async function executeQuery(
     } else if (message.type === "system" && message.subtype === "init") {
       // Oturum kimliği daha ilk mesajda gelir — bağlantı ortada kopsa bile
       // elimizde kalsın ki yeniden deneme baştan değil resume ile yapılabilsin
+      if (session.id !== message.session_id) opts.onSession?.(message.session_id);
       session.id = message.session_id;
       if (mcpServers && !session.mcpReported) {
         session.mcpReported = true;
@@ -551,19 +652,32 @@ async function countPrompt(sessionId: string, cwd: string, prompt: string): Prom
  * (~/.claude/projects/<dizin>/<kimlik>.jsonl); başka dizinde ya da başka
  * kullanıcıda/konteynerde açılmış konuşma burada bulunamaz.
  */
-async function reportLostSession(agent: AgentDefinition, sessionId: string, cwd: string, bus: EventBus): Promise<void> {
+async function reportLostSession(
+  agent: AgentDefinition,
+  sessionId: string,
+  cwd: string,
+  bus: EventBus,
+  recap: boolean,
+): Promise<void> {
   let foundDir: string | undefined;
+  let searchError: string | undefined;
   try {
     foundDir = (await getSessionInfo(sessionId))?.cwd;
-  } catch {
-    /* aranamadı — "bulunamadı" yazılır */
+  } catch (e) {
+    searchError = e instanceof Error ? e.message : String(e); // aranamadı — sebebi de yazılsın
   }
+  // Claude Code konuşmaları buraya yazar — kullanıcı "dosya nerede olmalıydı" diye bakabilsin
+  const projectsDir = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), "projects");
   console.warn(
     `  ⚠ ${agent.name}: önceki konuşma (${sessionId}) ` +
-      (foundDir ? `başka klasörde kayıtlı: ${foundDir} (bu koşunun dizini: ${cwd})` : "bu bilgisayarda bulunamadı") +
-      " — yeni konuşmayla başlanıyor",
+      (foundDir ? `başka klasörde kayıtlı: ${foundDir} (bu koşunun dizini: ${cwd})` : `bulunamadı (aranan yer: ${projectsDir})`) +
+      (searchError ? ` [arama hatası: ${searchError}]` : "") +
+      ` — yeni konuşmayla başlanıyor${recap ? ", önceki görevlerin özeti verildi" : ""}`,
   );
-  bus.emit({ type: "session_lost", agent: agent.key, sessionId, cwd, ...(foundDir ? { foundDir } : {}) });
+  bus.emit({
+    type: "session_lost", agent: agent.key, sessionId, cwd, projectsDir,
+    ...(foundDir ? { foundDir } : {}), ...(searchError ? { searchError } : {}), ...(recap ? { recap } : {}),
+  });
 }
 
 /** Konuşma kaydı var mı (en az bir mesaj); okunamazsa undefined */
@@ -602,15 +716,35 @@ async function executeWithRetry(
 ): Promise<AgentRunResult | typeof SCHEMA_FAILED> {
   // Sürdürülen önceki konuşma (yoksa ajan yeni konuşmayla başlar)
   const base = session.id;
+  // Kendi açtığımız konuşma kayda hiç geçmezse dönülecek konuşma — bilinçli olarak
+  // bırakılınca (kayıp, bozuk, bağlam doldu) yok
+  let origin = base;
+  // Konuşmadaki görev mesajı: yeni konuşma önceki görevler özetiyle açılırsa ikisi birlikte
+  let taskText = prompt;
   // Görev bu denemelerden önce konuşmada kaç kez geçiyordu — sonradan artmışsa
   // görev kayda yazılmış demektir. İlk denemeden ÖNCE okunmalı; yalnızca önceki
   // konuşma sürdürülürken gerekir, yeni konuşmada 0'dır.
-  const before = base ? await countPrompt(base, cwd, prompt) : 0;
+  let before = base ? await countPrompt(base, cwd, prompt) : 0;
   let attempt = 0; // toplam başarısız deneme
   let permanentRun = 0; // üst üste kalıcı hata
   let step = 0; // bekleme basamağı (ilerleme olunca sıfırlanır)
   let contextFull = 0; // üst üste "bağlam doldu"
+  let suspect = 0; // ilerlemeden üst üste altyapı dışı hata (bozuk konuşma şüphesi)
+  let switched = false; // bu ilerlemesiz seride konuşma zaten yenilendi — tekrar yenileme
   let attemptPrompt = prompt;
+
+  /** Konuşmayı bırakıp yenisini aç; varsa önceki görevler özeti başa konur. Özet verildi mi */
+  const freshConversation = (): boolean => {
+    session.id = undefined;
+    session.contextTokens = undefined;
+    origin = undefined;
+    before = 0;
+    switched = true;
+    const recap = base ? opts.recap?.() : undefined;
+    taskText = recap ? `${recap}\n\n${prompt}` : prompt;
+    attemptPrompt = taskText;
+    return !!recap;
+  };
 
   while (true) {
     session.progressed = false;
@@ -628,26 +762,43 @@ async function executeWithRetry(
         step = 0;
         permanentRun = 0;
         contextFull = 0;
+        suspect = 0;
+        switched = false;
       }
       permanentRun = info.kind === "permanent" ? permanentRun + 1 : 0;
+      if (info.kind === "permanent" || (info.kind === "transient" && !info.infra)) suspect++;
       const error = err instanceof Error ? err.message : String(err);
       if (!s.enabled || (s.maxAttempts > 0 && attempt >= s.maxAttempts)) throw err;
-      if (info.kind === "permanent" && s.permanentMaxAttempts > 0 && permanentRun >= s.permanentMaxAttempts) {
-        throw new Error(`${error} — ${info.reason}: üst üste ${permanentRun} denemede düzelmedi, ayarları kontrol et`);
-      }
 
       // Sıradaki denemenin oturumu ve mesajı
       let note = "";
       let decided = false;
-      if (info.kind === "lost_session") {
+      if (session.id && !switched && suspect >= SUSPECT_SWITCH) {
+        // Aynı konuşma ilerlemeden üst üste reddediliyor: geçmişinde sunucunun
+        // işleyemediği bir şey var. Beklemek değiştirmez — yeni konuşmayla devam
+        // (sınır sayacı da sıfırlanır: yeni konuşmanın kendi hakkı olsun)
+        permanentRun = 0;
+        suspect = 0;
+        const recap = freshConversation();
+        note = "konuşma sunucuya gönderilemiyor — yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
+        decided = true;
+      } else if (info.kind === "permanent" && s.permanentMaxAttempts > 0 && permanentRun >= s.permanentMaxAttempts) {
+        throw new Error(`${error} — ${info.reason}: üst üste ${permanentRun} denemede düzelmedi, ayarları kontrol et`);
+      } else if (info.kind === "lost_session") {
         // Önceki konuşma kayboldu: nerede olduğunu (varsa) bul, panele sebebiyle yaz —
         // "neden hatırlamıyor" sorusu tahmine kalmasın
-        if (base && session.id === base) await reportLostSession(agent, base, cwd, bus);
+        const lostBase = !!base && session.id === base;
         // Sürdürülecek konuşma yok: kendi açtığımız konuşma kayda hiç geçmediyse
         // önceki konuşmaya, o da yoksa yeni konuşmaya dön — görev baştan gider
-        session.id = session.id !== base ? base : undefined;
-        attemptPrompt = prompt;
-        note = session.id ? "önceki konuşmadan sürdürülecek" : "yeni konuşmayla başlanacak";
+        if (origin && session.id !== origin) {
+          session.id = origin;
+          attemptPrompt = taskText;
+          note = "önceki konuşmadan sürdürülecek";
+        } else {
+          const recap = freshConversation();
+          note = "yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
+          if (lostBase) await reportLostSession(agent, base!, cwd, bus, recap);
+        }
         decided = true;
       } else if (info.kind === "context_full") {
         // Bağlam doldu: aynı konuşmayı tekrar göndermek hep aynı hatayı verir.
@@ -660,7 +811,7 @@ async function executeWithRetry(
         }
         let compacted = false;
         if (contextFull === 1) {
-          const r = await compactSession(agent, session.id, cwd, cfg, bus, abortController, "dolu", session.contextTokens);
+          const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "dolu", session.contextTokens);
           compacted = r.ok;
           if (r.ok) session.contextTokens = r.post;
           bus.emit({
@@ -669,27 +820,25 @@ async function executeWithRetry(
           });
         }
         if (!compacted) {
-          session.id = undefined;
-          session.contextTokens = undefined;
-          attemptPrompt = prompt;
-          note = "bağlam doldu — yeni konuşmayla başlanacak";
+          const recap = freshConversation();
+          note = "bağlam doldu — yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
           decided = true;
         }
       }
       if (!decided && session.id) {
-        const now = await countPrompt(session.id, cwd, prompt);
+        const now = await countPrompt(session.id, cwd, taskText);
         if (now === undefined || before === undefined) {
-          attemptPrompt = prompt; // kayıt okunamadı — eski davranış: görevle sürdür
+          attemptPrompt = taskText; // kayıt okunamadı — eski davranış: görevle sürdür
         } else if (now > before) {
           // Görev kayıtta — tekrar gönderme. Uzun açıklama bir kez yeter: önceki deneme
           // de devam mesajıydı ve model arada hiç yanıt veremediyse kısa olanı gider
           const sent = attemptPrompt === CONTINUE_PROMPT || attemptPrompt === CONTINUE_PROMPT_SHORT;
           attemptPrompt = sent && !session.progressed ? CONTINUE_PROMPT_SHORT : CONTINUE_PROMPT;
-        } else if (session.id !== base && (await sessionExists(session.id, cwd)) === false) {
-          session.id = base; // yeni konuşma kayda geçmemiş — baştan
-          attemptPrompt = prompt;
+        } else if (session.id !== origin && (await sessionExists(session.id, cwd)) === false) {
+          session.id = origin; // yeni konuşma kayda geçmemiş — baştan
+          attemptPrompt = taskText;
         } else {
-          attemptPrompt = prompt;
+          attemptPrompt = taskText;
         }
       }
 
@@ -713,6 +862,7 @@ async function executeWithRetry(
         delayMs: delay,
         resumed: !!session.id,
         continued,
+        ...(note ? { note } : {}),
       });
 
       await abortableSleep(delay, abortController.signal);
@@ -749,7 +899,11 @@ export async function runAgent(
     // Bağlam penceresi model listesinden — yalnızca henüz bilinmiyorsa çekilir, bir kez yeter
     await refreshModelContext(cfg.modelsUrl, cfg.apiKey, agent.config.model ?? cfg.model);
     if (resume && opts.contextTokens) {
+      const had = resume;
       ({ resume, opts } = await compactIfNeeded(agent, cwd, cfg, bus, abortController, resume, opts));
+      // Konuşma neredeyse dolu ve özetlenemedi → yeni konuşma; önceki görevler özetiyle açılsın
+      const recap = had && !resume ? opts.recap?.() : undefined;
+      if (recap) prompt = `${recap}\n\n${prompt}`;
     }
     return await runAgentInner(agent, prompt, cwd, cfg, bus, abortController, resume, opts, () => retries);
   } finally {
@@ -781,7 +935,7 @@ async function compactIfNeeded(
   const pct = (tokens / info.limit) * 100;
   if (pct < esik) return { resume, opts };
 
-  const r = await compactSession(agent, resume, cwd, cfg, bus, abortController, "esik", tokens);
+  const r = await compactWithRetry(agent, resume, cwd, cfg, bus, abortController, "esik", tokens);
   if (r.ok) {
     bus.emit({ type: "context_compacted", agent: agent.key, ok: true, pre: r.pre, post: r.post });
     if (r.post) bus.emit({ type: "context_usage", agent: agent.key, tokens: r.post, window: info.window, limit: info.limit });

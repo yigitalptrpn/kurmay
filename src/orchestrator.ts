@@ -347,7 +347,14 @@ export async function runWorkflow(
   // Entry ajanın SDK oturum kimliği burada tutulur: gelen değer varsa o oturum
   // sürdürülür (resume), koşu boyunca en güncel kimlikle güncellenir (bellekte)
   // entryContext: o konuşmanın bilinen boyutu (token) — eşiği geçmişse özetlenir
-  sessionStore: { entrySessionId?: string; entryContext?: number } = {},
+  // recap: konuşma kaybolursa yeni konuşmaya verilecek önceki görevler özeti;
+  // onSession: konuşma kimliği öğrenilince hemen kaydet (servis iş ortasında durabilir)
+  sessionStore: {
+    entrySessionId?: string;
+    entryContext?: number;
+    recap?: () => string | undefined;
+    onSession?: (id: string) => void;
+  } = {},
   /** Verilirse akış (ilk düğüm dahil) bu zamana kadar bekler — görevin kendisini
    *  ileri bir saate kurmak için. Beklerken "şimdi çalıştır"/iptal/Durdur çalışır. */
   startAt?: number,
@@ -455,7 +462,13 @@ export async function runWorkflow(
     const result = await runAgent(
       agent, buildPrompt(agent, ctx), cwd, cfg, bus, abortController,
       isEntry ? sessionStore.entrySessionId : undefined,
-      isEntry && sessionStore.entrySessionId ? { contextTokens: sessionStore.entryContext } : {},
+      isEntry
+        ? {
+            ...(sessionStore.entrySessionId ? { contextTokens: sessionStore.entryContext } : {}),
+            recap: sessionStore.recap,
+            onSession: sessionStore.onSession,
+          }
+        : {},
     );
     if (isEntry && result.sessionId) {
       sessionStore.entrySessionId = result.sessionId;

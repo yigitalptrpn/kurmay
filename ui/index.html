@@ -212,6 +212,18 @@ body { overflow:hidden; }
 #taskCard:has(#taskInput:placeholder-shown):has(#taskWhenPreset option[value="0"]:checked) .composer-opts:not(:has(.fchip)) { display:none; }
 .composer-opts .flow { margin-top:0; }
 #btnStart { flex:none; box-shadow:var(--md-elev-2); }
+/* Görevle yapıştırılan görseller: yazma kutusunun altında önizleme, görev balonunda küçük resim */
+.ekler { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+#taskImages { margin-top:8px; }
+#taskImages .ek { position:relative; }
+.ekler img { display:block; width:64px; height:64px; object-fit:cover; border-radius:var(--md-shape-sm, 6px); border:1px solid var(--md-outline-variant); background:var(--md-surface-container); }
+#taskImages .ek button { position:absolute; top:-7px; right:-7px; min-height:0; width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:1; }
+#stream > .me .ekler { margin-top:8px; }
+#stream > .me .ekler a:not(.ekdosya) { display:block; }
+.ekdosya { display:flex; align-items:center; gap:6px; height:40px; max-width:220px; padding:0 12px; border-radius:var(--md-shape-sm, 6px); border:1px solid var(--md-outline-variant); background:var(--md-surface-container); color:var(--text); font-size:12.5px; text-decoration:none; }
+.ekdosya span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#stream > .me a.ekdosya { color:inherit; background:color-mix(in srgb, currentColor 10%, transparent); border-color:color-mix(in srgb, currentColor 30%, transparent); }
+#taskCard.drop { outline:2px dashed var(--md-primary); outline-offset:3px; }
 
 /* — Sağ: koşu özeti — */
 .rail { background:var(--md-surface-container-low); border-left:1px solid var(--border); padding:16px; overflow:auto; }
@@ -649,9 +661,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
         <span style="flex:1">Model seçilmedi — görev başlatmak için sağdaki listeden bir model seç.</span>
       </div>
       <div class="row" style="display:flex;gap:8px;align-items:flex-end">
-        <textarea id="taskInput" rows="1" placeholder="Ekibe bir görev ver… (Enter gönderir)"></textarea>
+        <textarea id="taskInput" rows="1" placeholder="Ekibe bir görev ver… (Enter gönderir; dosya ya da görsel yapıştırıp sürükleyebilirsin)"></textarea>
         <button class="primary" id="btnStart">Başlat ➤</button>
       </div>
+      <div class="ekler hidden" id="taskImages"></div>
       <div class="composer-opts">
         <span class="row" id="taskWhen" style="display:flex;gap:8px;align-items:center">
           <span class="label" style="margin:0">⏰</span>
@@ -745,7 +758,9 @@ let pipelineTicker = null;
 document.addEventListener("pointerdown", (ev) => {
   const el = ev.target.closest("button, .sess");
   if (!el || el.disabled) return;
-  el.style.position ||= "relative";
+  // Yalnızca konumsuz öğeye: mutlak konumlu düğmeyi (ek önizlemesindeki ×) basıldığı
+  // anda yerinden oynatıyordu — tıklama düğmeye değil kapsayıcısına düşüyordu
+  if (getComputedStyle(el).position === "static") el.style.position = "relative";
   if (getComputedStyle(el).overflow !== "hidden") el.style.overflow = "hidden";
   const r = el.getBoundingClientRect();
   const span = document.createElement("span");
@@ -1628,6 +1643,30 @@ function handleEvent(e) {
         const me = document.createElement("div");
         me.className = "me";
         me.textContent = e.task;
+        if (e.attachments?.length && viewSessionId) {
+          const ek = document.createElement("div");
+          ek.className = "ekler";
+          for (const at of e.attachments) {
+            // Eski biçim: yalnızca ad dizisi
+            const { name, original } = typeof at === "string" ? { name: at, original: at } : at;
+            const a = document.createElement("a");
+            a.href = `/ekler/${encodeURIComponent(viewSessionId)}/${encodeURIComponent(name)}`;
+            a.title = original;
+            if (GORSEL.test(name)) {
+              a.target = "_blank";
+              const img = document.createElement("img");
+              img.src = a.href;
+              img.alt = original;
+              img.loading = "lazy";
+              a.append(img);
+            } else {
+              a.className = "ekdosya";
+              a.innerHTML = `<b>📄</b><span>${esc(original)}</span>`;
+            }
+            ek.append(a);
+          }
+          me.append(ek);
+        }
         appendStream(me);
       }
       addLog(e.ts, `harekât başladı · <span title="${esc(e.targetDir)}">📁 ${esc(shortDir(e.targetDir))}</span>${e.model ? ` · 🧠 ${esc(e.model)}` : ""}${e.effort ? ` · akıl yürütme: ${esc(EFFORT_NAMES[e.effort] || e.effort)}` : ""}`);
@@ -1667,20 +1706,24 @@ function handleEvent(e) {
       // Önceki konuşma bulunamadı: sebebi açıkça yaz (aynı hatanın yeniden deneme satırı yazılmaz)
       lostShown[e.agent] = true;
       const yol = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      const neden = !e.foundDir
-        ? "kaydı bu bilgisayarda bulunamadı — silinmiş olabilir ya da başka bir kullanıcı, bilgisayar veya konteynerde oluşturulmuş"
-        : yol(e.foundDir) !== yol(e.cwd)
-          ? `kaydı başka bir klasöre bağlı: <code>${esc(e.foundDir)}</code> (bu koşunun dizini <code>${esc(e.cwd)}</code>)`
-          : "kaydı duruyor ama sürdürülemedi";
+      const neden = e.searchError
+        ? `kaydı aranamadı (${esc(trunc(e.searchError, 120))})`
+        : !e.foundDir
+          ? "kaydı bu bilgisayarda bulunamadı — silinmiş olabilir ya da başka bir kullanıcı, bilgisayar veya konteynerde oluşturulmuş" +
+            (e.projectsDir ? ` (aranan yer: <code>${esc(e.projectsDir)}</code>, dosya <code>${esc(e.sessionId)}.jsonl</code>)` : "")
+          : yol(e.foundDir) !== yol(e.cwd)
+            ? `kaydı başka bir klasöre bağlı: <code>${esc(e.foundDir)}</code> (bu koşunun dizini <code>${esc(e.cwd)}</code>)`
+            : "kaydı duruyor ama sürdürülemedi";
       bubbleNote(bubbleOf(e.agent, e.ts),
-        `⚠ Önceki konuşmanın ${neden}. Yeni konuşmayla başlıyor — önceki konuşmayı hatırlamayacak.`, "warn");
+        `⚠ Önceki konuşmanın ${neden}. Yeni konuşmayla başlıyor — ` +
+        (e.recap ? "bu oturumun önceki görevlerinin özeti oturum kaydından verildi." : "önceki konuşmayı hatırlamayacak."), "warn");
       break;
     }
     case "agent_retrying": {
       // Model sunucusu hatası — akış ölmedi, bekleyip yeniden deneyecek
       if (e.kind === "lost_session" && lostShown[e.agent]) { delete lostShown[e.agent]; break; }
       const kac = e.maxAttempts > 0 ? `${e.attempt}/${e.maxAttempts}` : `${e.attempt}`;
-      const nasil = e.continued ? "kaldığı yerden devam" : e.resumed ? "oturum sürdürülecek" : "oturum baştan";
+      const nasil = e.note || (e.continued ? "kaldığı yerden devam" : e.resumed ? "oturum sürdürülecek" : "oturum baştan");
       if (!e.reason) {
         // Eski koşu kaydı: sebep sınıflandırılmamıştı
         bubbleNote(bubbleOf(e.agent, e.ts),
@@ -2787,7 +2830,10 @@ async function startTask() {
   const res = await fetch("/task", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ task, session: viewSessionId || undefined, runAt }),
+    body: JSON.stringify({
+      task, session: viewSessionId || undefined, runAt,
+      ...(taskFiles.some((f) => f.data) ? { files: taskFiles.filter((f) => f.data).map((f) => ({ name: f.name, data: f.data })) } : {}),
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (data.ok) {
@@ -2801,6 +2847,8 @@ async function startTask() {
     if (data.warning) addLog(Date.now(), "⚠ " + esc(data.warning), "warn");
     $("taskInput").value = "";
     autoGrow($("taskInput"));
+    taskFiles = [];
+    renderTaskFiles();
     $("taskError").textContent = "";
     resetWhenOf("taskWhenPreset", "taskWhenCustom"); // sıradaki görev yine "hemen" başlasın
     updateStartLabel();
@@ -2809,6 +2857,81 @@ async function startTask() {
   }
 }
 $("btnStart").addEventListener("click", startTask);
+
+// Dosya ekleme: yazma kutusuna yapıştır (Ctrl+V — ekran görüntüsü, kopyalanan dosya) ya da
+// görev kartına sürükle-bırak; görsel, PDF, metin, belge… Sunucu runs/ekler/'e kaydeder,
+// ajanlar Read ile açar (görseli ancak görsel destekli model anlar)
+const EK_EN_FAZLA = 10, EK_BOYUT = 20 * 1024 * 1024;
+const GORSEL = /\.(png|jpe?g|gif|webp)$/i;
+let taskFiles = []; // [{name, type, size, data(data: adresi)}]
+const fmtBoyut = (n) => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+function renderTaskFiles() {
+  const box = $("taskImages");
+  box.innerHTML = "";
+  const hazir = taskFiles.filter((f) => f.data); // okunması süren dosya henüz gösterilmez
+  box.classList.toggle("hidden", hazir.length === 0);
+  for (const f of hazir) {
+    const d = document.createElement("div");
+    d.className = "ek";
+    d.title = `${f.name} · ${fmtBoyut(f.size)}`;
+    if (f.type.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = f.data;
+      img.alt = f.name;
+      d.append(img);
+    } else {
+      const c = document.createElement("span");
+      c.className = "ekdosya";
+      c.innerHTML = `<b>📄</b><span>${esc(f.name)}</span>`;
+      d.append(c);
+    }
+    const x = document.createElement("button");
+    x.type = "button";
+    x.textContent = "×";
+    x.title = "Eki çıkar";
+    x.setAttribute("aria-label", `${f.name} ekini çıkar`);
+    x.addEventListener("click", () => { taskFiles = taskFiles.filter((t) => t !== f); renderTaskFiles(); $("taskInput").focus(); });
+    d.append(x);
+    box.append(d);
+  }
+}
+function addTaskFiles(files) {
+  for (const f of files) {
+    if (!f.size) { $("taskError").textContent = `Boş dosya ya da klasör eklenemez: ${f.name}`; continue; }
+    if (f.size > EK_BOYUT) { $("taskError").textContent = `Dosya çok büyük: ${f.name} — en fazla 20 MB`; continue; }
+    if (taskFiles.length >= EK_EN_FAZLA) { $("taskError").textContent = `En fazla ${EK_EN_FAZLA} dosya eklenebilir`; break; }
+    // Panodan gelen ekran görüntüsünün adı hep "image.png" — sırayla adlandır
+    const ad = f.name && f.name !== "image.png" ? f.name : `ekran-goruntusu-${taskFiles.length + 1}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
+    const slot = { name: ad, type: f.type || "", size: f.size, data: "" };
+    taskFiles.push(slot);
+    const r = new FileReader();
+    r.onload = () => { slot.data = String(r.result); renderTaskFiles(); };
+    r.onerror = () => { taskFiles = taskFiles.filter((x) => x !== slot); $("taskError").textContent = `Okunamadı: ${f.name}`; renderTaskFiles(); };
+    r.readAsDataURL(f);
+  }
+}
+$("taskInput").addEventListener("paste", (ev) => {
+  const files = [...(ev.clipboardData?.files || [])];
+  if (files.length) {
+    ev.preventDefault(); // dosya yapıştırıldı — metin alanına adı düşmesin
+    $("taskError").textContent = "";
+    addTaskFiles(files);
+  }
+});
+const tasinanDosya = (ev) => [...(ev.dataTransfer?.types || [])].includes("Files");
+$("taskCard").addEventListener("dragover", (ev) => {
+  if (tasinanDosya(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; $("taskCard").classList.add("drop"); }
+});
+$("taskCard").addEventListener("dragleave", (ev) => {
+  if (!$("taskCard").contains(ev.relatedTarget)) $("taskCard").classList.remove("drop");
+});
+$("taskCard").addEventListener("drop", (ev) => {
+  $("taskCard").classList.remove("drop");
+  const files = [...(ev.dataTransfer?.files || [])];
+  if (files.length) { ev.preventDefault(); $("taskError").textContent = ""; addTaskFiles(files); }
+});
+// Kartın dışına bırakılan dosyayı tarayıcı açıp paneli terk etmesin
+for (const t of ["dragover", "drop"]) window.addEventListener(t, (ev) => { if (tasinanDosya(ev)) ev.preventDefault(); });
 // Enter gönderir, Shift+Enter yeni satır açar
 $("taskInput").addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); startTask(); }
