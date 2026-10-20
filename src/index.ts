@@ -329,6 +329,26 @@ async function main() {
     }
   };
 
+  /** Kullanıcı talimatı (Ayarlar): config.json'a yazar, sıradaki görevde her ajanın prompt'una eklenir */
+  const setUserPrompt = (text: string): { ok: boolean; error?: string; text?: string } => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    const value = text.trim();
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      if (value) parsed.userPrompt = value;
+      else delete parsed.userPrompt;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      loadAppConfig(resolvedConfigPath); // yapı doğrulaması
+      // Çalışan koşu kendi cfg kopyasıyla devam eder
+      if (value) cfg.userPrompt = value;
+      else delete cfg.userPrompt;
+      return { ok: true, text: value };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   /**
    * Güvenlik denetçisini akışa ekler ve açar (Ayarlar'daki "Güvenlik denetimi" anahtarı).
    * Denetçi sonradan geldi: daha önce oluşturulmuş config.json'larda (kurmay init /
@@ -773,6 +793,7 @@ async function main() {
       }),
       setNodeDisabled,
       setAutoForward,
+      setUserPrompt,
       addSecurityAudit,
       getToggles,
       listSecurityReports: () => securityReports.list(),

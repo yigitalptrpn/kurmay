@@ -25,6 +25,9 @@ export interface UiServer {
 /** Klasör seçicide gizlenen sistem klasörleri (Windows) — "." ile başlayanlar da gizli */
 const HIDDEN_DIRS = new Set(["System Volume Information", "$RECYCLE.BIN", "$Recycle.Bin", "Recovery", "Config.Msi"]);
 
+/** Kullanıcı talimatının en fazla uzunluğu — her ajan isteğinin system prompt'una girer */
+const USER_PROMPT_MAX = 4000;
+
 /**
  * Klasör seçici (GET /browse): tarayıcı güvenlik gereği seçilen klasörün tam yolunu
  * vermez, bu yüzden klasörleri sunucu listeler. Yalnızca klasör ADLARI döner (dosya
@@ -138,6 +141,7 @@ export interface UiServerOptions {
   setNodeDisabled?: (key: string, disabled: boolean) => { ok: boolean; error?: string };
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
   setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
+  setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
   /** Güvenlik denetçisini açar; config'te düğümü yoksa Teftiş onayından sonraya ekler */
   addSecurityAudit?: () => { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string };
   /** Aç/Kapat sayfası verisi (GET /toggles-data): ajanlar, beceriler, MCP sunucuları */
@@ -174,6 +178,7 @@ export interface UiServerOptions {
  *   GET  /workflow      { entry, autoForwardPlan, nodes[] } — ana yol sırasıyla düğümler ve açık/kapalı durumları
  *   POST /node-disabled { key: string, disabled: boolean } — düğümü kapatır/açar (canlı + config.json)
  *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
+ *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
@@ -567,6 +572,18 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       readJson(req, (parsed) => {
         if (!parsed || typeof parsed.enabled !== "boolean") return json(res, 400, { ok: false, error: "geçersiz istek" });
         const r = options.setAutoForward ? options.setAutoForward(parsed.enabled) : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/user-prompt") {
+      readJson(req, (parsed) => {
+        if (!parsed || typeof parsed.text !== "string") return json(res, 400, { ok: false, error: "geçersiz istek" });
+        if (parsed.text.length > USER_PROMPT_MAX) {
+          return json(res, 400, { ok: false, error: `talimat çok uzun (en fazla ${USER_PROMPT_MAX} karakter)` });
+        }
+        const r = options.setUserPrompt ? options.setUserPrompt(parsed.text) : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });
       return;

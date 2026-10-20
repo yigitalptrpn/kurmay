@@ -153,6 +153,19 @@ body { overflow:hidden; }
   border-radius:999px; font-size:13px; background:var(--blueBg); color:var(--blue); box-shadow:var(--md-elev-2, 0 2px 6px rgba(0,0,0,.15)); }
 .loadinfo .bar { display:block; height:3px; margin-top:4px; border-radius:2px; background:color-mix(in srgb, var(--blue) 20%, transparent); overflow:hidden; }
 .loadinfo .bar i { display:block; height:100%; background:var(--blue); }
+/* Bekleme oyunu (Ctrl+Alt+X): yükleme satırının yerine geçer, temanın renklerini kullanır */
+.oyun { position:sticky; top:0; z-index:6; width:min(620px, 100%); margin:0 auto 12px; padding:8px 12px 6px;
+  border:1px solid var(--border); border-radius:var(--md-shape-md); background:var(--bubble); box-shadow:var(--md-elev-2, 0 2px 6px rgba(0,0,0,.15)); }
+.oyun:focus { outline:none; }
+.oyun:focus-visible { box-shadow:0 0 0 2px var(--md-primary); }
+.oyun-head { display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--muted); }
+.oyun-head #oyunDurum { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.oyun-head #oyunDurum.bitti { color:var(--teal); font-weight:600; }
+.oyun-head .skor { font:600 12.5px var(--font-mono); color:var(--text); white-space:nowrap; }
+.oyun-head button { padding:0 8px; min-height:24px; line-height:1; }
+.oyun canvas { display:block; width:100%; height:150px; margin-top:6px; cursor:pointer; touch-action:manipulation; }
+.oyun .ipucu { font-size:11.5px; color:var(--muted); text-align:center; margin-top:2px; }
+.chat.oyunda .loadinfo { display:none; }
 #stream { display:flex; flex-direction:column; gap:14px; overflow-wrap:anywhere; }
 #stream > .me { align-self:flex-end; max-width:min(680px, 78%); background:var(--md-on-surface); color:var(--md-surface); padding:11px 16px; border-radius:20px 20px 6px 20px; white-space:pre-wrap; box-shadow:var(--md-elev-1); }
 .msg { display:flex; gap:12px; max-width:94%; align-items:flex-start; } /* geniş ekranda sütunu doldursun (sabit üst sınır 32" monitörde yarıda bırakıyordu) */
@@ -587,6 +600,11 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 
   <div class="chat" id="chat">
     <div class="loadinfo hidden" id="loadInfo" role="status" aria-live="polite"></div>
+    <div class="oyun hidden" id="oyun" tabindex="0" role="application" aria-label="Bekleme oyunu">
+      <div class="oyun-head"><span id="oyunDurum"></span><span class="skor" id="oyunSkor"></span><button id="oyunKapat" title="Kapat (Esc)" aria-label="Oyunu kapat">×</button></div>
+      <canvas id="oyunCanvas"></canvas>
+      <div class="ipucu">Boşluk / ↑ / dokun: zıpla · Esc: kapat</div>
+    </div>
     <div class="logfilter hidden" id="logFilter">
       <span id="logFilterText"></span>
       <button id="btnLogAll">Tümünü göster</button>
@@ -1233,8 +1251,10 @@ document.addEventListener("click", (ev) => {
 
 const lostShown = {}; // ajan → "önceki konuşma bulunamadı" notu yazıldı (ardından gelen deneme satırı yazılmaz)
 let replayStatus = null; // yeniden oynatma sırasında gelen son durum — "ready"de uygulanır
+let statusKind = ""; // son uygulanan durumun türü (run = bekleniyor; oyun buna bakar)
 function setStatus(text, kind) {
   if (replaying) { replayStatus = [text, kind]; return; }
+  statusKind = kind;
   const el = $("status");
   el.textContent = text;
   const map = { run:["var(--blueBg)","var(--blue)"], ok:["var(--tealBg)","var(--teal)"], err:["var(--redBg)","var(--red)"], warn:["var(--amberBg)","var(--amber)"] };
@@ -2950,6 +2970,195 @@ for (const id of ["taskInput", "rejectComment"]) {
   el.addEventListener("input", () => autoGrow(el));
   autoGrow(el);
 }
+
+// — Bekleme oyunu: uzun bekleme sırasında (geçmiş yükleniyor / ajan çalışıyor) Ctrl+Alt+X —
+// Yükleme satırının yerinde küçük bir koşu oyunu açılır: engellerin ve alçak uçan kuşların üstünden
+// zıpla, yüksek uçanların altından geç. Bekleme bitince başlık söyler; oyun kendiliğinden kapanmaz.
+(() => {
+  const kutu = $("oyun"), cv = $("oyunCanvas"), ctx = cv.getContext("2d");
+  const REKOR = "kurmay-oyun-rekor";
+  const ZEMIN_PAY = 18, BOY = 26, EN = 18, ZIPLA = 560, YERCEKIMI = 1800, KISA = 200;
+  let W = 0, H = 0, raf = 0, sonT = 0, durum = "hazir"; // hazir | oyun | bitti
+  let oy, engeller, hiz, mesafe, kare, renk = {};
+  let rekor = 0;
+  try { rekor = Number(localStorage.getItem(REKOR)) || 0; } catch {}
+
+  const zemin = () => H - ZEMIN_PAY;
+  function bekleniyor() { return replaying || statusKind === "run"; }
+
+  function renkleriOku() {
+    const st = getComputedStyle(document.documentElement);
+    const v = (ad, yedek) => st.getPropertyValue(ad).trim() || yedek;
+    renk = { oyuncu: v("--md-primary", "#36c"), engel: v("--red", "#c33"), kus: v("--text", "#222"),
+      zemin: v("--muted", "#888"), yazi: v("--muted", "#888"), font: v("--font-mono", "monospace") };
+  }
+  new MutationObserver(renkleriOku).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
+
+  function boyutla() {
+    const dpr = window.devicePixelRatio || 1;
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function sifirla() {
+    oy = { x: 36, y: 0, vy: 0, yerde: true };
+    engeller = []; hiz = 260; mesafe = 0; kare = 0;
+  }
+
+  function zipla() {
+    if (durum !== "oyun") { sifirla(); durum = "oyun"; return; }
+    if (oy.yerde) { oy.vy = -ZIPLA; oy.yerde = false; }
+  }
+  // Tuş erken bırakılırsa kısa zıplama
+  function birak() { if (oy && oy.vy < -KISA) oy.vy = -KISA; }
+
+  function engelUret() {
+    const kusOlur = mesafe > 3000 && Math.random() < 0.3;
+    if (kusOlur) {
+      const alcak = Math.random() < 0.55;
+      // Alçak kuş ayakta duranı vurur (zıpla), yüksek kuş zıplayanı vurur (altından geç)
+      const alt = alcak ? 20 : 54;
+      return { tur: "kus", x: W + 10, w: 22, h: 12, y: zemin() - alt - 12 };
+    }
+    const w = 12 + Math.floor(Math.random() * 3) * 10, h = 18 + Math.random() * 16;
+    return { tur: "sandik", x: W + 10, w, h, y: zemin() - h };
+  }
+
+  function adim(dt) {
+    hiz = Math.min(650, hiz + 7 * dt);
+    mesafe += hiz * dt;
+    if (!oy.yerde) {
+      oy.vy += YERCEKIMI * dt;
+      oy.y += oy.vy * dt;
+      if (oy.y >= 0) { oy.y = 0; oy.vy = 0; oy.yerde = true; }
+    }
+    for (const e of engeller) e.x -= hiz * dt;
+    engeller = engeller.filter((e) => e.x + e.w > -10);
+    // Zıplama süresince alınan yoldan kısa aralık bırakma — her engel aşılabilir olsun
+    const son = engeller[engeller.length - 1];
+    const aralik = hiz * (0.8 + Math.random() * 0.9);
+    if (!son || son.x < W - aralik) engeller.push(engelUret());
+    // Çarpışma (kenarlardan biraz pay)
+    const ox = oy.x + 3, oyY = zemin() - BOY + oy.y + 3, ow = EN - 6, oh = BOY - 5;
+    for (const e of engeller) {
+      if (ox < e.x + e.w - 2 && ox + ow > e.x + 2 && oyY < e.y + e.h - 2 && oyY + oh > e.y + 2) {
+        durum = "bitti";
+        const puan = Math.floor(mesafe / 10);
+        if (puan > rekor) { rekor = puan; try { localStorage.setItem(REKOR, String(rekor)); } catch {} }
+        return;
+      }
+    }
+  }
+
+  function ciz() {
+    ctx.clearRect(0, 0, W, H);
+    const zy = zemin();
+    // Zemin + kayan çizgiler
+    ctx.strokeStyle = renk.zemin; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, zy + 0.5); ctx.lineTo(W, zy + 0.5); ctx.stroke();
+    ctx.fillStyle = renk.zemin;
+    const kay = mesafe % 40;
+    for (let x = -kay; x < W; x += 40) ctx.fillRect(x, zy + 6, 10, 1);
+    for (let x = -(mesafe * 0.5 % 70); x < W; x += 70) ctx.fillRect(x + 25, zy + 11, 4, 1);
+    // Engeller
+    for (const e of engeller) {
+      if (e.tur === "kus") {
+        ctx.strokeStyle = renk.kus; ctx.lineWidth = 2;
+        const kanat = Math.floor(kare / 8) % 2 ? -5 : 5, cy = e.y + 6;
+        ctx.beginPath();
+        ctx.moveTo(e.x, cy + kanat); ctx.lineTo(e.x + e.w / 2, cy); ctx.lineTo(e.x + e.w, cy + kanat);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = renk.engel; ctx.fillRect(e.x, e.y, e.w, e.h);
+        ctx.strokeStyle = renk.zemin; ctx.lineWidth = 1;
+        ctx.strokeRect(e.x + 0.5, e.y + 0.5, e.w - 1, e.h - 1);
+      }
+    }
+    // Oyuncu: miğferli küçük er, yerdeyken bacaklar oynar
+    const px = oy ? oy.x : 36, py = zy - BOY + (oy ? oy.y : 0);
+    ctx.fillStyle = renk.oyuncu;
+    ctx.beginPath(); ctx.arc(px + EN / 2, py + 6, 7, Math.PI, 0); ctx.fill(); // miğfer
+    ctx.fillRect(px + 4, py + 6, EN - 8, 5);                                  // yüz
+    ctx.fillRect(px + 2, py + 11, EN - 4, 9);                                 // gövde
+    const yuruyor = durum === "oyun" && oy.yerde, ayak = yuruyor && Math.floor(kare / 6) % 2;
+    ctx.fillRect(px + 4, py + 20, 4, ayak ? 4 : 6);
+    ctx.fillRect(px + EN - 8, py + 20, 4, ayak ? 6 : 4);
+    // Yazılar
+    ctx.fillStyle = renk.yazi; ctx.textAlign = "center"; ctx.font = `600 13px ${renk.font}`;
+    if (durum === "hazir") ctx.fillText("Başlamak için boşluk / dokun", W / 2, H / 2 - 10);
+    if (durum === "bitti") ctx.fillText("Vuruldun — yeniden başlamak için boşluk / dokun", W / 2, H / 2 - 10);
+  }
+
+  function basligiYaz() {
+    const d = $("oyunDurum");
+    let metin;
+    if (replaying) {
+      const pct = loadTotal ? Math.min(100, Math.round((loadDone / loadTotal) * 100)) : 0;
+      metin = `⏳ Oturum geçmişi yükleniyor${loadTotal ? ` — %${pct}` : "…"}`;
+    } else if (statusKind === "run") metin = `⏳ ${$("status").textContent}…`;
+    else metin = `✓ Bekleme bitti — ${$("status").textContent}`;
+    if (d.textContent !== metin) d.textContent = metin;
+    d.classList.toggle("bitti", !bekleniyor());
+    const s = `${String(Math.floor(mesafe / 10)).padStart(5, "0")}  rekor ${String(rekor).padStart(5, "0")}`;
+    if ($("oyunSkor").textContent !== s) $("oyunSkor").textContent = s;
+  }
+
+  function dongu(t) {
+    raf = 0;
+    if (kutu.classList.contains("hidden") || document.hidden) return;
+    const dt = Math.min(0.05, (t - (sonT || t)) / 1000);
+    sonT = t;
+    if (cv.clientWidth !== W || cv.clientHeight !== H) boyutla();
+    kare++;
+    if (durum === "oyun") adim(dt);
+    ciz();
+    basligiYaz();
+    raf = requestAnimationFrame(dongu);
+  }
+  function calistir() { if (!raf) { sonT = 0; raf = requestAnimationFrame(dongu); } }
+
+  function ac() {
+    renkleriOku();
+    kutu.classList.remove("hidden");
+    $("chat").classList.add("oyunda");
+    boyutla(); sifirla(); durum = "hazir";
+    kutu.focus({ preventScroll:true });
+    calistir();
+  }
+  function kapat() {
+    kutu.classList.add("hidden");
+    $("chat").classList.remove("oyunda");
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    durum = "hazir";
+  }
+  const acik = () => !kutu.classList.contains("hidden");
+
+  window.addEventListener("keydown", (ev) => {
+    const x = ev.code === "KeyX" || (ev.key || "").toLowerCase() === "x";
+    if (ev.ctrlKey && ev.altKey && x && !ev.repeat) {
+      // Yalnızca beklerken açılır; açıkken aynı kısayol kapatır
+      if (acik()) { ev.preventDefault(); kapat(); }
+      else if (bekleniyor()) { ev.preventDefault(); ac(); }
+    }
+  });
+  kutu.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); kapat(); return; }
+    if (ev.code === "Space" || ev.key === "ArrowUp" || ev.key === "w" || ev.key === "W") {
+      ev.preventDefault();
+      if (!ev.repeat) zipla();
+    }
+  });
+  kutu.addEventListener("keyup", (ev) => {
+    if (ev.code === "Space" || ev.key === "ArrowUp" || ev.key === "w" || ev.key === "W") birak();
+  });
+  cv.addEventListener("pointerdown", (ev) => { ev.preventDefault(); kutu.focus({ preventScroll:true }); zipla(); });
+  cv.addEventListener("pointerup", birak);
+  cv.addEventListener("pointercancel", birak);
+  $("oyunKapat").addEventListener("click", kapat);
+  // Sekme arka plandayken döngü durur, dönünce kaldığı yerden sürer
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && acik()) calistir(); });
+})();
 
 </script>
 </body>
