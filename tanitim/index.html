@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kurmay</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Kurmay: yazılım işini planlayan, uygulayan ve denetleyen yapay zekâ heyeti. Akışı model değil kod yönetir.">
+<link rel="icon" href="data:,">
+<script>
+  // Kayıtlı tema sayfa boyanmadan önce uygulanır (yoksa işletim sisteminin tercihi geçerli)
+  try { var t = localStorage.getItem("kurmay-tanitim-tema"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<style>
+/* Yazı tipleri sayfayla birlikte gelir (yazi-tipleri/, SIL OFL 1.1) — internet gerekmez.
+   Her ailede iki alt küme: latin (ı dahil) ve latin-ext (ğ, ş, İ). */
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(yazi-tipleri/archivo-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(yazi-tipleri/archivo-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-400.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-ext-400.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-700.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-ext-700.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/saira-stencil-one-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/saira-stencil-one-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(yazi-tipleri/jetbrains-mono-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(yazi-tipleri/jetbrains-mono-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+/* Yerleşim: harekât emri dosyası — manila kâğıt üstünde beş paragraflı emir (Durum, Görev,
+   İcra, İdari ve Lojistik, Komuta ve Muhabere) + ekler; büyük şablon harfli paragraf
+   numaraları, daktilo künye satırları. Açık = Gizli Evrak, koyu = Radar (panelin temaları). */
+:root {
+  --kagit:#E7DFC6;          /* manila zemin */
+  --yaprak:#F6F1E2;         /* üstteki yaprak: kart, tablo, fotoğraf kenarı */
+  --murekkep:#211C14;       /* metin */
+  --soluk:#5C5343;          /* ikincil metin */
+  --cizgi:#CABF9F;          /* çizgi, kenarlık */
+  --vurgu:#8B1E1E;          /* bordo: bağlantı, düğme, paragraf numarası */
+  --vurgu-uzeri:#FFF8EE;    /* vurgu zeminindeki yazı */
+  --muhur:#9B2420;          /* mühür mürekkebi */
+  --onay:#2F5D3A;           /* onay yeşili */
+  --saha:#24476B;           /* saha timi rengi */
+  --uyari:#8A5A0B;
+  --kod-zemin:#211D17; --kod-yazi:#EFE7D2; --kod-soluk:#A99F88;
+  --golge:0 1px 0 rgba(60,45,20,.08), 0 10px 28px -12px rgba(60,45,20,.45);
+  --doku:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .26 0 0 0 0 .14 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --f-govde:"Archivo",system-ui,"Segoe UI",Roboto,sans-serif;
+  --f-daktilo:"Courier Prime","Courier New",Courier,monospace;
+  --f-sablon:"Saira Stencil One","Archivo",Impact,sans-serif;
+  --f-kod:"JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --kagit:#06100A; --yaprak:#0C1A12; --murekkep:#D2F0DC; --soluk:#86AE95; --cizgi:#21402E;
+    --vurgu:#4BE38A; --vurgu-uzeri:#03140A; --muhur:#FFC857; --onay:#4BE38A; --saha:#6FD3FF; --uyari:#FFC857;
+    --kod-zemin:#030805; --kod-yazi:#BFF3D1; --kod-soluk:#5E8A70;
+    --golge:0 0 0 1px rgba(75,227,138,.06), 0 12px 30px -14px rgba(0,0,0,.9);
+    --doku:repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --kagit:#06100A; --yaprak:#0C1A12; --murekkep:#D2F0DC; --soluk:#86AE95; --cizgi:#21402E;
+  --vurgu:#4BE38A; --vurgu-uzeri:#03140A; --muhur:#FFC857; --onay:#4BE38A; --saha:#6FD3FF; --uyari:#FFC857;
+  --kod-zemin:#030805; --kod-yazi:#BFF3D1; --kod-soluk:#5E8A70;
+  --golge:0 0 0 1px rgba(75,227,138,.06), 0 12px 30px -14px rgba(0,0,0,.9);
+  --doku:repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px);
+  color-scheme:dark;
+}
+
+:root { padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+*, *::before, *::after { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:84px; -webkit-text-size-adjust:100%; }
+body { margin:0; background-color:var(--kagit); background-image:var(--doku); color:var(--murekkep);
+  font:400 17px/1.65 var(--f-govde); font-stretch:100%; }
+img { max-width:100%; height:auto; display:block; }
+main { overflow-x:clip; }
+a { color:var(--vurgu); text-underline-offset:3px; text-decoration-thickness:1px; }
+a:hover { text-decoration-thickness:2px; }
+:focus-visible { outline:2px solid var(--vurgu); outline-offset:3px; }
+::selection { background:var(--vurgu); color:var(--vurgu-uzeri); }
+code { font-family:var(--f-kod); font-size:.86em; padding:.1em .35em; background:var(--yaprak); border:1px solid var(--cizgi); border-radius:3px; overflow-wrap:anywhere; }
+h1, h2, h3 { text-wrap:balance; margin:0; }
+p { margin:0; }
+
+.kap { max-width:1180px; margin-inline:auto;
+  padding-left:max(clamp(16px, 4vw, 40px), env(safe-area-inset-left, 0px));
+  padding-right:max(clamp(16px, 4vw, 40px), env(safe-area-inset-right, 0px)); }
+.etiket { font:700 13px/1.3 var(--f-daktilo); letter-spacing:.09em; text-transform:uppercase; color:var(--soluk); }
+.yazi { max-width:65ch; display:grid; grid-template-columns:minmax(0, 1fr); gap:14px; color:var(--murekkep); }
+.yazi p { color:var(--murekkep); }
+.ince { color:var(--soluk); }
+
+/* — Üst çubuk — */
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--kagit); }
+.ust { position:sticky; top:env(safe-area-inset-top, 0px); z-index:9; background:var(--kagit); background:color-mix(in srgb, var(--kagit) 92%, transparent);
+  backdrop-filter:blur(6px); border-bottom:1px solid var(--cizgi); }
+.ust .kap { display:flex; align-items:center; gap:18px; min-height:60px; }
+.marka { font:400 22px/1 var(--f-sablon); letter-spacing:.06em; color:var(--murekkep); text-decoration:none; text-transform:uppercase; flex:none; }
+.gez { display:flex; gap:4px; overflow-x:auto; flex:1; min-width:0; scrollbar-width:none; margin-inline:auto; justify-content:center; }
+.gez::-webkit-scrollbar { display:none; }
+.gez a { font:700 13px/1 var(--f-daktilo); letter-spacing:.06em; text-transform:uppercase; color:var(--soluk); text-decoration:none;
+  padding:9px 10px; border-radius:3px; white-space:nowrap; }
+.gez a b { color:var(--vurgu); margin-right:5px; }
+.gez a:hover, .gez a.su { color:var(--murekkep); background:var(--yaprak); }
+.tema { display:flex; gap:6px; flex:none; }
+.tema button { width:26px; height:26px; border-radius:50%; border:1px solid var(--cizgi); cursor:pointer; padding:0; }
+.tema [data-t="light"] { background:linear-gradient(135deg, #E7DFC6 0 50%, #8B1E1E 50%); }
+.tema [data-t="dark"] { background:linear-gradient(135deg, #06100A 0 50%, #4BE38A 50%); }
+.tema button[aria-pressed="true"] { outline:2px solid var(--murekkep); outline-offset:2px; }
+
+/* — Giriş — */
+.giris { padding-block:clamp(36px, 6vw, 72px) clamp(48px, 7vw, 88px); }
+.giris .kap { display:grid; grid-template-columns:minmax(0, 5fr) minmax(0, 7fr); gap:clamp(28px, 4vw, 56px); align-items:center; }
+.giris .ust-satir { font:400 14px/1.6 var(--f-daktilo); color:var(--soluk); display:flex; flex-wrap:wrap; gap:4px 18px;
+  border-top:2px solid var(--murekkep); border-bottom:1px solid var(--murekkep); padding-block:7px; }
+.giris .ust-satir b { color:var(--murekkep); font-weight:700; }
+.isim { font:400 clamp(60px, 7.8vw, 106px)/.86 var(--f-sablon); letter-spacing:.015em; text-transform:uppercase; margin:22px 0 18px;
+  color:var(--murekkep); }
+.lede { font:400 clamp(18px, 1.5vw, 21px)/1.55 var(--f-govde); max-width:34ch; }
+.lede b { font-weight:700; }
+.dugmeler { display:flex; flex-wrap:wrap; gap:12px; margin-top:26px; }
+.dugme { font:700 15px/1 var(--f-daktilo); letter-spacing:.05em; text-transform:uppercase; text-decoration:none; padding:15px 20px; border-radius:3px;
+  border:1.5px solid var(--vurgu); color:var(--vurgu); background:transparent; display:inline-flex; gap:8px; align-items:center; }
+.dugme.ana { background:var(--vurgu); color:var(--vurgu-uzeri); }
+.dugme:hover { transform:translateY(-1px); }
+.kunye { margin:30px 0 0; display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font:400 14.5px/1.5 var(--f-daktilo); }
+.kunye dt { font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--soluk); font-size:12.5px; padding-top:2px; }
+.kunye dd { margin:0; }
+
+.foto { position:relative; margin:0; background:var(--yaprak); padding:10px; box-shadow:var(--golge); transform:rotate(-1deg); border:1px solid var(--cizgi); }
+.foto img { border:1px solid var(--cizgi); cursor:zoom-in; }
+.foto .atac { position:absolute; top:-26px; left:38px; width:30px; height:70px; z-index:2; }
+.foto .atac path { fill:none; stroke:var(--soluk); stroke-width:3; stroke-linecap:round; }
+.foto figcaption { font:400 13px/1.45 var(--f-daktilo); color:var(--soluk); padding:10px 4px 2px; }
+.foto-resim { position:relative; }
+.muhur { position:absolute; left:-18px; bottom:9%; z-index:3; transform:rotate(-8deg); font:700 clamp(15px, 1.6vw, 20px)/1 var(--f-daktilo);
+  letter-spacing:.16em; text-transform:uppercase; color:var(--muhur); border:3px double var(--muhur); padding:10px 14px; background:var(--yaprak); background:color-mix(in srgb, var(--yaprak) 70%, transparent);
+  animation:bas .5s cubic-bezier(.3,1.4,.5,1) .7s both; pointer-events:none; }
+@keyframes bas { from { opacity:0; transform:rotate(-15deg) scale(1.9); } to { opacity:1; transform:rotate(-8deg) scale(1); } }
+
+/* — Bölüm (emir paragrafı) — */
+.bolum { padding-block:clamp(56px, 8vw, 104px); border-top:1px dashed var(--cizgi); }
+.bas { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:clamp(14px, 2.5vw, 30px); align-items:start; margin-bottom:clamp(28px, 4vw, 44px); }
+.pno { font:400 clamp(72px, 10vw, 128px)/.8 var(--f-sablon); color:var(--vurgu); min-width:.7em; }
+.bas h2 { font:800 clamp(30px, 4.2vw, 50px)/1.04 var(--f-govde); font-stretch:72%; letter-spacing:-.005em; margin-top:8px; text-transform:uppercase; }
+.bas .yazi { margin-top:16px; }
+
+/* Durum: ilkeler */
+.ilkeler { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); border-top:2px solid var(--murekkep); }
+.ilkeler > div { padding:20px 22px 6px 0; display:grid; gap:8px; align-content:start; }
+.ilkeler > div + div { border-left:1px solid var(--cizgi); padding-left:22px; }
+.ilkeler h3 { font:800 24px/1.15 var(--f-govde); font-stretch:80%; }
+.ilkeler p { color:var(--soluk); font-size:16px; }
+
+/* Görev: heyet */
+.heyet { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:18px; }
+.rol { background:var(--yaprak); border:1px solid var(--cizgi); box-shadow:var(--golge); padding:20px 20px 22px; display:grid; grid-template-columns:minmax(0, 1fr); gap:14px; align-content:start; position:relative; }
+.rol .ust-rol { display:flex; align-items:center; gap:12px; }
+.rol .ikon { width:46px; height:46px; display:grid; place-items:center; border:2px solid currentColor; color:var(--rol); font:700 18px/1 var(--f-kod); flex:none; }
+.rol .ikon svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.rol h3 { font:800 23px/1.1 var(--f-govde); font-stretch:80%; }
+.rol .alt { font:400 13px/1.3 var(--f-daktilo); color:var(--soluk); }
+.rol dl { margin:0; display:grid; gap:10px; }
+.rol dt { font:700 12px/1 var(--f-daktilo); letter-spacing:.09em; text-transform:uppercase; color:var(--soluk); }
+.rol dd { margin:4px 0 0; font-size:15.5px; line-height:1.55; }
+.rol.istege { border-style:dashed; box-shadow:none; }
+.rol.istege::after { content:"İsteğe bağlı"; position:absolute; top:-11px; right:14px; font:700 11.5px/1 var(--f-daktilo); letter-spacing:.08em; text-transform:uppercase;
+  background:var(--kagit); color:var(--soluk); border:1px dashed var(--cizgi); padding:5px 8px; }
+.kod-adlari { font:400 14px/1.5 var(--f-daktilo); color:var(--rol); }
+
+/* İcra: akış şeması + adımlar */
+.sema { overflow-x:auto; background:var(--yaprak); border:1px solid var(--cizgi); box-shadow:var(--golge); padding:18px 8px 10px; margin-bottom:34px; }
+.sema svg { display:block; min-width:900px; width:100%; height:auto; }
+.sema .kutu { fill:var(--yaprak); stroke:var(--murekkep); stroke-width:1.5; }
+.sema .kutu.sen { stroke:var(--muhur); stroke-width:2; stroke-dasharray:none; }
+.sema .kutu.istege { stroke-dasharray:6 5; }
+.sema .cip { fill:var(--kagit); stroke:var(--saha); stroke-width:1.2; }
+.sema .ad { fill:var(--murekkep); font:800 17px var(--f-govde); font-stretch:80%; }
+.sema .not { fill:var(--soluk); font:400 11.5px var(--f-daktilo); }
+.sema .cip-ad { fill:var(--saha); font:700 11px var(--f-daktilo); }
+.sema .ok { fill:none; stroke:var(--murekkep); stroke-width:1.6; }
+.sema .ok.red { stroke:var(--muhur); stroke-dasharray:5 4; }
+.sema .ok-ucu { fill:var(--murekkep); }
+.sema .ok-ucu.red { fill:var(--muhur); }
+.sema .red-yazi { fill:var(--muhur); font:700 12.5px var(--f-daktilo); }
+.sema .sen-yazi { fill:var(--muhur); font:700 11px var(--f-daktilo); letter-spacing:.12em; }
+.sema-not { font:400 13px/1.5 var(--f-daktilo); color:var(--soluk); padding:6px 12px 2px; }
+
+.adimlar { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:26px 30px; }
+.adimlar li { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:4px 14px; border-top:2px solid var(--murekkep); padding-top:14px; }
+.adimlar .no { font:700 15px/1.3 var(--f-daktilo); color:var(--vurgu); grid-row:span 2; padding-top:3px; }
+.adimlar h3 { font:800 20px/1.2 var(--f-govde); font-stretch:82%; }
+.adimlar p { font-size:15.5px; color:var(--soluk); }
+
+.ikili { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:24px; margin-top:44px; }
+.belge { margin:0; background:var(--yaprak); border:1px solid var(--cizgi); box-shadow:var(--golge); padding:8px; display:grid; grid-template-columns:minmax(0, 1fr); align-content:start; }
+.belge img { border:1px solid var(--cizgi); cursor:zoom-in; width:100%; }
+.belge figcaption { padding:12px 6px 6px; font-size:15px; line-height:1.5; color:var(--soluk); }
+.belge figcaption b { color:var(--murekkep); font-weight:700; }
+
+/* Lojistik */
+.lojistik { display:grid; grid-template-columns:minmax(0, 7fr) minmax(0, 5fr); gap:clamp(24px, 4vw, 48px); align-items:start; }
+.kurulum { display:grid; grid-template-columns:minmax(0, 1fr); gap:26px; }
+.kurulum h3, .yan h3, .dayanik h3 { font:800 22px/1.2 var(--f-govde); font-stretch:80%; margin-bottom:10px; }
+.kurulum .ince { font-size:15.5px; margin-top:10px; }
+.kod { position:relative; background:var(--kod-zemin); color:var(--kod-yazi); border-radius:4px; overflow-x:auto; }
+.kod pre { margin:0; padding:18px 92px 18px 20px; font:400 14.5px/1.75 var(--f-kod); white-space:pre; }
+.kod .is { color:var(--kod-soluk); user-select:none; }
+.kod .yorum { color:var(--kod-soluk); }
+.kopyala { position:absolute; top:10px; right:10px; font:700 12px/1 var(--f-daktilo); letter-spacing:.06em; text-transform:uppercase; background:transparent;
+  color:var(--kod-yazi); border:1px solid var(--kod-soluk); border-radius:3px; padding:8px 10px; cursor:pointer; }
+.kopyala:hover { border-color:var(--kod-yazi); }
+.yan { display:grid; grid-template-columns:minmax(0, 1fr); gap:22px; }
+.kart { background:var(--yaprak); border:1px solid var(--cizgi); padding:20px 22px; }
+.kart.uyari { border-left:4px solid var(--muhur); }
+.kart ul, .kart ol { margin:0; padding-left:20px; display:grid; gap:8px; font-size:15.5px; }
+.kart p { font-size:15.5px; }
+.kart .kunye { margin-top:0; }
+
+.dayanik { margin-top:clamp(40px, 6vw, 64px); }
+.tablo-kap { overflow-x:auto; border:1px solid var(--cizgi); background:var(--yaprak); }
+table { border-collapse:collapse; width:100%; min-width:640px; font-size:15.5px; }
+th, td { text-align:left; vertical-align:top; padding:13px 16px; border-bottom:1px solid var(--cizgi); }
+th { font:700 12.5px/1.3 var(--f-daktilo); letter-spacing:.08em; text-transform:uppercase; color:var(--soluk); background:var(--kagit); background:color-mix(in srgb, var(--kagit) 55%, var(--yaprak)); }
+tr:last-child td { border-bottom:0; }
+td.sayi { font:700 14.5px/1.5 var(--f-daktilo); white-space:nowrap; font-variant-numeric:tabular-nums; color:var(--murekkep); }
+td code { white-space:nowrap; }
+
+/* Muhabere */
+.panel-buyuk { margin-bottom:24px; }
+.izgara { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)) minmax(0, .62fr); gap:24px; }
+.izgara .telefon { grid-column:3; grid-row:1 / span 2; }
+.izgara .belge img { aspect-ratio:16 / 10; object-fit:cover; object-position:top left; }
+.izgara .telefon { grid-template-rows:minmax(0, 1fr) auto; }
+.izgara .telefon img { aspect-ratio:auto; height:100%; min-height:0; object-position:top center; }
+.kontrol { margin-top:clamp(40px, 6vw, 60px); display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0; border-top:2px solid var(--murekkep); }
+.kontrol > div { padding:18px 22px 18px 0; border-bottom:1px solid var(--cizgi); }
+.kontrol > div:not(:nth-child(3n+1)) { padding-left:22px; border-left:1px solid var(--cizgi); }
+.kontrol h3 { font:800 19px/1.2 var(--f-govde); font-stretch:82%; margin-bottom:6px; }
+.kontrol p { font-size:15.5px; color:var(--soluk); }
+
+.temalar { margin-top:clamp(40px, 6vw, 64px); }
+.temalar > h3 { font:800 26px/1.15 var(--f-govde); font-stretch:78%; text-transform:uppercase; margin-bottom:6px; }
+.temalar > p { color:var(--soluk); margin-bottom:22px; max-width:65ch; }
+.tema-izgara { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:20px; }
+.tema-izgara figure { margin:0; display:grid; gap:10px; }
+.tema-izgara img { border:1px solid var(--cizgi); box-shadow:var(--golge); cursor:zoom-in; }
+.tema-izgara figcaption { font-size:15px; line-height:1.45; color:var(--soluk); }
+.tema-izgara figcaption b { display:block; color:var(--murekkep); font:800 18px/1.2 var(--f-govde); font-stretch:82%; }
+
+/* Ekler */
+.ek + .ek { margin-top:clamp(40px, 6vw, 60px); }
+.ek-bas { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+.ek-bas .etiket { color:var(--vurgu); }
+.ek-bas h3 { font:800 clamp(24px, 3vw, 32px)/1.1 var(--f-govde); font-stretch:76%; text-transform:uppercase; }
+.ek-ikili { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:24px; align-items:start; }
+.sinirlar { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0 30px; }
+.sinirlar li { padding:14px 0; border-bottom:1px solid var(--cizgi); font-size:15.5px; display:grid; gap:4px; }
+.sinirlar b { font-weight:700; }
+
+/* Alt */
+.alt-bilgi { border-top:2px solid var(--murekkep); padding-block:28px 40px; font:400 14px/1.6 var(--f-daktilo); color:var(--soluk); }
+.alt-bilgi .kap { display:flex; flex-wrap:wrap; gap:10px 32px; justify-content:space-between; }
+.alt-bilgi .marka { font-size:26px; }
+
+/* Büyüteç */
+dialog.buyut { border:0; padding:0; background:transparent; max-width:min(1500px, 96vw); max-height:94vh; }
+dialog.buyut::backdrop { background:rgba(10,8,4,.82); }
+dialog.buyut img { max-height:86vh; width:auto; margin-inline:auto; border:1px solid var(--cizgi); cursor:zoom-out; }
+dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:center; padding-top:10px; }
+
+@media (max-width: 1080px) {
+  .heyet { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .adimlar { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .izgara { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .izgara .telefon { grid-column:auto; grid-row:auto; }
+  .izgara .telefon img { aspect-ratio:9 / 16; height:auto; }
+  .kontrol { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .kontrol > div:not(:nth-child(3n+1)) { padding-left:0; border-left:0; }
+  .kontrol > div:nth-child(even) { padding-left:22px; border-left:1px solid var(--cizgi); }
+}
+@media (max-width: 860px) {
+  .giris .kap, .lojistik, .ek-ikili { grid-template-columns:minmax(0, 1fr); }
+  .foto { transform:none; margin-top:18px; }
+  .ilkeler { grid-template-columns:minmax(0, 1fr); }
+  .ilkeler > div + div { border-left:0; padding-left:0; border-top:1px solid var(--cizgi); }
+  .ikili, .tema-izgara { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .sinirlar { grid-template-columns:minmax(0, 1fr); }
+  .gez { justify-content:flex-start; }
+}
+@media (max-width: 600px) {
+  body { font-size:16px; }
+  .heyet, .adimlar, .ikili, .izgara, .tema-izgara, .kontrol { grid-template-columns:minmax(0, 1fr); }
+  .kontrol > div:nth-child(even) { padding-left:0; border-left:0; }
+  .ust .kap { gap:10px; }
+  .marka { font-size:18px; }
+  .muhur { left:-6px; bottom:7%; font-size:12px; padding:7px 9px; }
+  .bas { grid-template-columns:minmax(0, 1fr); }
+  .pno { font-size:64px; }
+  .kod pre { padding-right:20px; padding-top:48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior:auto; }
+  .muhur { animation:none; }
+  .dugme:hover { transform:none; }
+}
+</style>
+</head>
+<body>
+
+<header class="ust">
+  <div class="kap">
+    <a class="marka" href="#ust">Kurmay</a>
+    <nav class="gez" aria-label="Bölümler">
+      <a href="#durum"><b>1</b>Durum</a>
+      <a href="#gorev"><b>2</b>Görev</a>
+      <a href="#icra"><b>3</b>İcra</a>
+      <a href="#lojistik"><b>4</b>Lojistik</a>
+      <a href="#muhabere"><b>5</b>Muhabere</a>
+      <a href="#ekler">Ekler</a>
+    </nav>
+    <div class="tema" role="group" aria-label="Görünüm">
+      <button type="button" data-t="light" aria-label="Açık görünüm (Gizli Evrak)" title="Gizli Evrak"></button>
+      <button type="button" data-t="dark" aria-label="Koyu görünüm (Radar)" title="Radar"></button>
+    </div>
+  </div>
+</header>
+
+<main id="ust">
+  <section class="giris" id="giris">
+    <div class="kap">
+      <div>
+        <div class="ust-satir"><span><b>SAYI:</b> KRM-0.1.7</span><span><b>KONU:</b> Yazılım harekâtı</span></div>
+        <h1 class="isim">Kurmay</h1>
+        <p class="lede">Yazılım işini bir yapay zekâ heyetine ver. <b>Analist</b> planlar, sen onaylarsın, <b>Saha Timi</b> uygular, <b>Teftiş</b> denetler. Hangi ajanın ne zaman çalışacağına model değil, kod karar verir.</p>
+        <div class="dugmeler">
+          <a class="dugme ana" href="#lojistik">Kuruluma geç</a>
+          <a class="dugme" href="#icra">Akışı incele</a>
+        </div>
+        <dl class="kunye">
+          <dt>Heyet</dt><dd>Analist · Saha Timi · Teftiş · Güvenlik Denetçisi</dd>
+          <dt>Model</dt><dd>Kendi model sunucun ya da bulut</dd>
+          <dt>Ayar</dt><dd>Tek dosya: <code>config.json</code></dd>
+          <dt>Panel</dt><dd>Tarayıcıda açılır, dışarıya bağlanmaz</dd>
+        </dl>
+      </div>
+      <figure class="foto">
+        <svg class="atac" viewBox="0 0 30 70" aria-hidden="true"><path d="M10 58V12a6 6 0 0 1 12 0v40a10 10 0 0 1-20 0V18"/></svg>
+        <div class="foto-resim">
+          <img src="gorseller/onay-evrak.jpg" width="2160" height="1350" alt="Kurmay panelinde Analist'in planı: önce ve sonra hali yan yana, üstte ONAY BEKLİYOR mührü, sağda bağlam ve oturum bilgileri" data-alt-yazi="Analist'in harekât planı onay bekliyor: dosya dosya önce ve sonra hali, her parçaya yorum yazılabilir.">
+          <div class="muhur" aria-hidden="true">Çevrimdışı çalışır</div>
+        </div>
+        <figcaption>Analist'in planı onayını bekliyor. Her dosyada önce ve sonra hali yan yana.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 1. DURUM -->
+  <section class="bolum" id="durum">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">1</span>
+        <div>
+          <p class="etiket">Durum</p>
+          <h2>Tek ajana her şeyi yaptırınca sıra kaybolur</h2>
+          <div class="yazi">
+            <p>Bir modele “planla, kodu yaz, kontrol et, bitince diğerini çağır” dediğinde adım atlar, sırayı karıştırır ya da kendi yazdığı kodu kendisi onaylar. Yerel modellerde bu daha da sık olur. Kurmay geçişleri modele bırakmaz: her ajan yalnızca kendi işini yapar, sıradaki adımı orkestratör seçer.</p>
+          </div>
+        </div>
+      </header>
+      <div class="ilkeler">
+        <div>
+          <p class="etiket">Akış</p>
+          <h3>Akış kodda</h3>
+          <p>Kimin ne zaman çalışacağı, red gelince nereye dönüleceği ve kaç tur deneneceği orkestratörde yazılı. Model talimatı unutsa da akış unutmaz.</p>
+        </div>
+        <div>
+          <p class="etiket">Roller</p>
+          <h3>Roller metin dosyasında</h3>
+          <p>Her ajanın talimatı <code>.claude/agents/</code> altında bir md dosyası. Ayarlar sayfasından düzenlenir, sıradaki görevde geçerli olur.</p>
+        </div>
+        <div>
+          <p class="etiket">Ayarlar</p>
+          <h3>Ayarlar tek dosyada</h3>
+          <p>Sağlayıcı, model, hedef dizin, akış şeması ve sınırlar <code>config.json</code>'da durur. Panelden değiştirdiğin her şey oraya yazılır.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. GÖREV -->
+  <section class="bolum" id="gorev">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">2</span>
+        <div>
+          <p class="etiket">Görev</p>
+          <h2>Heyet görevi planlar, uygular, denetler ve raporlar</h2>
+          <div class="yazi">
+            <p>Her rolün açık bir görevi ve aşamayacağı bir sınırı var. Sınırları talimat metni değil, kod ve koruma kapıları uygular.</p>
+          </div>
+        </div>
+      </header>
+      <div class="heyet">
+        <article class="rol" style="--rol:var(--vurgu)">
+          <div class="ust-rol"><span class="ikon" aria-hidden="true">◎</span><div><h3>Analist</h3><p class="alt">Planlama</p></div></div>
+          <dl>
+            <div><dt>Görevi</dt><dd>Görevi ve kodu okur, dosya dosya harekât planı çıkarır: hangi dosya, nerede, önce ve sonra hali. Soru sorduysan plan yerine cevap ve kaynak yazar.</dd></div>
+            <div><dt>Sınırı</dt><dd>Dosya yazamaz. Salt okunur kapısı yazma girişimini durdurur.</dd></div>
+          </dl>
+        </article>
+        <article class="rol" style="--rol:var(--saha)">
+          <div class="ust-rol"><span class="ikon" aria-hidden="true">&lt;/&gt;</span><div><h3>Saha Timi</h3><p class="alt">Uygulama</p></div></div>
+          <dl>
+            <div><dt>Görevi</dt><dd>Plan mıntıkalara (repolara) bölünür, her mıntıkaya kuş kod adlı bir saha ajanı gider. En fazla üçü aynı anda çalışır.</dd></div>
+            <div><dt>Sınırı</dt><dd>Her ajan yalnızca kendi mıntıkasına yazabilir.</dd></div>
+          </dl>
+          <p class="kod-adlari">Atmaca · Doğan · Şahin · Kartal · Kerkenez · Turna…</p>
+        </article>
+        <article class="rol" style="--rol:var(--onay)">
+          <div class="ust-rol"><span class="ikon" aria-hidden="true">✓</span><div><h3>Teftiş</h3><p class="alt">Denetim</p></div></div>
+          <dl>
+            <div><dt>Görevi</dt><dd>Diske yazılan değişiklikleri plana ve kalite ölçütlerine göre inceler, onay ya da red verir.</dd></div>
+            <div><dt>Sınırı</dt><dd>Reddederse yalnızca sorunun geçtiği mıntıkalar yeniden çalışır, en fazla beş tur.</dd></div>
+          </dl>
+        </article>
+        <article class="rol istege" style="--rol:var(--uyari)">
+          <div class="ust-rol"><span class="ikon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/></svg></span><div><h3>Güvenlik Denetçisi</h3><p class="alt">Güvenlik incelemesi</p></div></div>
+          <dl>
+            <div><dt>Görevi</dt><dd>Teftiş onayından sonra değişen kodu güvenlik açısından inceler, kanıtlı bir rapor yazar.</dd></div>
+            <div><dt>Sınırı</dt><dd>Akışı durdurmaz, yalnızca rapor verir. Ayarlar'dan tek dokunuşla açılır.</dd></div>
+          </dl>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. İCRA -->
+  <section class="bolum" id="icra">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">3</span>
+        <div>
+          <p class="etiket">İcra</p>
+          <h2>Bir görevin yolculuğu</h2>
+          <div class="yazi">
+            <p>Görevi panele yazarsın. Kod değişikliği hiçbir zaman senin onayın olmadan başlamaz; onayladıktan sonra akış kendi yürür ve her adımı panelde canlı görürsün.</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="sema" role="img" aria-label="Akış şeması: Görev, Analist, senin onayın, Saha Timi (mıntıka başına bir ajan), Teftiş, Güvenlik Denetçisi ve rapor. Onayı reddedersen plan yorumunla yeniden yapılır; Teftiş reddederse sorunlu mıntıkalar yeniden çalışır.">
+        <svg viewBox="0 0 1100 300" aria-hidden="true">
+          <defs>
+            <marker id="uc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ok-ucu" d="M0 0 10 5 0 10z"/></marker>
+            <marker id="uc-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ok-ucu red" d="M0 0 10 5 0 10z"/></marker>
+          </defs>
+          <!-- ileri oklar -->
+          <path class="ok" d="M165 110H195" marker-end="url(#uc)"/>
+          <path class="ok" d="M349 110H379" marker-end="url(#uc)"/>
+          <path class="ok" d="M533 110H563" marker-end="url(#uc)"/>
+          <path class="ok" d="M717 110H747" marker-end="url(#uc)"/>
+          <path class="ok" d="M901 110H931" marker-end="url(#uc)"/>
+          <path class="ok" d="M1010 142V210" marker-end="url(#uc)"/>
+          <!-- geri dönüş yolları -->
+          <path class="ok red" d="M458 78C458 34 274 34 274 74" marker-end="url(#uc-red)"/>
+          <text class="red-yazi" x="366" y="24" text-anchor="middle">red + yorumun → yeniden plan</text>
+          <path class="ok red" d="M826 142C826 258 642 258 642 180" marker-end="url(#uc-red)"/>
+          <text class="red-yazi" x="734" y="282" text-anchor="middle">red → sorunlu mıntıka, en fazla 5 tur</text>
+          <!-- düğümler -->
+          <rect class="kutu" x="15" y="78" width="150" height="64" rx="3"/>
+          <text class="ad" x="29" y="106">Görev</text><text class="not" x="29" y="127">panelden yazılır</text>
+          <rect class="kutu" x="199" y="78" width="150" height="64" rx="3"/>
+          <text class="ad" x="213" y="106">Analist</text><text class="not" x="213" y="127">dosya dosya plan</text>
+          <rect class="kutu sen" x="383" y="78" width="150" height="64" rx="3"/>
+          <text class="sen-yazi" x="397" y="98">ONAY</text><text class="ad" x="397" y="119">Sen</text><text class="not" x="397" y="135">onayla · reddet</text>
+          <rect class="kutu" x="567" y="40" width="150" height="140" rx="3"/>
+          <text class="ad" x="581" y="66">Saha Timi</text><text class="not" x="581" y="84">mıntıka başına</text>
+          <rect class="cip" x="579" y="96" width="126" height="22" rx="2"/><text class="cip-ad" x="587" y="111">Atmaca · sipariş</text>
+          <rect class="cip" x="579" y="122" width="126" height="22" rx="2"/><text class="cip-ad" x="587" y="137">Doğan · ödeme</text>
+          <rect class="cip" x="579" y="148" width="126" height="22" rx="2"/><text class="cip-ad" x="587" y="163">Şahin · stok</text>
+          <rect class="kutu" x="751" y="78" width="150" height="64" rx="3"/>
+          <text class="ad" x="765" y="106">Teftiş</text><text class="not" x="765" y="127">onay ya da red</text>
+          <rect class="kutu istege" x="935" y="78" width="150" height="64" rx="3"/>
+          <text class="ad" x="949" y="103">Güvenlik</text><text class="ad" x="949" y="121">Denetçisi</text><text class="not" x="949" y="136">isteğe bağlı</text>
+          <rect class="kutu" x="950" y="214" width="120" height="46" rx="3"/>
+          <text class="ad" x="964" y="235">Rapor</text><text class="not" x="964" y="251">/guvenlik</text>
+        </svg>
+        <p class="sema-not">Kesik kenarlı kutu isteğe bağlı adım. Kesik kırmızı oklar geri dönüş yolları.</p>
+      </div>
+
+      <ol class="adimlar">
+        <li><span class="no">3.1</span><h3>Görevi ver</h3><p>Panelde yaz. Ekran görüntüsü yapıştırabilir, PDF ya da Word belgesi sürükleyebilirsin; belgenin metni çıkarılıp ajanlara verilir. İstersen görevi ileri bir saate zamanla.</p></li>
+        <li><span class="no">3.2</span><h3>Analist planlar</h3><p>Kodu okur, değişecek her dosya için nerede, önce ve sonra ne olacağını yazar. Varsayımlarını açıkça belirtir, sana soru sormaz.</p></li>
+        <li><span class="no">3.3</span><h3>Sen onaylarsın</h3><p>Planı onayla, reddet ya da zamanla. Reddederken her değişiklik parçasına ayrı yorum yazabilirsin. İstersen dolu planlar onay beklemeden iletilsin.</p></li>
+        <li><span class="no">3.4</span><h3>Saha Timi uygular</h3><p>Plan mıntıkalara bölünür, her mıntıkada bir saha ajanı yalnızca kendi dosyalarına yazar. Raporlar tek çıktıda birleşir.</p></li>
+        <li><span class="no">3.5</span><h3>Teftiş denetler</h3><p>Diskteki değişiklikleri plana göre okur. Reddederse sorun listesi yalnızca ilgili mıntıkalara geri gider.</p></li>
+        <li><span class="no">3.6</span><h3>Rapor yazılır</h3><p>Güvenlik denetimi açıksa değişen kod incelenir; risk düzeyi, bulgular, kanıt satırları ve öneriler ayrı bir sayfada toplanır.</p></li>
+      </ol>
+
+      <div class="ikili">
+        <figure class="belge">
+          <img src="gorseller/saha-harita.jpg" width="2160" height="1350" alt="Saha Timi'nin iki mıntıkada çalışan ajanları Doğan ve Kerkenez: okudukları ve değiştirdikleri dosyalar, eklenen ve silinen satır sayıları">
+          <figcaption><b>İki mıntıka, iki ajan.</b> Doğan sipariş servisinde, Kerkenez ödeme servisinde çalışır. Sağda mıntıka ilerlemesi ve değişen dosyalar satır sayılarıyla görünür.</figcaption>
+        </figure>
+        <figure class="belge">
+          <img src="gorseller/guvenlik.jpg" width="2160" height="1350" alt="Güvenlik raporu sayfası: orta risk kalkanı, önem düzeyine göre bulgu sayıları, özet ve kanıt satırıyla bir bulgu">
+          <figcaption><b>Güvenlik raporu.</b> Genel risk, önem düzeyine göre bulgular, dosya ve satır, diskten alınmış kanıt ve öneri. Bulgu yoksa da olumlu tespitler yazılır.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. İDARİ VE LOJİSTİK -->
+  <section class="bolum" id="lojistik">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">4</span>
+        <div>
+          <p class="etiket">İdari ve lojistik</p>
+          <h2>Kurulum, model sunucusu ve ikmal hattı</h2>
+          <div class="yazi">
+            <p>Kurmay tek bir Node.js uygulaması. Kendi makinende ya da bir sunucuda çalışır, model olarak kendi sunucunu ya da bulutu kullanır.</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="lojistik">
+        <div class="kurulum">
+          <div>
+            <h3>Paketle kur (önerilen)</h3>
+            <div class="kod"><pre><span class="is">$ </span>npm install -g kurmay-ai
+<span class="is">$ </span>mkdir kurmay-calisma &amp;&amp; cd kurmay-calisma
+<span class="is">$ </span>kurmay init
+<span class="is">$ </span>kurmay serve</pre><button class="kopyala" type="button">Kopyala</button></div>
+            <p class="ince"><code>kurmay init</code> çalışma klasörüne <code>config.json</code> ile rolleri, kuralları ve koruma kapılarını koyar. Panel <code>http://localhost:4141</code> adresinde açılır. Paketi güncelledikten sonra <code>kurmay update</code> şablonları tazeler; senin değiştirdiğin dosyalara dokunmaz, yenisini <code>.yeni</code> uzantısıyla yanına koyar.</p>
+          </div>
+          <div>
+            <h3>Kaynak koddan</h3>
+            <div class="kod"><pre><span class="is">$ </span>npm install
+<span class="is">$ </span>npm run serve
+<span class="is">$ </span>npm run serve -- --port 4242   <span class="yorum"># ikinci servis</span></pre><button class="kopyala" type="button">Kopyala</button></div>
+          </div>
+          <div>
+            <h3>Konteynerle</h3>
+            <div class="kod"><pre><span class="is">$ </span>cp .env.example .env   <span class="yorum"># portu ve dizini yaz</span>
+<span class="is">$ </span>docker compose up --build</pre><button class="kopyala" type="button">Kopyala</button></div>
+          </div>
+          <div>
+            <h3>Panelsiz tek görev</h3>
+            <div class="kod"><pre><span class="is">$ </span>kurmay "Sipariş iptaline iade ekle" --at +30m</pre><button class="kopyala" type="button">Kopyala</button></div>
+            <p class="ince">Görev verilince Kurmay tek görev modunda çalışır ve bitince kapanır. <code>--at</code> başlangıcı erteler (<code>+2h</code>, <code>+1d</code>, <code>"2026-11-03 09:00"</code>).</p>
+          </div>
+        </div>
+
+        <aside class="yan">
+          <div class="kart">
+            <h3>Gereksinimler</h3>
+            <dl class="kunye">
+              <dt>Node.js</dt><dd>20 ya da üstü</dd>
+              <dt>Model</dt><dd>Mesaj biçimi uyumlu bir sunucu (ör. vLLM, Ollama) ya da bulut</dd>
+              <dt>Sistem</dt><dd>Windows, Linux, macOS</dd>
+              <dt>Tarayıcı</dt><dd>Güncel herhangi biri; telefonda da çalışır</dd>
+            </dl>
+          </div>
+          <div class="kart uyari">
+            <h3>Kapalı ağda</h3>
+            <ul>
+              <li>Paket iç npm deposundan (Nexus vekili) kurulur. Paket işletim sistemine özel bir ikili dosya da indirir; vekilde o da bulunmalı.</li>
+              <li>Panelin yazı tipleri pakete gömülü. Panel açılırken dış adrese hiç istek gitmez.</li>
+              <li>Model sunucun iç ağdaysa Kurmay internet olmadan uçtan uca çalışır.</li>
+            </ul>
+          </div>
+          <div class="kart">
+            <h3>İlk ayar</h3>
+            <ol>
+              <li>Paneli aç, sağ üstteki dişliyle <b>Ayarlar</b>'a geç.</li>
+              <li><b>Bağlantı</b> bölümünde sağlayıcıyı “Yerel sunucu” seç; sunucu adresini, modeli ve model listesi adresini yaz.</li>
+              <li><b>Çalışma dizini</b>'ni klasör seçiciden seç.</li>
+              <li><b>Kaydet</b>'e bas, servisi bir kez yeniden başlat.</li>
+            </ol>
+          </div>
+        </aside>
+      </div>
+
+      <div class="dayanik">
+        <h3>Sunucu yük altındayken de durmaz</h3>
+        <p class="ince" style="max-width:65ch;margin-bottom:18px">Model sunucusu meşgul, yavaş ya da kararsızsa ajan bekler ve aynı konuşmayı kaldığı yerden sürdürür. Görevi baştan göndermez, biten adımları tekrarlamaz. Değerlerin hepsi Ayarlar'dan yeniden başlatmadan değişir.</p>
+        <div class="tablo-kap">
+          <table>
+            <thead><tr><th scope="col">Durum</th><th scope="col">Kurmay ne yapar</th><th scope="col">Varsayılan</th></tr></thead>
+            <tbody>
+              <tr><td>Sunucu meşgul (503), zaman aşımı, bağlantı koptu</td><td>Bekler, bekleme süresini her denemede ikiye katlar, konuşmayı sürdürerek yeniden dener</td><td class="sayi">5 sn → en fazla 60 sn, sınırsız</td></tr>
+              <tr><td>Kalıcı hata (yetki, model yok, istek reddedildi)</td><td>Arada ilerleme olmadan üst üste gelirse koşuyu durdurur</td><td class="sayi">üst üste 5</td></tr>
+              <tr><td>Yanıt akmaya başladı ama takıldı</td><td>İsteği keser, kaldığı yerden sürdürür</td><td class="sayi">300 sn</td></tr>
+              <tr><td>Bağlam penceresi doluyor</td><td>Sıradaki görevden önce konuşmayı özetler, aynı oturumdan devam eder</td><td class="sayi">%75 doluluk</td></tr>
+              <tr><td>Bağlam koşu ortasında doldu</td><td>Önce özetler; yine dolarsa yeni konuşma açar</td><td class="sayi">2 kurtarma</td></tr>
+              <tr><td>Konuşma bozuldu ya da bulunamadı</td><td>Önceki görevlerin özetiyle yeni bir konuşma başlatır</td><td class="sayi">kendiliğinden</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. KOMUTA VE MUHABERE -->
+  <section class="bolum" id="muhabere">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">5</span>
+        <div>
+          <p class="etiket">Komuta ve muhabere</p>
+          <h2>Panel: heyetle yazıştığın yer</h2>
+          <div class="yazi">
+            <p>Ajanlar ekip sohbeti gibi akar: hangi dosyayı okuduğu, nereyi değiştirdiği, hangi komutu çalıştırdığı tek bakışta görünür. Durdurmak, zamanlamak ya da bir ajanı kapatmak için koşunun bitmesini beklemezsin.</p>
+          </div>
+        </div>
+      </header>
+
+      <figure class="belge panel-buyuk">
+        <img src="gorseller/bitti-radar.jpg" width="2160" height="1350" alt="Radar temasında tamamlanmış bir koşu: Teftiş kararı, güvenlik raporu satırı, sağda ajan başına bağlam doluluğu, mıntıkalar ve değişen dosyalar">
+        <figcaption><b>Tamamlanmış bir harekât.</b> Teftiş onayı, güvenlik raporu bağlantısı ve iş akışının sonu. Sağ sütunda her ajanın bağlam doluluğu, mıntıkalar ve değişen dosyalar.</figcaption>
+      </figure>
+
+      <div class="izgara">
+        <figure class="belge">
+          <img src="gorseller/onay-kart.jpg" width="1200" height="1652" alt="Onay kartı yakından: Analist'in özeti ve dosya bazında önce ve sonra kod parçaları">
+          <figcaption><b>Onay kartı.</b> Değişen kelimeler vurgulu, her parçanın altında yorum kutusu. Onaylarken başlangıcı ileri bir saate atabilirsin.</figcaption>
+        </figure>
+        <figure class="belge">
+          <img src="gorseller/eklenti-gece.jpg" width="2160" height="1350" alt="Eklenti penceresi: kod dizini eklentisinin yedi aracı, parametreleri ve açıklamaları">
+          <figcaption><b>Eklentiler.</b> Durum ışığı ve araç listesi. Bağlanamayan eklenti sohbete kırmızıyla yazılır, ajan onsuz çalıştığını bilirsin.</figcaption>
+        </figure>
+        <figure class="belge telefon">
+          <img src="gorseller/telefon-evrak.jpg" width="780" height="1688" alt="Telefonda panel: saha ajanının balonu, Teftiş'in çalıştırdığı komut ve kararı">
+          <figcaption><b>Telefonda.</b> Onayı yolda verirsin.</figcaption>
+        </figure>
+        <figure class="belge">
+          <img src="gorseller/ayarlar-sade.jpg" width="2160" height="1350" alt="Ayarlar sayfası: güvenlik denetimi ve planı otomatik iletme anahtarları, çalışma dizini, bağlantı ve dayanıklılık ayarları">
+          <figcaption><b>Ayarlar.</b> Bağlantı, dayanıklılık, bağlam penceresi, akış şeması ve rol talimatları tek sayfada.</figcaption>
+        </figure>
+        <figure class="belge">
+          <img src="gorseller/ackapat-karargah.jpg" width="2160" height="1350" alt="Aç/Kapat sayfası: ajanlar, kurallar ve beceriler için açma kapama anahtarları">
+          <figcaption><b>Aç/Kapat.</b> Ajanı, kuralı, beceriyi ya da eklentiyi tek dokunuşla kapat. Küçük işte Analist'i kapatırsan iş doğrudan Saha Timi'ne gider.</figcaption>
+        </figure>
+      </div>
+
+      <div class="kontrol">
+        <div><h3>Durdur</h3><p>Koşuyu her an keser; onay ya da zamanlama beklerken de çalışır.</p></div>
+        <div><h3>Zamanla</h3><p>+30 dakika, yarın sabah ya da belirli bir tarih. Geri sayım panelde, “şimdi çalıştır” bir tık.</p></div>
+        <div><h3>Oturumlar</h3><p>Aynı anda üç görev koşar. Her oturumun kendi modeli, akıl yürütme derinliği ve hedef dizini var.</p></div>
+        <div><h3>Konuşma sürer</h3><p>Aynı oturuma yeni görev verince Analist önceki konuşmayı hatırlar. Servis yeniden başlasa da geçmiş diskten gelir.</p></div>
+        <div><h3>Koruma kapıları</h3><p>Analist'in dosya yazmasını ve tehlikeli kabuk komutlarını engelleyen kapılar, araç çalışmadan önce devreye girer.</p></div>
+        <div><h3>Kayıt</h3><p>Her koşunun bütün olayları satır satır <code>runs/</code> klasörüne yazılır; raporlar <code>runs/guvenlik/</code>'te.</p></div>
+      </div>
+
+      <div class="temalar">
+        <h3>Altı görünüm</h3>
+        <p>Panel, Ayarlar ve Aç/Kapat sayfaları aynı altı temayı paylaşır. Seçim sağ üstteki renk örneklerinden yapılır ve tarayıcıda hatırlanır. Aşağıdakiler aynı onay kartının altı hali.</p>
+        <div class="tema-izgara">
+          <figure><img src="gorseller/tema-evrak.jpg" width="2160" height="1350" alt="Gizli Evrak teması"><figcaption><b>Gizli Evrak</b>Manila kâğıt, daktilo yazısı, bordo mühür.</figcaption></figure>
+          <figure><img src="gorseller/tema-radar.jpg" width="2160" height="1350" alt="Radar teması"><figcaption><b>Radar</b>Gece görüşü: fosfor yeşili, tarama çizgileri.</figcaption></figure>
+          <figure><img src="gorseller/tema-harita.jpg" width="2160" height="1350" alt="Harita teması"><figcaption><b>Harita</b>Pafta yeşili, eş yükselti eğrileri, mor bindirme.</figcaption></figure>
+          <figure><img src="gorseller/tema-karargah.jpg" width="2160" height="1350" alt="Karargâh teması"><figcaption><b>Karargâh</b>Zeytin yeşili branda, pirinç vurgu, şablon harfler.</figcaption></figure>
+          <figure><img src="gorseller/tema-sade.jpg" width="2160" height="1350" alt="Sade teması"><figcaption><b>Sade</b>Nötr açık zemin, ince kenarlık.</figcaption></figure>
+          <figure><img src="gorseller/tema-gece.jpg" width="2160" height="1350" alt="Gece teması"><figcaption><b>Gece</b>Nötr koyu zemin, ince kenarlık.</figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EKLER -->
+  <section class="bolum" id="ekler">
+    <div class="kap">
+      <div class="ek">
+        <div class="ek-bas"><span class="etiket">Ek-A</span><h3>Ayar dosyası</h3></div>
+        <div class="ek-ikili">
+          <div class="kod"><pre>{
+  "provider": "ollama",
+  "baseUrl": "http://model:8000",
+  "model": "qwen3-coder-30b",
+  "modelsUrl": "http://model:8000/v1/models",
+  "targetDir": "D:/work/e-ticaret",
+  "maxParallelRuns": 3,
+  "workflow": {
+    "entry": "analist",
+    "maxCycles": 5,
+    "agents": {
+      "analist":   { "routes": { … } },
+      "saha-timi": { "type": "fanout" },
+      "teftis":    { "verdict": { … } },
+      "guvenlik":  { "securityReport": true }
+    }
+  }
+}</pre><button class="kopyala" type="button">Kopyala</button></div>
+          <div class="tablo-kap">
+            <table>
+              <thead><tr><th scope="col">Alan</th><th scope="col">Ne işe yarar</th><th scope="col">Ayarlar'da</th></tr></thead>
+              <tbody>
+                <tr><td><code>provider</code></td><td><code>ollama</code> yerel sunucu, <code>anthropic</code> bulut</td><td>Bağlantı</td></tr>
+                <tr><td><code>baseUrl</code></td><td>Model sunucusunun adresi</td><td>Bağlantı</td></tr>
+                <tr><td><code>apiKey</code></td><td>Erişim anahtarı; boşsa sunucunun varsayılanı</td><td>Bağlantı</td></tr>
+                <tr><td><code>model</code></td><td>Varsayılan model; her oturum kendi modelini seçebilir</td><td>Bağlantı</td></tr>
+                <tr><td><code>modelsUrl</code></td><td>Model listesi; bağlam penceresi de buradan okunur</td><td>Bağlantı</td></tr>
+                <tr><td><code>targetDir</code></td><td>Ajanların çalışacağı proje klasörü</td><td>Çalışma dizini</td></tr>
+                <tr><td><code>retry</code>, <code>limits</code></td><td>Yeniden deneme, zaman aşımı ve bağlam sınırları</td><td>Dayanıklılık</td></tr>
+                <tr><td><code>mcpServers</code></td><td>Ajanlara araç veren eklentiler</td><td>Aç/Kapat</td></tr>
+                <tr><td><code>workflow</code></td><td>Akış şeması: düğümler, geçişler, onay noktaları</td><td>Akış şeması</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="ek">
+        <div class="ek-bas"><span class="etiket">Ek-B</span><h3>Bilinen sınırlar</h3></div>
+        <ul class="sinirlar">
+          <li><b>Panelde giriş ekranı yok.</b><span class="ince">Paneli yalnızca güvenilir ağda aç. Klasör seçici diskteki klasör adlarını, Ayarlar sayfası erişim anahtarını gösterir.</span></li>
+          <li><b>Erişim anahtarı düz metin.</b><span class="ince"><code>config.json</code> içinde durur; dosyayı depoya gönderirken dikkat et.</span></li>
+          <li><b>Paralellik sunucuya bağlı.</b><span class="ince">Model sunucusu istekleri sırayla işliyorsa mıntıkaları aynı anda çalıştırmak hız kazandırmaz.</span></li>
+          <li><b>Görseller görsel destekli modelde işe yarar.</b><span class="ince">PDF ve Word belgelerinin metni yüklenirken çıkarıldığı için her modelde okunur.</span></li>
+          <li><b>Özetleme koşular arasında yapılır.</b><span class="ince">Tek bir görev pencereyi kendi başına doldurursa yalnızca hata kurtarması devreye girer.</span></li>
+          <li><b>Bu sayfadaki ekran görüntüleri örnektir.</b><span class="ince">Panel ve akış gerçek; görüntüler örnek bir projede, senaryolu bir deneme sunucusuyla alındı.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="alt-bilgi">
+  <div class="kap">
+    <div><span class="marka">Kurmay</span><br>Sürüm 0.1.7 · npm paketi <code>kurmay-ai</code></div>
+    <div>Bu sayfa tek klasördür, internetsiz açılır.<br>Yazı tipleri: Archivo, Courier Prime, Saira Stencil One, JetBrains Mono.<br>SIL Açık Yazı Tipi Lisansı 1.1, <a href="yazi-tipleri/lisans/">yazi-tipleri/lisans</a>.</div>
+  </div>
+</footer>
+
+<dialog class="buyut" id="buyut" aria-label="Büyütülmüş ekran görüntüsü">
+  <img id="buyutResim" alt="">
+  <p id="buyutYazi"></p>
+</dialog>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  // Görünüm: açık (Gizli Evrak) / koyu (Radar); seçim yoksa işletim sistemine uyar
+  var dugmeler = document.querySelectorAll(".tema button");
+  function koyuMu() {
+    if (root.dataset.theme) return root.dataset.theme === "dark";
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function isaretle() {
+    var koyu = koyuMu();
+    dugmeler.forEach(function (b) { b.setAttribute("aria-pressed", String((b.dataset.t === "dark") === koyu)); });
+  }
+  dugmeler.forEach(function (b) {
+    b.addEventListener("click", function () {
+      root.dataset.theme = b.dataset.t;
+      try { localStorage.setItem("kurmay-tanitim-tema", b.dataset.t); } catch (e) {}
+      isaretle();
+    });
+  });
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", isaretle); } catch (e) {}
+  isaretle();
+
+  // Kopyala: komut satırlarındaki "$ " işaretleri kopyalanmaz
+  document.querySelectorAll(".kopyala").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var pre = b.parentElement.querySelector("pre");
+      var metin = Array.prototype.map.call(pre.childNodes, function (n) {
+        return n.nodeType === 1 && n.classList.contains("is") ? "" : n.textContent;
+      }).join("").replace(/[ \t]+#.*$/gm, "");
+      function oldu() { b.textContent = "Kopyalandı"; setTimeout(function () { b.textContent = "Kopyala"; }, 1600); }
+      function sec() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { if (document.execCommand("copy")) { oldu(); return; } } catch (e) {}
+        b.textContent = "Seçildi, Ctrl+C";
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(metin).then(oldu, sec);
+      else sec();
+    });
+  });
+
+  // Ekran görüntüleri: tıklayınca büyür
+  var dlg = document.getElementById("buyut"), img = document.getElementById("buyutResim"), yazi = document.getElementById("buyutYazi");
+  document.querySelectorAll(".foto img, .belge img, .tema-izgara img").forEach(function (el) {
+    el.tabIndex = 0;
+    function ac() {
+      if (!dlg.showModal) { window.open(el.src); return; }
+      img.src = el.src; img.alt = el.alt;
+      var fc = el.closest("figure") && el.closest("figure").querySelector("figcaption");
+      yazi.textContent = el.dataset.altYazi || (fc ? fc.textContent : el.alt);
+      dlg.showModal();
+    }
+    el.addEventListener("click", ac);
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ac(); } });
+  });
+  dlg.addEventListener("click", function () { dlg.close(); });
+
+  // Gezinmede bulunulan bölüm
+  var linkler = {};
+  document.querySelectorAll(".gez a").forEach(function (a) { linkler[a.getAttribute("href").slice(1)] = a; });
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (girdiler) {
+      girdiler.forEach(function (g) {
+        if (!g.isIntersecting) return;
+        Object.keys(linkler).forEach(function (k) { linkler[k].classList.toggle("su", k === g.target.id); });
+      });
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    Object.keys(linkler).concat("giris").forEach(function (k) { var s = document.getElementById(k); if (s) io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
