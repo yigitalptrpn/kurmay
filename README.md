@@ -4,6 +4,8 @@
 **Analist** kodu okuyup harekât planını çıkarır, **Saha Timi** planı mıntıkalarda (repolarda)
 uygular — her mıntıkada kuş kod adlı bir saha ajanı —, **Teftiş** işi denetler.
 
+Tanıtım sayfası: **https://yigitalptrpn.github.io/kurmay/** (kaynağı `tanitim/`; klasörü indirip internetsiz de açabilirsin).
+
 Md dosyalarıyla tanımlanan ajanları (Analist → Saha Timi ⇄ Teftiş) **deterministik** bir iş akışıyla koordine eden TypeScript orkestratörü.
 
 Kontrol akışı kodda, personalar md dosyalarında, tüm ayarlar tek `config.json`'da yaşar:

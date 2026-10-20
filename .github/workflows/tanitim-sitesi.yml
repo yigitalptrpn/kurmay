@@ -1,0 +1,41 @@
+# Tanıtım sitesini (tanitim/ klasörü) GitHub Pages'e yayımlar:
+#   https://yigitalptrpn.github.io/kurmay/
+# main'e tanitim/ altında bir değişiklik gelince (ve elle) çalışır; derleme adımı yok,
+# klasör olduğu gibi yayımlanır.
+# Bir kez yapılacak ayar: depo Settings → Pages → Build and deployment → Source:
+# "GitHub Actions". Bu yapılmadan çalışırsa yayın adımı "Pages etkin değil" hatasıyla düşer;
+# ayardan sonra Actions sekmesinden bu işi elle yeniden çalıştırmak yeter.
+name: Tanıtım sitesi
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tanitim/**"
+      - ".github/workflows/tanitim-sitesi.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  yayimla:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.yayin.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: tanitim
+
+      - id: yayin
+        uses: actions/deploy-pages@v4
