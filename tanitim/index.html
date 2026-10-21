@@ -39,8 +39,8 @@
 @font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(yazi-tipleri/jetbrains-mono-latin-ext.woff2) format("woff2");
   unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 
-/* Yerleşim: harekât emri dosyası — manila kâğıt üstünde beş paragraflı emir (Durum, Görev,
-   İcra, İdari ve Lojistik, Komuta ve Muhabere) + ekler; büyük şablon harfli paragraf
+/* Yerleşim: harekât emri dosyası — manila kâğıt üstünde dört paragraflı emir (Durum, Görev,
+   İcra, İdari ve Lojistik) + sorular + ekler; büyük şablon harfli paragraf
    numaraları, daktilo künye satırları. Açık = Gizli Evrak, koyu = Radar (panelin temaları). */
 :root {
   --kagit:#E7DFC6;          /* manila zemin */
@@ -237,28 +237,6 @@ tr:last-child td { border-bottom:0; }
 td.sayi { font:700 14.5px/1.5 var(--f-daktilo); white-space:nowrap; font-variant-numeric:tabular-nums; color:var(--murekkep); }
 td code { white-space:nowrap; }
 
-/* Muhabere */
-.panel-buyuk { margin-bottom:24px; }
-.izgara { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)) minmax(0, .62fr); gap:24px; }
-.izgara .telefon { grid-column:3; grid-row:1 / span 2; }
-.izgara .belge img { aspect-ratio:16 / 10; object-fit:cover; object-position:top left; }
-.izgara .telefon { grid-template-rows:minmax(0, 1fr) auto; }
-.izgara .telefon img { aspect-ratio:auto; height:100%; min-height:0; object-position:top center; }
-.kontrol { margin-top:clamp(40px, 6vw, 60px); display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:0; border-top:2px solid var(--murekkep); }
-.kontrol > div { padding:18px 22px 18px 0; border-bottom:1px solid var(--cizgi); }
-.kontrol > div:not(:nth-child(3n+1)) { padding-left:22px; border-left:1px solid var(--cizgi); }
-.kontrol h3 { font:800 19px/1.2 var(--f-govde); font-stretch:82%; margin-bottom:6px; }
-.kontrol p { font-size:15.5px; color:var(--soluk); }
-
-.temalar { margin-top:clamp(40px, 6vw, 64px); }
-.temalar > h3 { font:800 26px/1.15 var(--f-govde); font-stretch:78%; text-transform:uppercase; margin-bottom:6px; }
-.temalar > p { color:var(--soluk); margin-bottom:22px; max-width:65ch; }
-.tema-izgara { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:20px; }
-.tema-izgara figure { margin:0; display:grid; gap:10px; }
-.tema-izgara img { border:1px solid var(--cizgi); box-shadow:var(--golge); cursor:zoom-in; }
-.tema-izgara figcaption { font-size:15px; line-height:1.45; color:var(--soluk); }
-.tema-izgara figcaption b { display:block; color:var(--murekkep); font:800 18px/1.2 var(--f-govde); font-stretch:82%; }
-
 /* Sorular */
 .sss { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0 34px; border-top:2px solid var(--murekkep); }
 .soru { padding:20px 0; border-bottom:1px solid var(--cizgi); display:grid; grid-template-columns:minmax(0, 1fr); gap:8px; align-content:start; }
@@ -293,26 +271,19 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
 @media (max-width: 1080px) {
   .heyet { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .adimlar { grid-template-columns:repeat(2, minmax(0, 1fr)); }
-  .izgara { grid-template-columns:repeat(2, minmax(0, 1fr)); }
-  .izgara .telefon { grid-column:auto; grid-row:auto; }
-  .izgara .telefon img { aspect-ratio:9 / 16; height:auto; }
-  .kontrol { grid-template-columns:repeat(2, minmax(0, 1fr)); }
-  .kontrol > div:not(:nth-child(3n+1)) { padding-left:0; border-left:0; }
-  .kontrol > div:nth-child(even) { padding-left:22px; border-left:1px solid var(--cizgi); }
 }
 @media (max-width: 860px) {
   .giris .kap, .lojistik, .ek-ikili { grid-template-columns:minmax(0, 1fr); }
   .foto { transform:none; margin-top:18px; }
   .ilkeler { grid-template-columns:minmax(0, 1fr); }
   .ilkeler > div + div { border-left:0; padding-left:0; border-top:1px solid var(--cizgi); }
-  .ikili, .tema-izgara { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .ikili { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .sinirlar, .sss { grid-template-columns:minmax(0, 1fr); }
   .gez { justify-content:flex-start; }
 }
 @media (max-width: 600px) {
   body { font-size:16px; }
-  .heyet, .adimlar, .ikili, .izgara, .tema-izgara, .kontrol { grid-template-columns:minmax(0, 1fr); }
-  .kontrol > div:nth-child(even) { padding-left:0; border-left:0; }
+  .heyet, .adimlar, .ikili { grid-template-columns:minmax(0, 1fr); }
   .ust .kap { gap:10px; }
   .marka { font-size:18px; }
   .bas { grid-template-columns:minmax(0, 1fr); }
@@ -335,7 +306,6 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
       <a href="#gorev"><b>2</b>Görev</a>
       <a href="#icra"><b>3</b>İcra</a>
       <a href="#lojistik"><b>4</b>Lojistik</a>
-      <a href="#muhabere"><b>5</b>Muhabere</a>
       <a href="#sorular"><b>?</b>Sorular</a>
       <a href="#ekler">Ekler</a>
     </nav>
@@ -604,85 +574,17 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
 
       <div class="dayanik">
         <h3>Sunucu yük altındayken de durmaz</h3>
-        <p class="ince" style="max-width:65ch;margin-bottom:18px">Model sunucusu meşgul, yavaş ya da kararsızsa ajan bekler ve aynı konuşmayı kaldığı yerden sürdürür. Görevi baştan göndermez, biten adımları tekrarlamaz. Değerlerin hepsi Ayarlar'dan yeniden başlatmadan değişir.</p>
+        <p class="ince" style="max-width:65ch;margin-bottom:18px">Claude Code tek bir isteği zaten 10 kez yeniden dener. Aşağıdakiler Kurmay'ın onun üstüne kattıkları; değerler Ayarlar'dan yeniden başlatmadan değişir.</p>
         <div class="tablo-kap">
           <table>
             <thead><tr><th scope="col">Durum</th><th scope="col">Kurmay ne yapar</th><th scope="col">Varsayılan</th></tr></thead>
             <tbody>
-              <tr><td>Sunucu meşgul (503), zaman aşımı, bağlantı koptu</td><td>Bekler, bekleme süresini her denemede ikiye katlar, konuşmayı sürdürerek yeniden dener</td><td class="sayi">5 sn → en fazla 60 sn, sınırsız</td></tr>
-              <tr><td>Kalıcı hata (yetki, model yok, istek reddedildi)</td><td>Arada ilerleme olmadan üst üste gelirse koşuyu durdurur</td><td class="sayi">üst üste 5</td></tr>
-              <tr><td>Yanıt akmaya başladı ama takıldı</td><td>İsteği keser, kaldığı yerden sürdürür</td><td class="sayi">300 sn</td></tr>
+              <tr><td>Claude Code'un denemeleri bitti, sunucu hâlâ meşgul</td><td>Bekler, bekleme süresini her denemede ikiye katlar, konuşmayı kaldığı yerden sürdürür; görevi baştan göndermez</td><td class="sayi">5 sn → en fazla 60 sn, sınırsız</td></tr>
               <tr><td>Bağlam penceresi doluyor</td><td>Sıradaki görevden önce konuşmayı özetler, aynı oturumdan devam eder</td><td class="sayi">%75 doluluk</td></tr>
-              <tr><td>Bağlam koşu ortasında doldu</td><td>Önce özetler; yine dolarsa yeni konuşma açar</td><td class="sayi">2 kurtarma</td></tr>
+              <tr><td>Bağlam koşu ortasında doldu (vLLM'in hatası)</td><td>Önce özetler; yine dolarsa yeni konuşma açar</td><td class="sayi">2 kurtarma</td></tr>
               <tr><td>Konuşma bozuldu ya da bulunamadı</td><td>Önceki görevlerin özetiyle yeni bir konuşma başlatır</td><td class="sayi">kendiliğinden</td></tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 5. KOMUTA VE MUHABERE -->
-  <section class="bolum" id="muhabere">
-    <div class="kap">
-      <header class="bas">
-        <span class="pno" aria-hidden="true">5</span>
-        <div>
-          <p class="etiket">Komuta ve muhabere</p>
-          <h2>Panel: heyetle yazıştığın yer</h2>
-          <div class="yazi">
-            <p>Ajanlar ekip sohbeti gibi akar: hangi dosyayı okuduğu, nereyi değiştirdiği, hangi komutu çalıştırdığı tek bakışta görünür. Durdurmak, zamanlamak ya da bir ajanı kapatmak için koşunun bitmesini beklemezsin.</p>
-          </div>
-        </div>
-      </header>
-
-      <figure class="belge panel-buyuk">
-        <img loading="lazy" decoding="async" src="gorseller/bitti-radar.jpg" width="2160" height="1350" alt="Radar temasında tamamlanmış bir koşu: Teftiş kararı, güvenlik raporu satırı, sağda ajan başına bağlam doluluğu, mıntıkalar ve değişen dosyalar">
-        <figcaption><b>Tamamlanmış bir harekât.</b> Teftiş onayı, güvenlik raporu bağlantısı ve iş akışının sonu. Sağ sütunda her ajanın bağlam doluluğu, mıntıkalar ve değişen dosyalar.</figcaption>
-      </figure>
-
-      <div class="izgara">
-        <figure class="belge">
-          <img loading="lazy" decoding="async" src="gorseller/onay-kart.jpg" width="1200" height="1652" alt="Onay kartı yakından: Analist'in özeti ve dosya bazında önce ve sonra kod parçaları">
-          <figcaption><b>Onay kartı.</b> Değişen kelimeler vurgulu, her parçanın altında yorum kutusu. Onaylarken başlangıcı ileri bir saate atabilirsin.</figcaption>
-        </figure>
-        <figure class="belge">
-          <img loading="lazy" decoding="async" src="gorseller/eklenti-gece.jpg" width="2160" height="1350" alt="Eklenti penceresi: kod dizini eklentisinin yedi aracı, parametreleri ve açıklamaları">
-          <figcaption><b>Eklentiler.</b> Durum ışığı ve araç listesi. Bağlanamayan eklenti sohbete kırmızıyla yazılır, ajan onsuz çalıştığını bilirsin.</figcaption>
-        </figure>
-        <figure class="belge telefon">
-          <img loading="lazy" decoding="async" src="gorseller/telefon-evrak.jpg" width="780" height="1688" alt="Telefonda panel: saha ajanının balonu, Teftiş'in çalıştırdığı komut ve kararı">
-          <figcaption><b>Telefonda.</b> Onayı yolda verirsin.</figcaption>
-        </figure>
-        <figure class="belge">
-          <img loading="lazy" decoding="async" src="gorseller/ayarlar-sade.jpg" width="2160" height="1350" alt="Ayarlar sayfası: güvenlik denetimi ve planı otomatik iletme anahtarları, çalışma dizini, bağlantı ve dayanıklılık ayarları">
-          <figcaption><b>Ayarlar.</b> Bağlantı, dayanıklılık, bağlam penceresi, akış şeması ve rol talimatları tek sayfada.</figcaption>
-        </figure>
-        <figure class="belge">
-          <img loading="lazy" decoding="async" src="gorseller/ackapat-karargah.jpg" width="2160" height="1350" alt="Aç/Kapat sayfası: ajanlar, kurallar ve beceriler için açma kapama anahtarları">
-          <figcaption><b>Aç/Kapat.</b> Ajanı, kuralı, beceriyi ya da eklentiyi tek dokunuşla kapat. Küçük işte Analist'i kapatırsan iş doğrudan Saha Timi'ne gider.</figcaption>
-        </figure>
-      </div>
-
-      <div class="kontrol">
-        <div><h3>Durdur</h3><p>Koşuyu her an keser; onay ya da zamanlama beklerken de çalışır.</p></div>
-        <div><h3>Zamanla</h3><p>+30 dakika, yarın sabah ya da belirli bir tarih. Geri sayım panelde, “şimdi çalıştır” bir tık.</p></div>
-        <div><h3>Oturumlar</h3><p>Aynı anda üç görev koşar. Her oturumun kendi modeli, akıl yürütme derinliği ve hedef dizini var.</p></div>
-        <div><h3>Konuşma sürer</h3><p>Aynı oturuma yeni görev verince Analist önceki konuşmayı hatırlar. Servis yeniden başlasa da geçmiş diskten gelir.</p></div>
-        <div><h3>Koruma kapıları</h3><p>Analist'in dosya yazmasını ve tehlikeli kabuk komutlarını engelleyen kapılar, araç çalışmadan önce devreye girer.</p></div>
-        <div><h3>Kayıt</h3><p>Her koşunun bütün olayları satır satır <code>runs/</code> klasörüne yazılır; raporlar <code>runs/guvenlik/</code>'te.</p></div>
-      </div>
-
-      <div class="temalar">
-        <h3>Altı görünüm</h3>
-        <p>Panel, Ayarlar ve Aç/Kapat sayfaları aynı altı temayı paylaşır. Seçim sağ üstteki renk örneklerinden yapılır ve tarayıcıda hatırlanır. Aşağıdakiler aynı onay kartının altı hali.</p>
-        <div class="tema-izgara">
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-evrak.jpg" width="2160" height="1350" alt="Gizli Evrak teması"><figcaption><b>Gizli Evrak</b>Manila kâğıt, daktilo yazısı, bordo mühür.</figcaption></figure>
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-radar.jpg" width="2160" height="1350" alt="Radar teması"><figcaption><b>Radar</b>Gece görüşü: fosfor yeşili, tarama çizgileri.</figcaption></figure>
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-harita.jpg" width="2160" height="1350" alt="Harita teması"><figcaption><b>Harita</b>Pafta yeşili, eş yükselti eğrileri, mor bindirme.</figcaption></figure>
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-karargah.jpg" width="2160" height="1350" alt="Karargâh teması"><figcaption><b>Karargâh</b>Zeytin yeşili branda, pirinç vurgu, şablon harfler.</figcaption></figure>
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-sade.jpg" width="2160" height="1350" alt="Sade teması"><figcaption><b>Sade</b>Nötr açık zemin, ince kenarlık.</figcaption></figure>
-          <figure><img loading="lazy" decoding="async" src="gorseller/tema-gece.jpg" width="2160" height="1350" alt="Gece teması"><figcaption><b>Gece</b>Nötr koyu zemin, ince kenarlık.</figcaption></figure>
         </div>
       </div>
     </div>
@@ -720,7 +622,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
         </div>
         <div class="soru">
           <h3>Claude Code zaten 15 kez yeniden denemiyor mu?</h3>
-          <p>Dener, ama tek bir isteği. Denemeler bitince koşu hatayla biter, görevi baştan vermen gerekir. Kurmay o noktadan sonra devreye girer: konuşmayı sürdürerek, bekleme süresini artırarak yeniden dener ve görevi tekrar göndermez, “kaldığın yerden devam et” der. Kısacası Claude Code isteği kurtarır, Kurmay işi kurtarır. Karşılaştırma aşağıdaki tabloda.</p>
+          <p>Dener, ve konuşmayı sürdürmeyi de bilir: denemeler bitince terminalde “devam et” yazarsan kaldığı yerden sürer. Ama bunu başında biri yapmalı. Kurmay aynı şeyi gözetimsiz yapar: bekler, kendisi sürdürür, görevi tekrar göndermez. Gece başlatılan iş, sunucu yarım saat meşgul olsa da kimse dokunmadan biter.</p>
         </div>
         <div class="soru">
           <h3>Claude Code yerel modelin bağlam penceresini bilir mi?</h3>
@@ -754,12 +656,9 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
           <table>
             <thead><tr><th scope="col">Durum</th><th scope="col">Claude Code tek başına</th><th scope="col">Kurmay</th></tr></thead>
             <tbody>
-              <tr><td>Tek isteğin yeniden denenmesi</td><td>En fazla 15 (varsayılan 10)</td><td>Aynısı, Ayarlar'dan değişir</td></tr>
-              <tr><td>Denemeler bitince</td><td>Koşu hatayla biter, elle yeniden başlatılır</td><td>Konuşma sürdürülerek yeniden denenir, varsayılan sınırsız</td></tr>
-              <tr><td>Görev tekrar gider mi</td><td>Yeniden başlatınca görev baştan işlenir</td><td>Görev kayıttaysa yalnızca “kaldığın yerden devam et” gider</td></tr>
-              <tr><td>Yanıt akarken takıldı</td><td>300 sn sonra kesilir</td><td>Daha kısa süre verilebilir, kesilince sürdürülür</td></tr>
-              <tr><td>Sunucu konuşmayı hep reddediyor</td><td>Her denemede aynı hata</td><td>İki başarısızlıktan sonra önceki görevlerin özetiyle yeni konuşma</td></tr>
-              <tr><td>Ayar değiştirmek</td><td>Ortam değişkeni ve yeniden başlatma</td><td>Hazır modlar: Dengeli, Sürekli dene, Sakince dene, Çabuk vazgeç; anında geçerli</td></tr>
+              <tr><td>Tek isteği yeniden dener</td><td>Evet, 10 kez</td><td>Evet, aynısı</td></tr>
+              <tr><td>Denemeler bitince</td><td>Durur; “devam et” yazınca kaldığı yerden sürer</td><td>Bekler ve kendisi sürdürür</td></tr>
+              <tr><td>Konuşma bozulursa</td><td>Her denemede aynı hata</td><td>Önceki görevlerin özetiyle yeni konuşma</td></tr>
             </tbody>
           </table>
         </div>
@@ -902,7 +801,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
 
   // Ekran görüntüleri: tıklayınca büyür
   var dlg = document.getElementById("buyut"), img = document.getElementById("buyutResim"), yazi = document.getElementById("buyutYazi");
-  document.querySelectorAll(".foto img, .belge img, .tema-izgara img").forEach(function (el) {
+  document.querySelectorAll(".foto img, .belge img").forEach(function (el) {
     el.tabIndex = 0;
     function ac() {
       if (!dlg.showModal) { window.open(el.src); return; }
