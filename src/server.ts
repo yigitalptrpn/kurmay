@@ -160,6 +160,7 @@ export interface UiServerOptions {
  *   GET  /          panel sayfası (ui/index.html)
  *   GET  /theme.css paylaşılan Material 3 tema (ui/theme.css)
  *   GET  /theme.js  tema seçimi: kayıtlı temayı uygular, renk örneklerini kurar (ui/theme.js)
+ *   GET  /version   { version } — çalışan Kurmay'ın sürümü (package.json); panelde marka yanında
  *   GET  /fonts/<ad>.woff2  gömülü yazı tipleri (ui/fonts) — çevrimdışı çalışır
  *   GET  /events?session=ID  SSE: o oturumun geçmişi (diskteki kayıtlar dahil) + canlı akışı
  *   GET  /lobby     SSE: oturum listesi + durumları, her değişiklikte tam liste
@@ -198,6 +199,13 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const themeCssPath = path.join(uiDir, "theme.css");
   const themeJsPath = path.join(uiDir, "theme.js");
   const dirPickerPath = path.join(uiDir, "dirpicker.js");
+  // Sürüm package.json'dan bir kez okunur (geliştirmede depo kökü, pakette paket kökü)
+  let version = "";
+  try {
+    version = String(JSON.parse(fs.readFileSync(path.join(uiDir, "..", "package.json"), "utf8")).version ?? "");
+  } catch {
+    // okunamazsa panel sürümü göstermez
+  }
   const sseClients = new Set<http.ServerResponse>();
   const json = (res: http.ServerResponse, code: number, payload: unknown) => {
     res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
@@ -241,6 +249,10 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       res.writeHead(200, { "content-type": "text/css; charset=utf-8" });
       res.end(fs.readFileSync(themeCssPath));
       return;
+    }
+
+    if (req.method === "GET" && req.url === "/version") {
+      return json(res, 200, { version });
     }
 
     // Tema seçimi (panel + Ayarlar + Aç/Kapat ortak): kayıtlı temayı sayfa çizilmeden uygular
