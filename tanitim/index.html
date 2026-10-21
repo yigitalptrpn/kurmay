@@ -148,10 +148,6 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
 .foto .atac path { fill:none; stroke:var(--soluk); stroke-width:3; stroke-linecap:round; }
 .foto figcaption { font:400 13px/1.45 var(--f-daktilo); color:var(--soluk); padding:10px 4px 2px; }
 .foto-resim { position:relative; }
-.muhur { position:absolute; left:-18px; bottom:9%; z-index:3; transform:rotate(-8deg); font:700 clamp(15px, 1.6vw, 20px)/1 var(--f-daktilo);
-  letter-spacing:.16em; text-transform:uppercase; color:var(--muhur); border:3px double var(--muhur); padding:10px 14px; background:var(--yaprak); background:color-mix(in srgb, var(--yaprak) 70%, transparent);
-  animation:bas .5s cubic-bezier(.3,1.4,.5,1) .7s both; pointer-events:none; }
-@keyframes bas { from { opacity:0; transform:rotate(-15deg) scale(1.9); } to { opacity:1; transform:rotate(-8deg) scale(1); } }
 
 /* — Bölüm (emir paragrafı) — */
 .bolum { padding-block:clamp(56px, 8vw, 104px); border-top:1px dashed var(--cizgi); }
@@ -263,6 +259,16 @@ td code { white-space:nowrap; }
 .tema-izgara figcaption { font-size:15px; line-height:1.45; color:var(--soluk); }
 .tema-izgara figcaption b { display:block; color:var(--murekkep); font:800 18px/1.2 var(--f-govde); font-stretch:82%; }
 
+/* Sorular */
+.sss { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0 34px; border-top:2px solid var(--murekkep); }
+.soru { padding:20px 0; border-bottom:1px solid var(--cizgi); display:grid; grid-template-columns:minmax(0, 1fr); gap:8px; align-content:start; }
+.soru h3 { font:800 21px/1.2 var(--f-govde); font-stretch:82%; }
+.soru p, .soru li { font-size:15.5px; color:var(--soluk); }
+.soru ul { margin:0; padding-left:20px; display:grid; gap:4px; }
+.sss-tablo { margin-top:clamp(36px, 5vw, 52px); }
+.sss-tablo h3 { font:800 22px/1.2 var(--f-govde); font-stretch:80%; margin-bottom:6px; }
+.sss-tablo > p { color:var(--soluk); font-size:15.5px; max-width:65ch; margin-bottom:14px; }
+
 /* Ekler */
 .ek + .ek { margin-top:clamp(40px, 6vw, 60px); }
 .ek-bas { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
@@ -300,7 +306,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
   .ilkeler { grid-template-columns:minmax(0, 1fr); }
   .ilkeler > div + div { border-left:0; padding-left:0; border-top:1px solid var(--cizgi); }
   .ikili, .tema-izgara { grid-template-columns:repeat(2, minmax(0, 1fr)); }
-  .sinirlar { grid-template-columns:minmax(0, 1fr); }
+  .sinirlar, .sss { grid-template-columns:minmax(0, 1fr); }
   .gez { justify-content:flex-start; }
 }
 @media (max-width: 600px) {
@@ -309,14 +315,12 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
   .kontrol > div:nth-child(even) { padding-left:0; border-left:0; }
   .ust .kap { gap:10px; }
   .marka { font-size:18px; }
-  .muhur { left:-6px; bottom:7%; font-size:12px; padding:7px 9px; }
   .bas { grid-template-columns:minmax(0, 1fr); }
   .pno { font-size:64px; }
   .kod pre { padding-right:20px; padding-top:48px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior:auto; }
-  .muhur { animation:none; }
   .dugme:hover { transform:none; }
 }
 </style>
@@ -332,6 +336,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
       <a href="#icra"><b>3</b>İcra</a>
       <a href="#lojistik"><b>4</b>Lojistik</a>
       <a href="#muhabere"><b>5</b>Muhabere</a>
+      <a href="#sorular"><b>?</b>Sorular</a>
       <a href="#ekler">Ekler</a>
     </nav>
     <div class="tema" role="group" aria-label="Görünüm">
@@ -345,7 +350,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
   <section class="giris" id="giris">
     <div class="kap">
       <div>
-        <div class="ust-satir"><span><b>SAYI:</b> KRM-0.1.7</span><span><b>KONU:</b> Yazılım harekâtı</span></div>
+        <div class="ust-satir"><span><b>SAYI:</b> KRM-0.1.10</span><span><b>KONU:</b> Yazılım harekâtı</span></div>
         <h1 class="isim">Kurmay</h1>
         <p class="lede">Yazılım işini bir yapay zekâ heyetine ver. <b>Analist</b> planlar, sen onaylarsın, <b>Saha Timi</b> uygular, <b>Teftiş</b> denetler. Hangi ajanın ne zaman çalışacağına model değil, kod karar verir.</p>
         <div class="dugmeler">
@@ -363,7 +368,6 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
         <svg class="atac" viewBox="0 0 30 70" aria-hidden="true"><path d="M10 58V12a6 6 0 0 1 12 0v40a10 10 0 0 1-20 0V18"/></svg>
         <div class="foto-resim">
           <img src="gorseller/onay-evrak.jpg" width="2160" height="1350" alt="Kurmay panelinde Analist'in planı: önce ve sonra hali yan yana, üstte ONAY BEKLİYOR mührü, sağda bağlam ve oturum bilgileri" data-alt-yazi="Analist'in harekât planı onay bekliyor: dosya dosya önce ve sonra hali, her parçaya yorum yazılabilir.">
-          <div class="muhur" aria-hidden="true">Çevrimdışı çalışır</div>
         </div>
         <figcaption>Analist'in planı onayını bekliyor. Her dosyada önce ve sonra hali yan yana.</figcaption>
       </figure>
@@ -684,6 +688,104 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
     </div>
   </section>
 
+  <!-- SORULAR -->
+  <section class="bolum" id="sorular">
+    <div class="kap">
+      <header class="bas">
+        <span class="pno" aria-hidden="true">?</span>
+        <div>
+          <p class="etiket">Sorular</p>
+          <h2>Tanıtımlarda en çok sorulanlar</h2>
+          <div class="yazi">
+            <p>Kurmay'ı ilk kez görenlerin sorduğu sorular ve kısa cevapları: Claude Code ile farkı, yerel model sunucusunda bağlam ve yanıt sınırları, Güvenlik Denetçisi.</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="sss">
+        <div class="soru">
+          <h3>Bilgisayara ayrıca Claude Code kurmak gerekir mi?</h3>
+          <p>Hayır. Kurmay, Claude Code'un motorunu kendi paketi içinden kullanır; işletim sistemine uygun çalıştırılabilir dosya paketle birlikte iner. <code>npm install -g kurmay-ai</code> yeterli. Kapalı ağda iç npm deposunda bu dosyanın paketi de bulunmalı.</p>
+        </div>
+        <div class="soru">
+          <h3>Claude Code terminalde zaten varken Kurmay neden gerekli?</h3>
+          <p>Claude Code tek bir asistan; sırayı modelin talimatı hatırlamasına bırakır. Kurmay üstüne bir iş düzeni kurar:</p>
+          <ul>
+            <li>Planlama, uygulama ve denetim ayrı ajanlarda; geçişleri kod yönetir.</li>
+            <li>Kod yazılmadan önce plan senin onayına gelir.</li>
+            <li>Analist dosya yazamaz, saha ajanı yalnızca kendi mıntıkasına yazar.</li>
+            <li>Çok repolu işte her repoya ayrı ajan, aynı anda.</li>
+            <li>Ekip panelden izler; oturum, onay ve raporlar kalıcı.</li>
+          </ul>
+        </div>
+        <div class="soru">
+          <h3>Claude Code zaten 15 kez yeniden denemiyor mu?</h3>
+          <p>Dener, ama tek bir isteği. Denemeler bitince koşu hatayla biter, görevi baştan vermen gerekir. Kurmay o noktadan sonra devreye girer: konuşmayı sürdürerek, bekleme süresini artırarak yeniden dener ve görevi tekrar göndermez, “kaldığın yerden devam et” der. Kısacası Claude Code isteği kurtarır, Kurmay işi kurtarır. Karşılaştırma aşağıdaki tabloda.</p>
+        </div>
+        <div class="soru">
+          <h3>Claude Code yerel modelin bağlam penceresini bilir mi?</h3>
+          <p>Hayır. Tanımadığı her modeli 200 bin jetonluk sayar; aynı sunucuya bağlı terminaldeki Claude Code da elle söylenmedikçe bunu bilmez. Kurmay pencereyi sunucunun model listesinden okur ve her ajana kendisi verir.</p>
+        </div>
+        <div class="soru">
+          <h3>Pencere yanlış bilinirse ne olur?</h3>
+          <ul>
+            <li>Gerçek pencere daha küçükse konuşma sunucunun sınırına çarpar. Claude Code vLLM'in “bağlam doldu” hatasını tanımadığı için özetlemez, koşu sıradan bir hatayla düşer.</li>
+            <li>Doluluk göstergesi yanıltır, özetleme yanlış zamanda ya da hiç tetiklenmez.</li>
+          </ul>
+          <p>Kurmay bu yüzden doluluğu kendisi izler: eşikte konuşmayı özetler, koşu ortasında dolarsa özetleyip sürdürür, olmazsa önceki görevlerin özetiyle yeni konuşma açar.</p>
+        </div>
+        <div class="soru">
+          <h3>“Şema bozuldu” hataları yanıt sınırından olabilir mi?</h3>
+          <p>Olabilir. Claude Code her istekte en fazla 32 bin jetonluk yanıt ister. Düşünen bir model büyük bir plan yazarken bu sınıra takılırsa yanıt sessizce sürdürülür ve plan yarıda kalabilir. Kurmay artık bunu ajanın balonunda “yanıt sınıra takılıp kesildi” diye yazar, plan yarım geldiyse onay kartı da söyler.</p>
+        </div>
+        <div class="soru">
+          <h3>Kurmay jeton sınırlarını kendisi ayarlıyor mu?</h3>
+          <p><b>Bağlam penceresi</b> modele göre otomatik. <b>Yanıta ayrılan pay</b> otomatik değil, 32 bin; Ayarlar → Bağlam penceresi kartından artırılır (ör. 64 bin). Pay büyüdükçe girdiye kalan alan o kadar küçülür, çünkü sunucu girdiyle payın toplamını pencereyle kıyaslar.</p>
+        </div>
+        <div class="soru">
+          <h3>Güvenlik Denetçisi ne yapar, neden gerekli?</h3>
+          <p>Teftiş onayından sonra, yalnızca bu koşuda değişen dosyaları güvenlik çerçevesiyle (enjeksiyon, yetki, gizli bilgi, güvensiz yapılandırma…) inceler. Kod yazamaz; her bulguyu dosya, satır ve diskten aynen alınmış kanıtla yazar; akışı durdurmaz, rapor verir. Teftiş “plan doğru uygulandı mı” diye bakar; açık ise çoğu zaman doğru çalışan kodda gizlidir. Varsayılan kapalı, Ayarlar'dan tek dokunuşla açılır.</p>
+        </div>
+      </div>
+
+      <div class="sss-tablo">
+        <h3>Yeniden deneme: Claude Code ve Kurmay</h3>
+        <div class="tablo-kap">
+          <table>
+            <thead><tr><th scope="col">Durum</th><th scope="col">Claude Code tek başına</th><th scope="col">Kurmay</th></tr></thead>
+            <tbody>
+              <tr><td>Tek isteğin yeniden denenmesi</td><td>En fazla 15 (varsayılan 10)</td><td>Aynısı, Ayarlar'dan değişir</td></tr>
+              <tr><td>Denemeler bitince</td><td>Koşu hatayla biter, elle yeniden başlatılır</td><td>Konuşma sürdürülerek yeniden denenir, varsayılan sınırsız</td></tr>
+              <tr><td>Görev tekrar gider mi</td><td>Yeniden başlatınca görev baştan işlenir</td><td>Görev kayıttaysa yalnızca “kaldığın yerden devam et” gider</td></tr>
+              <tr><td>Yanıt akarken takıldı</td><td>300 sn sonra kesilir</td><td>Daha kısa süre verilebilir, kesilince sürdürülür</td></tr>
+              <tr><td>Sunucu konuşmayı hep reddediyor</td><td>Her denemede aynı hata</td><td>İki başarısızlıktan sonra önceki görevlerin özetiyle yeni konuşma</td></tr>
+              <tr><td>Ayar değiştirmek</td><td>Ortam değişkeni ve yeniden başlatma</td><td>Hazır modlar: Dengeli, Sürekli dene, Sakince dene, Çabuk vazgeç; anında geçerli</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sss-tablo">
+        <h3>Java geliştiricisi için Güvenlik Denetçisi</h3>
+        <p>Denetçinin yakalaması beklenen tipik durumlar. Satırlar örnektir, gerçek bir rapordan alınmadı.</p>
+        <div class="tablo-kap">
+          <table>
+            <thead><tr><th scope="col">Kodda gördüğü</th><th scope="col">Bulgu</th><th scope="col">Önerisi</th></tr></thead>
+            <tbody>
+              <tr><td>Sorgu metnine birleştirilen parametre (<code>"… WHERE id=" + id</code>)</td><td>SQL enjeksiyonu</td><td><code>PreparedStatement</code> ya da JPA parametresi</td></tr>
+              <tr><td>Yeni uç noktada <code>@PreAuthorize</code> yok</td><td>Yetki denetimi eksik</td><td>Rol ve sahiplik kontrolü</td></tr>
+              <tr><td>İstek nesnesinin tamamı loga yazılıyor</td><td>Parola ya da anahtar logda</td><td>Hassas alanları maskele</td></tr>
+              <tr><td><code>application.yml</code> içinde açık parola</td><td>Kodda gizli bilgi</td><td>Ortam değişkeni ya da kasa</td></tr>
+              <tr><td>Dışarıdan gelen veriyle <code>readObject()</code></td><td>Güvensiz serileştirme</td><td>JSON ve tip kısıtı</td></tr>
+              <tr><td>Kullanıcı girdisiyle dosya yolu kuruluyor</td><td>Yol geçişi</td><td>Yolu normalize et, kökü doğrula</td></tr>
+              <tr><td>Her kaynağa açık çapraz istek, kapatılmış CSRF</td><td>Güvensiz yapılandırma</td><td>İzinli kaynak listesi</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- EKLER -->
   <section class="bolum" id="ekler">
     <div class="kap">
@@ -744,7 +846,7 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
 
 <footer class="alt-bilgi">
   <div class="kap">
-    <div><span class="marka">Kurmay</span><br>Sürüm 0.1.7 · npm paketi <code>kurmay-ai</code></div>
+    <div><span class="marka">Kurmay</span><br>Sürüm 0.1.10 · npm paketi <code>kurmay-ai</code></div>
     <div>Kaynak kod: <a href="https://github.com/yigitalptrpn/kurmay">github.com/yigitalptrpn/kurmay</a><br>Bu sayfa tek klasördür, indirilip internetsiz de açılır.</div>
     <div>Yazı tipleri SIL Açık Yazı Tipi Lisansı 1.1 ile:<br><a href="yazi-tipleri/lisans/archivo.txt">Archivo</a>, <a href="yazi-tipleri/lisans/courier-prime.txt">Courier Prime</a>, <a href="yazi-tipleri/lisans/saira-stencil-one.txt">Saira Stencil One</a>, <a href="yazi-tipleri/lisans/jetbrains-mono.txt">JetBrains Mono</a>.</div>
   </div>
