@@ -629,7 +629,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
           <textarea id="rejectComment" rows="1" placeholder="Red gerekçesi (isteğe bağlı)"></textarea>
         </div>
         <div class="row" id="when" style="margin-top:8px">
-          <span class="label">Ne zaman çalışsın?</span>
+          <span class="label" id="whenLabel">Ne zaman devam etsin?</span>
           <select id="whenPreset">
             <option value="0">Hemen</option>
             <option value="30m">+30 dakika</option>
@@ -1017,6 +1017,11 @@ function missText(miss) {
   if (miss.retries > 0) {
     t += ` Bu koşuda bağlantı <b>${miss.retries} kez</b> koptu ve oturum sürdürülerek yeniden denendi — ` +
       "kopma sonrası prompt tekrar gönderildiği için model şaşırmış olabilir.";
+  }
+  if (miss.outputLimit) {
+    t += ` Model bu koşuda <b>${miss.outputLimit.hits} kez</b> yanıt sınırına ` +
+      `(${Number(miss.outputLimit.limit).toLocaleString("tr-TR")} jeton) takıldı — plan yarıda kesilmiş olabilir. ` +
+      "Ayarlar → Bağlam penceresi → yanıta ayrılan payı artır ya da akıl yürütmeyi bir kademe düşür.";
   }
   return t;
 }
@@ -1722,6 +1727,18 @@ function handleEvent(e) {
       }
       break;
     }
+    case "output_limit": {
+      // Model yanıtı yanıt sınırında kesildi — Claude Code devam ettirmeyi dener; şemalı
+      // çıktı (plan) yarıda kalmış olabilir, kullanıcı ayarı nerede değiştireceğini bilsin
+      const sinir = `${Number(e.limit).toLocaleString("tr-TR")} jeton`;
+      const kac = e.hits > 1 ? `${e.hits} kez ` : "";
+      bubbleNote(bubbleOf(e.agent, e.ts),
+        (e.exhausted
+          ? `✂ Yanıt sınırına takıldı (${sinir}) ve sürdürülemedi — yanıt yarım kaldı. `
+          : `✂ Yanıt ${kac}sınıra takılıp kesildi (${sinir}); kaldığı yerden devam ettirildi. `) +
+        `Sık oluyorsa <b>Ayarlar → Bağlam penceresi → yanıta ayrılan pay</b>ı artır.`, "warn");
+      break;
+    }
     case "session_lost": {
       // Önceki konuşma bulunamadı: sebebi açıkça yaz (aynı hatanın yeniden deneme satırı yazılmaz)
       lostShown[e.agent] = true;
@@ -1875,7 +1892,11 @@ function handleEvent(e) {
       $("rejectComment").placeholder = e.endsFlow
         ? "Neden gerekli? (isteğe bağlı)"
         : "Red gerekçesi (isteğe bağlı)";
-      $("when").classList.toggle("hidden", !!e.endsFlow);
+      // Zaman seçimi hem onaya hem redde uygulanır: onayda sonraki adım, redde yeniden
+      // planlama o zaman başlar. Akışı bitiren kartta "Bitir"in zamanı olmaz — yalnızca
+      // "yeniden planla" için anlamlı, etiket bunu söyler
+      $("whenLabel").textContent = e.endsFlow ? "Yeniden planlama ne zaman başlasın?" : "Ne zaman devam etsin?";
+      $("whenLabel").title = e.endsFlow ? "" : "Onaylarsan sonraki adım, reddedersen yeniden planlama bu zamanda başlar";
       const diff = renderDiff(e.structured, true);
       // endsFlow'da boş file_plan BEKLENEN durum — "somut değişiklik yok" uyarısı yanıltırdı
       // Otomatik iletim açıkken kart açıldıysa nedenini başta söyle (yoksa "ayar çalışmıyor" sanılır)
@@ -2181,7 +2202,8 @@ $("approvalText").addEventListener("input", (ev) => {
 
 async function sendApproval(approved) {
   const comment = approved ? "" : buildRejectComment();
-  const runAt = approved ? selectedRunAt() : undefined;
+  // "Bitir" akışı kapatır, zamanı yok; onay ve ret (yeniden planla) seçilen zamanda devam eder
+  const runAt = approved && approvalEndsFlow ? undefined : selectedRunAt();
   await fetch("/approval", {
     method: "POST",
     headers: { "content-type": "application/json" },

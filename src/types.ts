@@ -420,6 +420,8 @@ export interface StructuredMiss {
   reason: "repair_text" | "repair_failed" | "no_session" | "schemaless";
   /** Bu ajan koşusunda bağlantı kopması sonrası yapılan yeniden deneme sayısı */
   retries: number;
+  /** Bu ajan koşusunda yanıt sınırına takılma sayısı ve sınır — plan yarıda kesilmiş olabilir */
+  outputLimit?: { hits: number; limit: number };
 }
 
 export interface AgentRunResult {

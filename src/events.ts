@@ -90,6 +90,20 @@ export type OrchestratorEvent =
       fallback?: "devam" | "yeni";
     }
   | {
+      /** Model yanıtı yanıt sınırına (max_tokens) takılıp yarıda kesildi. Claude Code
+       *  modele "kaldığın yerden devam et" diyerek kendisi sürdürür ve bunu SDK'ye
+       *  bildirmez (ölçüldü) — ajan bitince konuşma kaydından sayılır; yalnızca
+       *  sürdürme de tükenirse anında hata mesajı gelir (exhausted) */
+      type: "output_limit";
+      agent: string;
+      /** Takılınan sınır (jeton) — Claude Code'un mesajından, yoksa ayardan */
+      limit: number;
+      /** Bu koşuda kaç yanıt sınırda kesildi (verilmezse 1) */
+      hits?: number;
+      /** Claude Code devam ettirmeyi denedi ama vazgeçti (hata mesajı verdi) */
+      exhausted?: boolean;
+    }
+  | {
       /** Sürdürülecek konuşmanın kaydı bulunamadı — ajan yeni konuşmayla başlıyor.
        *  foundDir: kayıt başka bir proje klasöründe bulunduysa oradaki çalışma dizini */
       type: "session_lost";

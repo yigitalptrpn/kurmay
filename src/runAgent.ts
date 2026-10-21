@@ -4,7 +4,7 @@ import { getSessionInfo, getSessionMessages, query, type HookCallbackMatcher, ty
 import { activeMcpServers, buildAgentEnv, disabledMcpServers, isOffMcpTool } from "./config.js";
 import { mcpStatus, toLights } from "./mcpStatus.js";
 import { refreshModelContext } from "./models.js";
-import { compactPercent, contextInfo, FORCE_NEW_PERCENT, tokensOfUsage, type ContextInfo } from "./context.js";
+import { compactPercent, contextInfo, DEFAULT_OUTPUT_RESERVE, FORCE_NEW_PERCENT, tokensOfUsage, type ContextInfo } from "./context.js";
 import { buildHooks } from "./hooks.js";
 import { withUserPrompt } from "./agents.js";
 import {
@@ -548,6 +548,16 @@ async function executeQuery(
       // sohbete yazılmaz, hata kodu sınıflandırma için saklanır
       if (message.error) {
         session.apiError = message.error;
+        // Yanıt sınırı: Claude Code modele devam ettirmeyi dener ama şemalı çıktı yarıda
+        // kalmış olabilir — sessizce geçilmesin, panelde ve kartta görünsün
+        if (message.error === "max_output_tokens") {
+          const metin = (message.message.content as Array<{ type: string; text?: string }>)
+            .map((b) => (b.type === "text" ? b.text ?? "" : "")).join(" ");
+          const sayi = Number(/exceeded the (\d+) output token maximum/.exec(metin)?.[1]);
+          const limit = sayi > 0 ? sayi : (cfg.limits?.maxOutputTokens ?? DEFAULT_OUTPUT_RESERVE);
+          console.warn(`  ✂ ${agent.name}: yanıt sınırına (${limit} jeton) takıldı, Claude Code devam ettiremedi`);
+          bus.emit({ type: "output_limit", agent: agent.key, limit, exhausted: true });
+        }
         continue;
       }
       session.progressed = true;
@@ -679,6 +689,23 @@ async function reportLostSession(
     type: "session_lost", agent: agent.key, sessionId, cwd, projectsDir,
     ...(foundDir ? { foundDir } : {}), ...(searchError ? { searchError } : {}), ...(recap ? { recap } : {}),
   });
+}
+
+/**
+ * Konuşmada yanıt sınırında kesilmiş (stop_reason "max_tokens") model yanıtı sayısı.
+ * Claude Code bu durumda modeli kendisi sürdürüp SDK'ye haber vermediği için (ölçüldü)
+ * sınıra takılma yalnızca kayıttan anlaşılır. Okunamazsa undefined.
+ */
+async function countOutputLimits(sessionId: string, cwd: string): Promise<number | undefined> {
+  try {
+    let msgs = await getSessionMessages(sessionId, { dir: cwd });
+    if (msgs.length === 0) msgs = await getSessionMessages(sessionId);
+    return msgs.filter(
+      (m) => m.type === "assistant" && (m.message as { stop_reason?: unknown } | undefined)?.stop_reason === "max_tokens",
+    ).length;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Konuşma kaydı var mı (en az bir mesaj); okunamazsa undefined */
@@ -893,8 +920,10 @@ export async function runAgent(
   bus.emit({ type: "agent_started", agent: agent.key });
   // Bağlantı kopmalarını say — çıktı gelmezse kart "kaç kez koptu" yazabilsin
   let retries = 0;
+  let outputLimit: { hits: number; limit: number } | undefined;
   const unsubscribe = bus.subscribe((e) => {
     if (e.type === "agent_retrying" && e.agent === agent.key) retries++;
+    if (e.type === "output_limit" && e.agent === agent.key) outputLimit = { hits: (outputLimit?.hits ?? 0) + (e.hits ?? 1), limit: e.limit };
   });
   try {
     // Bağlam penceresi model listesinden — yalnızca henüz bilinmiyorsa çekilir, bir kez yeter
@@ -906,7 +935,7 @@ export async function runAgent(
       const recap = had && !resume ? opts.recap?.() : undefined;
       if (recap) prompt = `${recap}\n\n${prompt}`;
     }
-    return await runAgentInner(agent, prompt, cwd, cfg, bus, abortController, resume, opts, () => retries);
+    return await runAgentInner(agent, prompt, cwd, cfg, bus, abortController, resume, opts, () => retries, () => outputLimit);
   } finally {
     unsubscribe();
   }
@@ -957,8 +986,11 @@ async function runAgentInner(
   resume: string | undefined,
   opts: RunAgentOptions,
   retries: () => number,
+  outputLimit: () => { hits: number; limit: number } | undefined,
 ): Promise<AgentRunResult> {
   const session: SessionHolder = { id: resume, contextTokens: opts.contextTokens };
+  // Sürdürülen konuşmada önceki görevlerin kesilmiş yanıtları sayılmasın
+  const limitsBefore = resume ? await countOutputLimits(resume, cwd) : 0;
   let result = await executeWithRetry(agent, prompt, cwd, cfg, bus, true, abortController, session, opts);
   // Şemasız yedeğe düşüldüyse structured zaten beklenmez — onarım turu denenmez
   let schemaless = false;
@@ -1000,12 +1032,25 @@ async function runAgentInner(
     }
   }
 
+  // Yanıt sınırına takılma: Claude Code sessizce sürdürdüğü için kayıttan sayılır.
+  // Sürdürme tükendiyse (hata mesajı) zaten anında bildirildi — iki kez sayılmasın
+  if (!outputLimit() && result.sessionId) {
+    const after = await countOutputLimits(result.sessionId, cwd);
+    const hits = (after ?? 0) - (result.sessionId === resume ? limitsBefore ?? 0 : 0);
+    if (hits > 0) {
+      const limit = cfg.limits?.maxOutputTokens ?? DEFAULT_OUTPUT_RESERVE;
+      console.warn(`  ✂ ${agent.name}: ${hits} yanıt sınıra (${limit} jeton) takılıp kesildi — Claude Code devam ettirdi`);
+      bus.emit({ type: "output_limit", agent: agent.key, limit, hits });
+    }
+  }
+
   if (agent.outputSchema && result.structured === undefined) {
     result = {
       ...result,
       miss: {
         reason: schemaless ? "schemaless" : (repairOutcome ?? "no_session"),
         retries: retries(),
+        ...(outputLimit() ? { outputLimit: outputLimit() } : {}),
       },
     };
   }
