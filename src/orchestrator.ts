@@ -529,6 +529,21 @@ export async function runWorkflow(
       );
       if (!approval.approved) {
         ctx.feedback = approval.comment || "Kullanıcı çıktıyı reddetti, gözden geçir.";
+        // Ret de ileri bir zamana verilebilir ("bunu yarın sabah yeniden planla"):
+        // onaydaki zamanlamayla aynı bekleme — erken çalıştırma ya da iptal edilebilir
+        if (approval.runAt && approval.runAt > Date.now()) {
+          bus.emit({ type: "run_scheduled", agent: agent.key, runAt: approval.runAt });
+          console.log(`\n⏰ ${agent.name} yeniden planlaması ${fmtDate(approval.runAt)} için zamanlandı — bekleniyor…`);
+          const { outcome, source } = await waitForScheduledTime(approval.runAt, web, abortController.signal);
+          if (outcome === "cancelled") {
+            bus.emit({ type: "run_schedule_cancelled", agent: agent.key, source });
+            console.log(`\n🛑 Zamanlama iptal edildi (${source}) — koşu sonlandırılıyor.`);
+            bus.emit({ type: "workflow_finished" });
+            return;
+          }
+          bus.emit({ type: "run_resumed", agent: agent.key, source });
+          console.log(`\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — yeniden planlanıyor.`);
+        }
         console.log(`\n↩ ${agent.name} kullanıcı geri bildirimiyle yeniden çalıştırılıyor`);
         continue;
       }
