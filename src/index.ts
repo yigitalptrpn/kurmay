@@ -15,9 +15,10 @@ import { runWorkflow } from "./orchestrator.js";
 import { RuntimeRegistry, type SessionRuntime } from "./runtime.js";
 import { startUiServer, type ToggleKind, type UiServer } from "./server.js";
 import { SecurityReportStore, watchSecurityReports } from "./securityReport.js";
+import { SecurityAuditRunner } from "./securityAudit.js";
 import { SessionStore, sessionRecap, type SessionEntry } from "./sessions.js";
 import { attachmentSection, saveFiles, type Attachment, type FileInput } from "./attachments.js";
-import { isFanoutNode, mainPath, type AgentDefinition, type AppConfig } from "./types.js";
+import { isFanoutNode, mainPath, type AgentDefinition, type AppConfig, type WorkflowConfig } from "./types.js";
 
 function parseArgs(argv: string[]): {
   task: string;
@@ -218,6 +219,8 @@ async function main() {
     }
   }
   const runtimes = new RuntimeRegistry(runsDir, !task);
+  // Bağımsız güvenlik denetimleri (/guvenlik sayfasından) — aynı anda çalışan görev sınırına dahil
+  const audits = new SecurityAuditRunner({ store: securityReports, runsDir });
   // Aynı anda koşabilecek görev sınırı — Ayarlar'dan canlı değişir, her görevde yeniden okunur
   const maxParallel = () => cfg.maxParallelRuns ?? 3;
 
@@ -375,6 +378,89 @@ async function main() {
    * açılamıyordu. Düğüm Teftiş onayından sonraya bağlanır (onay kenarı denetçiye,
    * denetçinin next'i eski onay hedefine); rol tanımı/hook dosyası yoksa paketten kopyalanır.
    */
+  const SEC_PERSONA = ".claude/agents/guvenlik.md";
+  /** Rol tanımı / hook şablonu çalışma klasöründe yoksa paketten kopyalar; dosya varsa true */
+  const ensureTemplate = (rel: string): boolean => {
+    const abs = path.join(configRoot, rel);
+    if (fs.existsSync(abs)) return true;
+    const src = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), rel);
+    if (!fs.existsSync(src)) return false;
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.copyFileSync(src, abs);
+    return true;
+  };
+  /** Onay/red kararı veren inceleme adımı (öncelik "teftis") — denetçi onun ayarlarını alır */
+  const inspectorKey = (): string | undefined => {
+    const verdicts = Object.keys(cfg.workflow.agents).filter((k) => (cfg.workflow.agents[k] as { verdict?: unknown }).verdict);
+    return verdicts.includes("teftis") ? "teftis" : verdicts[0];
+  };
+  /** Denetçi düğümü (geçişsiz): Teftiş'in eklentileri ve kuralları; dosya yazan araç yok,
+   *  salt okunur hook'u (dosyası varsa) — akışa eklerken de bağımsız denetimde de aynısı */
+  const securityNode = (insp?: { tools?: string[]; rules?: string[] }) => ({
+    file: SEC_PERSONA,
+    tools: ["Read", "Glob", "Grep", ...(insp?.tools ?? []).filter((t) => t.startsWith("mcp__"))],
+    ...(insp?.rules?.length ? { rules: [...insp.rules] } : {}),
+    ...(ensureTemplate(".claude/hooks/guard-readonly.js")
+      ? {
+          hooks: [
+            {
+              event: "PreToolUse",
+              matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash",
+              command: 'node "${configDir}/.claude/hooks/guard-readonly.js"',
+            },
+          ],
+        }
+      : {}),
+    securityReport: true,
+  });
+
+  /**
+   * Bağımsız denetimin ajanı: akıştaki denetçi düğümü (akışta kapalı olsa da). Akışta yoksa
+   * aynı ayarlarla geçici bir tanım kurulur — config.json'a yazılmaz, akış değişmez.
+   */
+  const auditAgent = (): AgentDefinition | { error: string } => {
+    const nodes = cfg.workflow.agents;
+    const key = Object.keys(nodes).find((k) => (nodes[k] as { securityReport?: boolean }).securityReport);
+    const existing = key && agents.get(key);
+    if (existing) return existing;
+    if (!ensureTemplate(SEC_PERSONA)) return { error: `denetçinin rol tanımı bulunamadı: ${SEC_PERSONA}` };
+    const insp = inspectorKey();
+    const node = securityNode(insp ? (nodes[insp] as { tools?: string[]; rules?: string[] }) : undefined);
+    // loadAppConfig'in yaptığı gibi: hook komutundaki ${configDir} = config.json'ın klasörü
+    for (const h of node.hooks ?? []) h.command = h.command.split("${configDir}").join(configRoot.replace(/\\/g, "/"));
+    try {
+      const wf = { entry: "guvenlik", maxCycles: 1, agents: { guvenlik: { ...node, next: null } } } as unknown as WorkflowConfig;
+      const def = loadAgents(wf, configRoot, offOf(cfg)).get("guvenlik");
+      return def ?? { error: "denetçi yüklenemedi" };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  /** Bağımsız denetimi başlatır (/guvenlik sayfası): seçilen dizindeki kod tabanının tamamı */
+  const startAudit = (dir: string): { ok: boolean; error?: string; job?: unknown } => {
+    const resolvedDir = path.resolve(dir);
+    if (!dirOk(resolvedDir)) return { ok: false, error: `dizin bulunamadı: ${resolvedDir}` };
+    if (modelMissing(cfg)) return { ok: false, error: "Model seçilmedi — izleme panelindeki model listesinden bir model seç" };
+    if (audits.runningIn(resolvedDir)) return { ok: false, error: "Bu dizinde zaten bir denetim sürüyor" };
+    if (runtimes.busy().length + audits.running() >= maxParallel()) {
+      return {
+        ok: false,
+        error: `Aynı anda en fazla ${maxParallel()} görev çalışabilir (panel görevleri dahil) — biri bitince tekrar dene ya da Ayarlar sayfasından artır`,
+      };
+    }
+    const agent = auditAgent();
+    if ("error" in agent) return { ok: false, error: agent.error };
+    // Kopya: Ayarlar'dan canlı değişen alanlar süren denetimi etkilemesin
+    return { ok: true, job: audits.start(resolvedDir, agent, snapshotConfig(cfg)) };
+  };
+
+  /** Sayfadaki dizin önerileri: genel dizin, oturumların ve önceki denetimlerin dizinleri */
+  const auditDirs = (): string[] => {
+    const dirs = [cwd, ...audits.list().map((j) => j.dir), ...sessions.all().map((s) => s.targetDir ?? "")];
+    return [...new Set(dirs.filter((d) => d && dirOk(d)))].slice(0, 10);
+  };
+
   const addSecurityAudit = (): { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string } => {
     const nodes = cfg.workflow.agents;
     const disk = () => JSON.parse(fs.readFileSync(resolvedConfigPath, "utf8")) as AppConfig;
@@ -384,25 +470,11 @@ async function main() {
       return r.ok ? { ok: true, key: existing, node: disk().workflow.agents[existing] } : r;
     }
     // Bağlanacak yer: onay/red kararı veren inceleme adımı (öncelik "teftis")
-    const verdicts = Object.keys(nodes).filter((k) => (nodes[k] as { verdict?: unknown }).verdict);
-    const inspector = verdicts.includes("teftis") ? "teftis" : verdicts[0];
+    const inspector = inspectorKey();
     if (!inspector) {
       return { ok: false, error: "akışta onay/red kararı veren bir inceleme adımı yok — denetçi Teftiş onayından sonra çalışır" };
     }
-    // Rol tanımı ve salt okunur hook'u: çalışma klasöründe yoksa paketteki şablondan
-    const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-    const ensure = (rel: string): boolean => {
-      const abs = path.join(configRoot, rel);
-      if (fs.existsSync(abs)) return true;
-      const src = path.join(pkgRoot, rel);
-      if (!fs.existsSync(src)) return false;
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      fs.copyFileSync(src, abs);
-      return true;
-    };
-    const persona = ".claude/agents/guvenlik.md";
-    if (!ensure(persona)) return { ok: false, error: `denetçinin rol tanımı bulunamadı: ${persona}` };
-    const guard = ensure(".claude/hooks/guard-readonly.js");
+    if (!ensureTemplate(SEC_PERSONA)) return { ok: false, error: `denetçinin rol tanımı bulunamadı: ${SEC_PERSONA}` };
 
     let key = "guvenlik";
     for (let i = 2; nodes[key]; i++) key = `guvenlik-${i}`;
@@ -411,25 +483,7 @@ async function main() {
       const parsed = JSON.parse(prev) as AppConfig;
       const insp = parsed.workflow?.agents?.[inspector] as { tools?: string[]; rules?: string[]; verdict?: { onApprove: string | null } } | undefined;
       if (!insp?.verdict) return { ok: false, error: `düğüm ayar dosyasında yok: ${inspector}` };
-      // Teftiş'in eklentileri ve kuralları; dosya yazan araçlar yok (denetçi salt okunur)
-      const node = {
-        file: persona,
-        tools: ["Read", "Glob", "Grep", ...(insp.tools ?? []).filter((t) => t.startsWith("mcp__"))],
-        ...(insp.rules?.length ? { rules: [...insp.rules] } : {}),
-        ...(guard
-          ? {
-              hooks: [
-                {
-                  event: "PreToolUse",
-                  matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash",
-                  command: 'node "${configDir}/.claude/hooks/guard-readonly.js"',
-                },
-              ],
-            }
-          : {}),
-        securityReport: true,
-        next: insp.verdict.onApprove ?? null,
-      };
+      const node = { ...securityNode(insp), next: insp.verdict.onApprove ?? null };
       parsed.workflow.agents[key] = node as AppConfig["workflow"]["agents"][string];
       insp.verdict.onApprove = key;
       fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
@@ -817,6 +871,13 @@ async function main() {
       addSecurityAudit,
       getToggles,
       listSecurityReports: () => securityReports.list(),
+      ...(task
+        ? {} // CLI görevli modda bağımsız denetim de başlatılmaz (servis görev bitince kapanır)
+        : {
+            listAudits: () => ({ jobs: audits.list(), dirs: auditDirs(), defaultDir: cwd, model: cfg.model ?? "" }),
+            startAudit,
+            cancelAudit: (id: string) => audits.cancel(id),
+          }),
       getSecurityReport: (id) => securityReports.get(id),
       setToggle,
       getMcpStatus: mcpView,
@@ -858,10 +919,12 @@ async function main() {
               return { ok: false, error: "Bu oturumda zaten bir görev çalışıyor — bitmesini bekle ya da yeni oturum aç" };
             }
             const busy = runtimes.busy();
-            if (busy.length >= maxParallel()) {
+            if (busy.length + audits.running() >= maxParallel()) {
               return {
                 ok: false,
-                error: `Aynı anda en fazla ${maxParallel()} görev çalışabilir (Ayarlar sayfasından artırılabilir) — biri bitince tekrar dene`,
+                error:
+                  `Aynı anda en fazla ${maxParallel()} görev çalışabilir` +
+                  `${audits.running() ? " (bağımsız güvenlik denetimleri dahil)" : ""} — biri bitince tekrar dene ya da Ayarlar sayfasından artır`,
               };
             }
             // Aynı dizine iki akış aynı anda yazarsa birbirini ezer — engellemiyoruz
