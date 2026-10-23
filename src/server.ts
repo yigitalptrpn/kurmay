@@ -157,6 +157,12 @@ export interface UiServerOptions {
   listSecurityReports?: () => unknown[];
   /** Tek rapor (GET /security-reports/<id>); yoksa undefined */
   getSecurityReport?: (id: string) => unknown;
+  /** Bağımsız denetimler (GET /security-audits): işler + dizin önerileri; CLI görevli modda yok */
+  listAudits?: () => unknown;
+  /** Seçilen dizinde kod tabanının tamamını denetler (POST /security-audits/start) */
+  startAudit?: (dir: string) => { ok: boolean; error?: string; job?: unknown };
+  /** Süren bağımsız denetimi durdurur (POST /security-audits/cancel) */
+  cancelAudit?: (id: string) => boolean;
 }
 
 /**
@@ -187,6 +193,9 @@ export interface UiServerOptions {
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
  *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
+ *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
+ *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
+ *   POST /security-audits/cancel  { id } — süren bağımsız denetimi durdurur
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
  *   GET  /guvenlik      Güvenlik denetimi raporları sayfası (ui/guvenlik.html)
@@ -615,6 +624,32 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const r = options.setUserPrompt ? options.setUserPrompt(parsed.text) : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/security-audits") {
+      if (!options.listAudits) return json(res, 409, { ok: false, error: "bağımsız denetim yalnızca sunucu modunda (görev argümanı olmadan) başlatılabilir" });
+      return json(res, 200, options.listAudits());
+    }
+
+    if (req.method === "POST" && req.url === "/security-audits/start") {
+      readJson(req, (parsed) => {
+        if (!options.startAudit) {
+          return json(res, 409, { ok: false, error: "bağımsız denetim yalnızca sunucu modunda (görev argümanı olmadan) başlatılabilir" });
+        }
+        const dir = typeof parsed?.dir === "string" ? parsed.dir.trim() : "";
+        if (!dir) return json(res, 400, { ok: false, error: "proje dizini seçilmedi" });
+        const r = options.startAudit(dir);
+        json(res, r.ok ? 202 : 409, r);
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/security-audits/cancel") {
+      readJson(req, (parsed) => {
+        const ok = typeof parsed?.id === "string" && !!options.cancelAudit?.(parsed.id);
+        json(res, ok ? 200 : 409, ok ? { ok } : { ok, error: "durdurulacak denetim yok" });
       });
       return;
     }
