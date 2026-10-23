@@ -218,7 +218,8 @@ async function main() {
     }
   }
   const runtimes = new RuntimeRegistry(runsDir, !task);
-  const maxParallel = cfg.maxParallelRuns ?? 3;
+  // Aynı anda koşabilecek görev sınırı — Ayarlar'dan canlı değişir, her görevde yeniden okunur
+  const maxParallel = () => cfg.maxParallelRuns ?? 3;
 
   /** Panelin sol çubuğu için oturum listesi + canlı durumlar */
   // Analist'in modeli: düğümdeki ayar > oturumun modeli > genel model
@@ -324,6 +325,23 @@ async function main() {
       if (enabled) cfg.workflow.autoForwardPlan = true;
       else delete cfg.workflow.autoForwardPlan;
       return { ok: true, enabled };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  /** Aynı anda koşabilecek görev sınırı (Ayarlar): config.json'a yazar, sıradaki görevde geçerli.
+   *  Düşürmek çalışanları durdurmaz — yalnızca sayı sınırın altına inene dek yeni görev reddedilir */
+  const setMaxParallel = (value: number): { ok: boolean; error?: string; value?: number } => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      parsed.maxParallelRuns = value;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      loadAppConfig(resolvedConfigPath); // 1 veya daha büyük tam sayı mı
+      cfg.maxParallelRuns = value;
+      return { ok: true, value };
     } catch (e) {
       fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -794,6 +812,7 @@ async function main() {
       }),
       setNodeDisabled,
       setAutoForward,
+      setMaxParallel,
       setUserPrompt,
       addSecurityAudit,
       getToggles,
@@ -839,10 +858,10 @@ async function main() {
               return { ok: false, error: "Bu oturumda zaten bir görev çalışıyor — bitmesini bekle ya da yeni oturum aç" };
             }
             const busy = runtimes.busy();
-            if (busy.length >= maxParallel) {
+            if (busy.length >= maxParallel()) {
               return {
                 ok: false,
-                error: `Aynı anda en fazla ${maxParallel} görev çalışabilir (ayar dosyasında değiştirilebilir) — biri bitince tekrar dene`,
+                error: `Aynı anda en fazla ${maxParallel()} görev çalışabilir (Ayarlar sayfasından artırılabilir) — biri bitince tekrar dene`,
               };
             }
             // Aynı dizine iki akış aynı anda yazarsa birbirini ezer — engellemiyoruz
@@ -896,7 +915,7 @@ async function main() {
   }
 
   // Sunucu modu: görevler panelden gelir, her biri kendi oturumunda bağımsız koşar
-  console.log(`⏳ Görev bekleniyor — panelden girebilirsin (aynı anda en fazla ${maxParallel}).`);
+  console.log(`⏳ Görev bekleniyor — panelden girebilirsin (aynı anda en fazla ${maxParallel()}).`);
 }
 
 main().catch((err) => {
