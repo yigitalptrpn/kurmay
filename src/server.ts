@@ -78,7 +78,10 @@ export interface UiServerOptions {
     runAt?: number,
     /** Görevle yapıştırılan/sürüklenen dosyalar (src/attachments.ts) */
     files?: FileInput[],
-  ) => { ok: boolean; error?: string; session?: string; warning?: string };
+    /** Yalnızca bu görev için seçilen hedef dizin (panelde yazma kutusundaki 📁): yeni oturum
+     *  orada açılır, var olan oturumun dizini buna geçer; config.json'daki genel dizin değişmez */
+    targetDir?: string,
+  ) => { ok: boolean; error?: string; session?: string; warning?: string; dirChanged?: string; resetResume?: boolean };
   /** Görev eklerinin klasörü (runs/) — GET /ekler/<oturum>/<dosya> */
   runsDir?: string;
   /** Oturum listesi + canlı durumları (GET /sessions ve /lobby SSE) */
@@ -726,7 +729,8 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const { files, error: fileError } = parseFiles(parsed.files);
         if (fileError) return json(res, 400, { ok: false, error: fileError });
-        const result = options.onTask(task, session, runAt, files);
+        const targetDir = typeof parsed.targetDir === "string" && parsed.targetDir.trim() ? parsed.targetDir.trim() : undefined;
+        const result = options.onTask(task, session, runAt, files, targetDir);
         json(res, result.ok ? 202 : 409, result);
       });
       return;

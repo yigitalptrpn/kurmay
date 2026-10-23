@@ -219,12 +219,38 @@ body { overflow:hidden; }
 .composer-opts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; padding-top:10px; border-top:1px solid var(--border); }
 .composer-opts select { min-height:34px; padding:4px 10px; font-size:13px; }
 /* Kutu boşken zaman seçimi ve oturum notu gizli — dizüstü ekranda sohbete yer kalsın; yazmaya
-   başlayınca açılır, zamanlama seçiliyse hep görünür. Akış çipleri (ajanları aç/kapat) HER ZAMAN
-   görünür — kullanıcı görev yazmadan önce adımları ayarlıyor. Uyarılar ve hata satırı her zaman
-   görünür. Odağa bağlanamaz: kart açılınca kutu otomatik odaklanıyor. */
+   başlayınca açılır, zamanlama seçiliyse hep görünür. Dizin çipi ve akış çipleri (ajanları aç/kapat)
+   HER ZAMAN görünür — kullanıcı görev yazmadan önce nerede ve hangi adımlarla çalışacağını seçiyor.
+   Uyarılar ve hata satırı her zaman görünür. Odağa bağlanamaz: kart açılınca kutu otomatik odaklanıyor. */
 #taskCard:has(#taskInput:placeholder-shown):has(#taskWhenPreset option[value="0"]:checked) :is(#taskWhen, #taskCtx) { display:none !important; } /* #taskWhen satır içi display:flex taşıyor */
-#taskCard:has(#taskInput:placeholder-shown):has(#taskWhenPreset option[value="0"]:checked) .composer-opts:not(:has(.fchip)) { display:none; }
 .composer-opts .flow { margin-top:0; }
+/* Bu görevin hedef dizini: çip + son kullanılan dizinler menüsü (yukarı açılır) */
+.dirpick { position:relative; display:inline-flex; min-width:0; max-width:100%; }
+.dchip { display:inline-flex; align-items:center; gap:8px; min-height:auto; max-width:min(320px, 100%); padding:5px 12px;
+  border:1px dashed var(--border); border-radius:var(--md-shape-md); background:transparent; color:var(--text); text-align:left; line-height:1.25; cursor:pointer; }
+.dchip .dt { display:flex; flex-direction:column; min-width:0; }
+.dchip .nm { font:600 13px var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dchip small { font-size:10.5px; color:var(--muted); }
+.dchip .ok { color:var(--muted); font-size:11px; }
+.dchip.set { border-style:solid; border-color:var(--blue); background:var(--blueBg); color:var(--md-on-primary-container); }
+.dchip.set small { color:inherit; opacity:.8; }
+.dchip.missing { border-color:var(--red); color:var(--red); }
+.dmenu { position:absolute; left:0; bottom:calc(100% + 6px); z-index:40; width:min(440px, calc(100vw - 48px)); max-height:min(50vh, 380px);
+  overflow:auto; padding:6px; background:var(--md-surface-container); color:var(--text); border:1px solid var(--border);
+  border-radius:var(--md-shape-md); box-shadow:var(--md-elev-3); }
+.dmenu.hidden { display:none; }
+.dmenu .dh { padding:6px 10px 8px; font-size:12px; color:var(--muted); }
+.dmenu button { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; padding:6px 10px; text-align:left;
+  border:none !important; border-radius:var(--md-shape-sm, 6px) !important; background:transparent; color:var(--text); box-shadow:none; font-size:13px; }
+.dmenu button:hover, .dmenu button:focus-visible { background:var(--blueBg); }
+.dmenu button .dt { display:flex; flex-direction:column; min-width:0; flex:1; }
+.dmenu button b { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dmenu button .yol { font:11.5px var(--font-mono); color:var(--muted); overflow-wrap:anywhere; }
+.dmenu button .etk { flex:none; font-size:11px; color:var(--muted); }
+.dmenu button[aria-checked="true"] b::after { content:" ✓"; color:var(--md-primary); }
+.dmenu hr { border:none; border-top:1px solid var(--border); margin:6px 4px; }
+/* Yol büyük/küçük harfe duyarlı — Radar düğme yazısını büyük harf yapıyor, yol olduğu gibi kalsın */
+:is(.dchip .nm, .dmenu button b, .dmenu .yol) { text-transform:none; }
 #btnStart { flex:none; box-shadow:var(--md-elev-2); }
 /* Görevle yapıştırılan görseller: yazma kutusunun altında önizleme, görev balonunda küçük resim */
 .ekler { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
@@ -318,7 +344,7 @@ body { overflow:hidden; }
 [data-theme="evrak"] .chat-head { border-top:3px solid var(--md-primary); }
 [data-theme="evrak"] .ch-title .task { font-weight:700; }
 [data-theme="evrak"] :is(.bub, #cards > .card) { border-radius:2px; box-shadow:0 1px 1px rgba(0,0,0,.08), 0 8px 18px rgba(60,40,10,.10); }
-[data-theme="evrak"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .ftag, .logfilter) { border-radius:3px; }
+[data-theme="evrak"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .dchip, .ftag, .logfilter) { border-radius:3px; }
 [data-theme="evrak"] .sidebar { background:#D8C79A; }
 [data-theme="evrak"] .rail { background:#DED6C1; }
 [data-theme="evrak"] .sess { border-radius:2px 12px 0 0; background:#E8DAB2; border:1px solid #C9B47E; }
@@ -375,7 +401,7 @@ body { overflow:hidden; }
 /* Radar: gece görüşü; fosfor yeşili, tarama çizgileri, terminal dili */
 [data-theme="radar"] .main { background:radial-gradient(ellipse at 50% 30%, rgba(75,227,138,.07), transparent 65%),
   repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px), var(--chatBg); }
-[data-theme="radar"] :is(.bub, #cards > .card, .rbox, #taskCard, .sess, .node.mem, .node.group, button, .pill, .tchip, .fchip, .av, .ftag, .term, .logfilter, #stream > .me) { border-radius:2px; }
+[data-theme="radar"] :is(.bub, #cards > .card, .rbox, #taskCard, .sess, .node.mem, .node.group, button, .pill, .tchip, .fchip, .dchip, .av, .ftag, .term, .logfilter, #stream > .me) { border-radius:2px; }
 [data-theme="radar"] :is(.bub, #cards > .card) { box-shadow:0 0 0 1px rgba(75,227,138,.10), 0 0 18px rgba(75,227,138,.05); }
 [data-theme="radar"] :is(.bub .who, .ch-title .task, .sidebar-head .brand) { text-transform:uppercase; letter-spacing:.1em; text-shadow:0 0 8px rgba(75,227,138,.45); }
 [data-theme="radar"] :is(.bub .who small, .bub .who .zone) { text-transform:none; letter-spacing:0; text-shadow:none; }
@@ -418,7 +444,7 @@ body { overflow:hidden; }
 [data-theme="karargah"] :is(.ch-title .task, .sidebar-head .brand) { font-weight:400; text-transform:uppercase; letter-spacing:.06em; }
 [data-theme="karargah"] .ch-title .task { font-size:19px; }
 [data-theme="karargah"] .chat-head { border-bottom:2px solid var(--md-outline-variant); box-shadow:0 1px 0 rgba(0,0,0,.4); }
-[data-theme="karargah"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .ftag, .logfilter, .sess, .mcpchip, .mtool, .term, .rail-tools .tool, #stream > .sys, #stream > .me) { border-radius:3px; }
+[data-theme="karargah"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .dchip, .ftag, .logfilter, .sess, .mcpchip, .mtool, .term, .rail-tools .tool, #stream > .sys, #stream > .me) { border-radius:3px; }
 [data-theme="karargah"] :is(.bub, #cards > .card) { border-radius:3px; box-shadow:0 1px 0 rgba(233,226,200,.04) inset, 0 6px 16px rgba(0,0,0,.28); }
 [data-theme="karargah"] .sess.active { background:var(--md-surface-container-high); box-shadow:inset 3px 0 var(--md-primary); }
 [data-theme="karargah"] .sess.sess-new { background:var(--md-primary); color:var(--md-on-primary); box-shadow:inset 3px 0 var(--md-primary); }
@@ -685,6 +711,12 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
       </div>
       <div class="ekler hidden" id="taskImages"></div>
       <div class="composer-opts">
+        <span class="dirpick" id="taskDirWrap">
+          <button type="button" class="dchip" id="taskDirBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="taskDirMenu">
+            <span aria-hidden="true">📁</span><span class="dt"><span class="nm" id="taskDirName"></span><small id="taskDirNote"></small></span><span class="ok" aria-hidden="true">▾</span>
+          </button>
+          <div class="dmenu hidden" id="taskDirMenu" role="menu" aria-label="Bu görevin hedef dizini"></div>
+        </span>
         <span class="row" id="taskWhen" style="display:flex;gap:8px;align-items:center">
           <span class="label" style="margin:0">⏰</span>
           <select id="taskWhenPreset" style="width:auto">
@@ -733,7 +765,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <h4>Oturum</h4>
     <div class="kv"><span>Model</span><select id="modelSel" title="Model — sıradaki görevde kullanılır"></select></div>
     <div class="kv"><span>Akıl yürütme</span><select id="effortSel" title="Akıl yürütme derinliği — sıradaki görevde kullanılır"></select></div>
-    <div class="kv col"><span>Hedef dizin</span>
+    <div class="kv col"><span id="dirLabel">Hedef dizin</span>
       <span class="dir-wrap">
         <span class="dir" id="dir" title="Değiştirmek için tıkla"></span>
       </span>
@@ -2273,8 +2305,10 @@ function updateTaskCtx() {
   const s = sessionsById[viewSessionId];
   $("taskCardTitle").textContent = s ? "Bu oturumda yeni görev" : "Yeni görev";
   $("taskCtx").textContent = s
-    ? `↩ Oturum sürdürülecek: ${s.name} (Analist önceki konuşmayı hatırlar)`
-    : "＋ Yeni oturum açılacak — diğer oturumlar koşmaya devam eder";
+    ? (taskDir
+      ? `↩ Oturum sürdürülecek: ${s.name} — 📁 dizini ${taskDir} olacak, Analist orada yeni konuşmayla başlar`
+      : `↩ Oturum sürdürülecek: ${s.name} (Analist önceki konuşmayı hatırlar)`)
+    : `＋ Yeni oturum açılacak${taskDir ? ` (📁 ${taskDir})` : ""} — diğer oturumlar koşmaya devam eder`;
 }
 
 // Panelin oturuma ait her şeyini sıfırlar (akış, hat, kartlar, sayaçlar)
@@ -2349,6 +2383,8 @@ function openSession(id) {
   $("loadInfo").classList.add("hidden");
   viewSessionId = id || "";
   try { history.replaceState(null, "", viewSessionId ? "#" + viewSessionId : location.pathname); } catch {}
+  taskDir = ""; // görevle seçilen dizin o görünüme özel
+  closeDirMenu();
   resetView();
   renderSessions();
   updateTaskCtx();
@@ -2457,6 +2493,9 @@ lobby.onmessage = (m) => {
 // Diskte yoksa servis yine açılır; panel uyarır ve dizin düzelene dek görev başlatılamaz
 let currentDir = "", dirMissing = false;
 let globalDir = "", globalDirMissing = false; // yeni oturumların dizini (GET /target-dir)
+// Yalnızca sıradaki görev için yazma kutusundaki 📁 ile seçilen dizin ("" = oturumun/genel dizin).
+// Taslakta yeni oturum orada açılır (config.json değişmez); oturumda oturumun dizini buna geçer
+let taskDir = "";
 function viewDir() {
   const s = sessionsById[viewSessionId];
   if (s && s.targetDir) return { dir: s.targetDir, missing: s.dirExists === false };
@@ -2471,20 +2510,24 @@ function applyViewDir() {
 }
 function applyDirState() {
   $("dir").classList.toggle("missing", dirMissing);
+  // Taslakta buradaki dizin yeni oturumların varsayılanı; görev başına seçim yazma kutusundaki 📁
+  $("dirLabel").textContent = viewSessionId ? "Hedef dizin" : "Varsayılan dizin";
   $("dir").title = dirMissing ? "Bu dizin bulunamadı — değiştirmek için tıkla"
     : viewSessionId ? "Bu oturumun hedef dizini — değiştirmek için tıkla (diğer oturumlar etkilenmez)"
-    : "Yeni oturumların hedef dizini — değiştirmek için tıkla";
-  $("dirWarn").classList.toggle("hidden", !dirMissing);
+    : "Yeni oturumların varsayılan dizini — değiştirmek için tıkla (kalıcı; yalnızca bir görev için yazma kutusundaki 📁 dizin seçimini kullan)";
+  $("dirWarn").classList.toggle("hidden", !dirMissing || !!taskDir);
   $("dirWarnPath").textContent = currentDir;
+  renderTaskDir();
   updateStartGate();
 }
 // Başlat yalnızca hedef dizin VAR ve (gerekiyorsa) model SEÇİLİ iken açık
 let modelRequired = false;
 function updateStartGate() {
   const modelYok = modelRequired && !currentModel;
+  const dirYok = dirMissing && !taskDir; // görevle seçilen dizin var olduğu doğrulanmış klasör
   $("modelWarn").classList.toggle("hidden", !modelYok);
-  $("btnStart").disabled = dirMissing || modelYok;
-  $("btnStart").title = dirMissing ? "Önce geçerli bir hedef dizin seç"
+  $("btnStart").disabled = dirYok || modelYok;
+  $("btnStart").title = dirYok ? "Önce geçerli bir hedef dizin seç"
     : modelYok ? "Önce üst çubuktan bir model seç" : "";
 }
 function showDirDisplay(text) {
@@ -2533,6 +2576,94 @@ async function loadTargetDir() {
 }
 loadTargetDir();
 $("btnDirFix").addEventListener("click", pickDir);
+
+// Yazma kutusundaki dizin çipi: görev nerede çalışacak. Seçim yalnızca sıradaki görev içindir —
+// sağdaki "Hedef dizin" ise oturumun (taslakta yeni oturumların) kalıcı ayarı
+function renderTaskDir() {
+  if (taskDir === currentDir && !dirMissing) taskDir = ""; // oturum bu arada oraya geçtiyse seçim boşa düştü
+  const dir = taskDir || currentDir;
+  const s = sessionsById[viewSessionId];
+  const b = $("taskDirBtn");
+  $("taskDirName").textContent = dir ? baseName(dir) : "dizin seçilmedi";
+  $("taskDirNote").textContent = taskDir
+    ? (s ? "oturumun dizini değişecek" : "yalnızca bu görev")
+    : dirMissing ? "bulunamadı — seç" : s ? "oturumun dizini" : "varsayılan dizin";
+  b.classList.toggle("set", !!taskDir);
+  b.classList.toggle("missing", !taskDir && dirMissing);
+  b.title = `${dir || "—"}\n` + (s
+    ? "Bu görev bu dizinde çalışır. Başka dizin seçersen oturum oraya geçer; Analist orada yeni konuşmayla başlar."
+    : "Bu görev bu dizinde çalışır. Başka dizin seçmek yalnızca bu görevi etkiler; varsayılan dizin değişmez.");
+}
+function setTaskDir(dir) {
+  // Zaten geçerli olan dizini seçmek seçimi kaldırır
+  taskDir = dir && !(dir === currentDir && !dirMissing) ? dir : "";
+  applyDirState();
+  updateTaskCtx();
+}
+// Menüde: bu görünümün dizini, varsayılan dizin ve oturumların kullandığı dizinler (en yeni önce)
+function recentDirs() {
+  const list = [];
+  const ekle = (dir, etiket, missing) => {
+    if (dir && !list.some((d) => d.dir === dir)) list.push({ dir, etiket, missing });
+  };
+  ekle(currentDir, viewSessionId ? "oturumun dizini" : "varsayılan", dirMissing);
+  if (viewSessionId && !globalDirMissing) ekle(globalDir, "varsayılan");
+  ekle(taskDir, "");
+  for (const s of Object.values(sessionsById).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
+    if (s.targetDir && s.dirExists !== false) ekle(s.targetDir, "");
+  }
+  return list.slice(0, 10);
+}
+function openDirMenu() {
+  const m = $("taskDirMenu");
+  const secili = taskDir || currentDir;
+  m.innerHTML = `<div class="dh">Bu görev hangi dizinde çalışsın?</div>` +
+    recentDirs().map((d) => `<button type="button" role="menuitemradio" aria-checked="${d.dir === secili}" data-dir="${esc(d.dir)}"` +
+      `${d.missing ? ` disabled title="Bu dizin bulunamadı"` : ""}><span class="dt"><b>${esc(baseName(d.dir))}</b><span class="yol">${esc(d.dir)}</span></span>` +
+      `${d.missing ? `<span class="etk">bulunamadı</span>` : d.etiket ? `<span class="etk">${esc(d.etiket)}</span>` : ""}</button>`).join("") +
+    `<hr><button type="button" role="menuitem" data-act="browse"><span aria-hidden="true">📁</span><span class="dt"><b>Başka klasör seç…</b></span></button>`;
+  m.classList.remove("hidden");
+  $("taskDirBtn").setAttribute("aria-expanded", "true");
+  (m.querySelector('[aria-checked="true"]:not(:disabled)') || m.querySelector("button:not(:disabled)"))?.focus();
+}
+function closeDirMenu(odak) {
+  if ($("taskDirMenu").classList.contains("hidden")) return;
+  $("taskDirMenu").classList.add("hidden");
+  $("taskDirBtn").setAttribute("aria-expanded", "false");
+  if (odak) $("taskDirBtn").focus();
+}
+$("taskDirBtn").addEventListener("click", () => {
+  if ($("taskDirMenu").classList.contains("hidden")) openDirMenu();
+  else closeDirMenu();
+});
+$("taskDirMenu").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || b.disabled) return;
+  closeDirMenu();
+  if (b.dataset.act === "browse") {
+    const yol = await openDirPicker(taskDir || currentDir);
+    if (yol) setTaskDir(yol);
+  } else {
+    setTaskDir(b.dataset.dir);
+  }
+  $("taskInput").focus();
+});
+$("taskDirMenu").addEventListener("keydown", (ev) => {
+  const items = [...$("taskDirMenu").querySelectorAll("button:not(:disabled)")];
+  const i = items.indexOf(document.activeElement);
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    items[(i + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+  } else if (ev.key === "Escape") {
+    ev.preventDefault();
+    closeDirMenu(true);
+  } else if (ev.key === "Tab") {
+    closeDirMenu();
+  }
+});
+document.addEventListener("pointerdown", (ev) => {
+  if (!$("taskDirWrap").contains(ev.target)) closeDirMenu();
+});
 
 // Model seçimi: liste config'teki modelsUrl'den sunucu üzerinden çekilir (API
 // anahtarı tarayıcıya hiç gelmez). Seçim config.json'a yazılır, sıradaki görev kullanır.
@@ -2870,7 +3001,7 @@ function showTaskCard() {
 async function startTask() {
   const task = $("taskInput").value.trim();
   if (!task) return;
-  if (dirMissing) { $("taskError").textContent = "Hedef dizin bulunamadı — önce geçerli bir dizin seç"; return; }
+  if (dirMissing && !taskDir) { $("taskError").textContent = "Hedef dizin bulunamadı — önce geçerli bir dizin seç"; return; }
   if (modelRequired && !currentModel) { $("taskError").textContent = "Model seçilmedi — üst çubuktan bir model seç"; return; }
   // Zamanlanmış görev: analist dahil tüm akış seçilen saatte başlar
   const runAt = readRunAt("taskWhenPreset", "taskWhenCustom");
@@ -2882,7 +3013,7 @@ async function startTask() {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      task, session: viewSessionId || undefined, runAt,
+      task, session: viewSessionId || undefined, runAt, targetDir: taskDir || undefined,
       ...(taskFiles.some((f) => f.data) ? { files: taskFiles.filter((f) => f.data).map((f) => ({ name: f.name, data: f.data })) } : {}),
     }),
   });
@@ -2891,8 +3022,18 @@ async function startTask() {
     // Görev arka planda koşar; panel o oturuma geçer, diğer oturumlar sürer
     viewBusy = true;
     $("taskCard").classList.add("hidden");
+    const gorevDizini = taskDir || currentDir;
+    taskDir = "";
+    if (data.dirChanged) {
+      // Oturum görevle seçilen dizine geçti (sunucu doğruladı) — sağdaki dizin de güncellensin
+      const s = sessionsById[viewSessionId];
+      if (s) { s.targetDir = data.dirChanged; s.dirExists = true; }
+      addLog(new Date().toISOString(), `📁 bu oturumun hedef dizini: ${esc(data.dirChanged)}` +
+        (data.resetResume ? " · Analist bu oturumda yeni konuşmayla başlıyor (önceki konuşma eski dizine bağlı)" : ""), "ok");
+    }
+    applyViewDir();
     if (data.session && data.session !== viewSessionId) {
-      sessionsById[data.session] ??= { id: data.session, name: task, updatedAt: new Date().toISOString(), status: "running", busy: true };
+      sessionsById[data.session] ??= { id: data.session, name: task, updatedAt: new Date().toISOString(), status: "running", busy: true, targetDir: gorevDizini, dirExists: true };
       openSession(data.session);
     }
     if (data.warning) addLog(Date.now(), "⚠ " + esc(data.warning), "warn");

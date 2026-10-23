@@ -249,9 +249,10 @@ async function main() {
     });
 
   /** Bir oturumda görev başlatır (oturum yoksa açar); arka planda koşar */
-  const launch = (task: string, entry: SessionEntry | undefined, runAt?: number, files: FileInput[] = []) => {
-    // Yeni oturum o anki genel model/derinlik/dizinle açılır; sonra panelden yalnızca kendisi için değişebilir
-    const e = entry ?? sessions.create(task, cfg.model, cfg.effort, cwd);
+  const launch = (task: string, entry: SessionEntry | undefined, runAt?: number, files: FileInput[] = [], dir?: string) => {
+    // Yeni oturum o anki genel model/derinlik/dizinle (ya da görevle seçilen dizinle) açılır;
+    // sonra panelden yalnızca kendisi için değişebilir
+    const e = entry ?? sessions.create(task, cfg.model, cfg.effort, dir ?? cwd);
     // Eski kayıt (dizinsiz): o anki genel dizine sabitlenir — konuşması da o dizinde
     if (!e.targetDir) sessions.setTargetDir(e.id, cwd, true);
     const runDir = e.targetDir ?? cwd;
@@ -816,16 +817,23 @@ async function main() {
       },
       onTask: task
         ? undefined // CLI görevli modda panelden görev alınmaz
-        : (t, sessionId, runAt, files) => {
+        : (t, sessionId, runAt, files, targetDir) => {
             const existing = sessionId ? sessions.get(sessionId) : undefined;
             if (modelMissing({ ...cfg, model: existing?.model || cfg.model })) {
               return { ok: false, error: "Model seçilmedi — üst çubuktaki model listesinden bir model seç" };
             }
             const entry = sessionId ? sessions.get(sessionId) : undefined;
             if (sessionId && !entry) return { ok: false, error: "oturum bulunamadı" };
-            const dir = entry?.targetDir ?? cwd; // oturumun dizini; yeni oturumda genel dizin
+            // Görevle seçilen dizin > oturumun dizini > genel dizin (yeni oturum)
+            const chosen = targetDir ? path.resolve(targetDir) : undefined;
+            const dir = chosen ?? entry?.targetDir ?? cwd;
             if (!dirOk(dir)) {
-              return { ok: false, error: `Hedef dizin bulunamadı: ${dir} — sağdaki hedef dizine tıklayıp geçerli bir dizin seç` };
+              return {
+                ok: false,
+                error: chosen
+                  ? `Seçilen dizin bulunamadı: ${dir} — görev kutusundaki 📁 ile başka bir dizin seç`
+                  : `Hedef dizin bulunamadı: ${dir} — sağdaki hedef dizine tıklayıp geçerli bir dizin seç`,
+              };
             }
             if (entry && runtimes.get(entry.id, entry.runLogs).busy) {
               return { ok: false, error: "Bu oturumda zaten bir görev çalışıyor — bitmesini bekle ya da yeni oturum aç" };
@@ -840,11 +848,20 @@ async function main() {
             // Aynı dizine iki akış aynı anda yazarsa birbirini ezer — engellemiyoruz
             // (salt okunur bilgi soruları zararsız) ama açıkça uyarıyoruz
             const clash = busy.find((r) => r.cwd === dir);
-            const { entry: e, run } = launch(t, entry, runAt, files);
+            // Var olan oturum başka dizinde sürecekse dizini değişir — Analist'in konuşması eski
+            // dizine bağlı olduğu için o oturumda yeni konuşmayla başlar (sağdaki dizin seçiciyle aynı)
+            let resetResume = false;
+            const dirChanged = !!(entry && chosen && (entry.targetDir ?? cwd) !== chosen);
+            if (entry && chosen && dirChanged) {
+              resetResume = sessions.setTargetDir(entry.id, chosen).resetResume;
+              runtimes.notify();
+            }
+            const { entry: e, run } = launch(t, entry, runAt, files, chosen);
             run.catch((err) => console.error(`💥 [${e.name}] Koşu hatası:`, err instanceof Error ? err.message : err));
             return {
               ok: true,
               session: e.id,
+              ...(dirChanged ? { dirChanged: dir, resetResume } : {}),
               ...(clash
                 ? { warning: `Aynı hedef dizinde (${dir}) çalışan başka bir oturum var — dosyaları birbirini ezebilir` }
                 : {}),
