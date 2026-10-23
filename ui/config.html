@@ -58,6 +58,10 @@ input[type=text], input[type=number], select { width:100%; }
 .secc-st { font:600 11.5px/1 var(--font-ui); padding:4px 9px; border-radius:999px; background:var(--bg); color:var(--muted); }
 .secc-st.on { background:var(--tealBg); color:var(--teal); }
 .secc-a { font-size:13px; white-space:nowrap; }
+.parset { display:flex; align-items:center; gap:8px; }
+.parset input { width:84px; }
+#parMsg { flex-basis:100%; font-size:12.5px; }
+#parMsg:empty { display:none; }
 /* input.sw: göstergedeki çizgi örnekleri (.legend .sw) de "sw" sınıfını taşıyor — topuz onlara çizilmesin */
 input.sw { appearance:none; -webkit-appearance:none; flex:none; position:relative; width:51px !important; height:31px; min-height:0 !important; margin:0; cursor:pointer;
   border-radius:999px !important; background:var(--md-outline-variant); transition:background-color 220ms ease; }
@@ -145,6 +149,21 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="fhint" style="font-size:12.5px">Açıkken Analist'in planı hazır olunca onay kartı açılmaz, plan düğmeye basmadan Saha Timi'ne geçer. Plan boş ya da okunamaz gelirse onayın yine sorulur. Sıradaki görevde geçerli.</div>
   </div>
   <input type="checkbox" role="switch" class="sw" id="fwdSw" aria-label="Planı Saha Timi'ne otomatik ilet">
+</div>
+
+<!-- Aynı anda çalışan görev sınırı: config.json'daki maxParallelRuns (yoksa 3).
+     Uygula'ya basınca anında geçerli, üstteki Kaydet'i ve yeniden başlatmayı beklemez. -->
+<div class="card secc" id="parCard" style="margin-bottom:14px">
+  <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg></div>
+  <div class="secc-t">
+    <div class="secc-h">Aynı anda çalışan görev sayısı <span id="parState" class="secc-st on"></span></div>
+    <div class="fhint" style="font-size:12.5px">Panelden aynı anda en fazla kaç görev koşabilir; zamanlanıp bekleyen görev de sayılır. Sınır dolunca yeni görev, biri bitene kadar başlatılamaz. Model sunucusu istekleri sırayla işliyorsa artırmak işi hızlandırmaz, istekler sıraya girer. Hemen geçerli.</div>
+  </div>
+  <span class="parset">
+    <input type="number" id="parVal" min="1" step="1" inputmode="numeric" aria-label="Aynı anda çalışan görev sayısı">
+    <button class="primary" id="parSave" type="button" disabled>Uygula</button>
+  </span>
+  <div id="parMsg" role="status"></div>
 </div>
 
 <!-- Kullanıcı talimatı: her ajanın talimatının sonuna eklenen kişisel tercih (hitap, üslup).
@@ -709,6 +728,47 @@ $("fwdSw").addEventListener("change", async ()=>{
   renderFwdCard();
 });
 
+// Aynı anda çalışan görev sınırı kartı: config.maxParallelRuns (POST /max-parallel, canlı)
+const PAR_DEFAULT = 3; // alan yoksa geçerli sınır — src/index.ts ile aynı tutulmalı
+function fillPar(){
+  $("parVal").value = (cfg && cfg.maxParallelRuns) || PAR_DEFAULT;
+  renderParCard();
+}
+function parValue(){
+  const v = Number($("parVal").value);
+  return $("parVal").value.trim() && Number.isInteger(v) && v >= 1 ? v : null;
+}
+function renderParCard(){
+  const set = cfg && cfg.maxParallelRuns, saved = set || PAR_DEFAULT;
+  $("parState").textContent = `şu an ${saved}` + (set ? "" : " · varsayılan");
+  const v = parValue();
+  $("parSave").disabled = v === null || v === saved;
+}
+$("parVal").addEventListener("input", ()=>{
+  $("parMsg").innerHTML = parValue() === null && $("parVal").value.trim()
+    ? `<span style="color:var(--red)">1 veya daha büyük bir tam sayı gir</span>` : "";
+  renderParCard();
+});
+$("parVal").addEventListener("keydown", (e)=>{
+  if (e.key === "Enter" && !$("parSave").disabled){ e.preventDefault(); $("parSave").click(); }
+});
+$("parSave").addEventListener("click", async ()=>{
+  const value = parValue();
+  if (!cfg || value === null) return;
+  $("parSave").disabled = true;
+  try {
+    const res = await fetch("/max-parallel", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ value }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "uygulanamadı");
+    // Sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa sınır geri dönmesin
+    cfg.maxParallelRuns = data.value;
+    $("parMsg").innerHTML = `<span style="color:var(--teal)">✓ Aynı anda en fazla ${data.value} görev çalışabilir — hemen geçerli; çalışan görevler etkilenmez</span>`;
+  } catch (err){
+    $("parMsg").innerHTML = `<span style="color:var(--red)">✗ ${esc(err.message)}</span>`;
+  }
+  renderParCard();
+});
+
 // Kullanıcı talimatı kartı: config.userPrompt (POST /user-prompt, canlı)
 function fillUserPrompt(){
   $("upText").value = (cfg && cfg.userPrompt) || "";
@@ -1235,6 +1295,7 @@ async function load(){
   $("tdir").value = cfg.targetDir || "";
   fillConn();
   fillUserPrompt();
+  fillPar();
   fillResilience();
   fillContext();
   loadContextModels();

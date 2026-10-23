@@ -145,6 +145,8 @@ export interface UiServerOptions {
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
   setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
   setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
+  /** Aynı anda koşabilecek görev sınırını değiştirir: çalışan sürece uygular, config.json'a yazar */
+  setMaxParallel?: (value: number) => { ok: boolean; error?: string; value?: number };
   /** Güvenlik denetçisini açar; config'te düğümü yoksa Teftiş onayından sonraya ekler */
   addSecurityAudit?: () => { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string };
   /** Aç/Kapat sayfası verisi (GET /toggles-data): ajanlar, beceriler, MCP sunucuları */
@@ -183,6 +185,7 @@ export interface UiServerOptions {
  *   POST /node-disabled { key: string, disabled: boolean } — düğümü kapatır/açar (canlı + config.json)
  *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
+ *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
@@ -587,6 +590,18 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       readJson(req, (parsed) => {
         if (!parsed || typeof parsed.enabled !== "boolean") return json(res, 400, { ok: false, error: "geçersiz istek" });
         const r = options.setAutoForward ? options.setAutoForward(parsed.enabled) : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/max-parallel") {
+      readJson(req, (parsed) => {
+        const value = parsed?.value;
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+          return json(res, 400, { ok: false, error: "aynı anda çalışacak görev sayısı 1 veya daha büyük bir tam sayı olmalı" });
+        }
+        const r = options.setMaxParallel ? options.setMaxParallel(value) : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });
       return;
