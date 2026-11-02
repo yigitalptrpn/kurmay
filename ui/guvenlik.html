@@ -151,7 +151,7 @@ ul.pos { list-style:none; margin:0; padding:0; }
 /* Düğmeler */
 .btn { display:inline-flex; align-items:center; gap:8px; cursor:pointer; padding:9px 16px; border-radius:10px; border:1px solid var(--line2);
   background:var(--panel); color:var(--text); font-size:14px; font-weight:600; line-height:1.2; white-space:nowrap; }
-.btn:hover { border-color:var(--accent); }
+.btn:hover { border-color:var(--accent); text-decoration:none; }
 .btn.primary { background:linear-gradient(180deg, #38bdf8, #0ea5e9); border-color:transparent; color:#04121c; box-shadow:0 0 18px rgba(56,189,248,.25); }
 .btn.primary:hover { filter:brightness(1.08); }
 .btn.danger { border-color:color-mix(in srgb, var(--crit) 60%, transparent); color:#ffb4b6; }
@@ -295,6 +295,7 @@ const I = {
   plug:  '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>',
   redo:  '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 };
 const fmtDate = (iso) => new Date(iso).toLocaleString("tr-TR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
@@ -373,7 +374,11 @@ function renderReport(r) {
         ${r.model ? `<div>${icon(I.cpu)}<b>${esc(r.model)}</b></div>` : ""}
         <div>${icon(I.file)}<b>${r.files.length} dosya ${r.standalone ? "incelendi" : "denetlendi"}</b></div>
       </div>
-      ${r.standalone && !auditError ? `<div class="actions" style="margin-top:16px"><button class="btn" data-reaudit="${esc(r.targetDir)}">${icon(I.redo)}Yeniden denetle</button></div>` : ""}
+      <div class="actions" style="margin-top:16px">
+        <button class="btn primary" data-pdf="${esc(r.id)}">${icon(I.download)}PDF indir</button>
+        <a class="btn" href="/guvenlik/rapor/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${icon(I.file)}Baskı önizleme</a>
+        ${r.standalone && !auditError ? `<button class="btn" data-reaudit="${esc(r.targetDir)}">${icon(I.redo)}Yeniden denetle</button>` : ""}
+      </div>
     </div>
   </section>`;
 
@@ -591,6 +596,38 @@ async function pickDir() {
   if (yol) { launchDir = yol; renderLaunch(); }
 }
 
+// PDF: sunucu bilgisayardaki tarayıcıyla basar; tarayıcı yoksa basılı şablon yazdırma
+// penceresiyle açılır ("PDF olarak kaydet")
+async function downloadPdf(id, b) {
+  b.disabled = true;
+  const eski = b.innerHTML;
+  b.innerHTML = `<i class="spin"></i>PDF hazırlanıyor…`;
+  try {
+    const res = await fetch(`/security-reports/${encodeURIComponent(id)}/pdf`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // İstek bitince açılan yeni sekmeyi tarayıcı engelliyor — aynı sekmede açılır
+      // (basılı şablonda "Raporlara dön" var)
+      if (data.fallback) { location.href = data.fallback; return; }
+      throw new Error(data.error || "PDF üretilemedi");
+    }
+    const ad = decodeURIComponent((res.headers.get("content-disposition") || "").match(/filename\*=UTF-8''([^;]+)/)?.[1] || "guvenlik-raporu.pdf");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = ad;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast("PDF indirildi");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    b.disabled = false;
+    b.innerHTML = eski;
+  }
+}
+
 let toastT;
 function toast(m) { $("toast").textContent = m; $("toast").classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => $("toast").classList.remove("show"), 1800); }
 
@@ -617,6 +654,8 @@ document.addEventListener("click", (ev) => {
   if (dc) { launchDir = dc.dataset.dir; return renderLaunch(); }
   const cancel = ev.target.closest("[data-cancel]");
   if (cancel) { cancel.disabled = true; return cancelJob(cancel.dataset.cancel); }
+  const pdf = ev.target.closest("[data-pdf]");
+  if (pdf) return downloadPdf(pdf.dataset.pdf, pdf);
   const rp = ev.target.closest("[data-report]");
   if (rp) return open(rp.dataset.report);
   const loc = ev.target.closest(".loc");
