@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
+import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -200,6 +201,8 @@ export interface UiServerOptions {
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
  *   GET  /guvenlik      Güvenlik denetimi raporları sayfası (ui/guvenlik.html)
  *   GET  /security-reports       [{ id, createdAt, task, risk, counts }] — en yeni önce
+ *   GET  /guvenlik/rapor/<id>    raporun basılı şablonu (ui/guvenlik-rapor.html, veri gömülü; ?yazdir → yazdırma penceresi)
+ *   GET  /security-reports/<id>/pdf  raporun PDF'i — bilgisayardaki Edge/Chrome başsız basar; yoksa 501 + yedek adres
  *   GET  /security-reports/<id>  tam rapor (bulgular, olumlu tespitler…)
  *   GET  /toggles       Aç/Kapat sayfası (ui/toggles.html)
  *   GET  /toggles-data  { entry, agents[], skills[], mcpServers[] } — açık/kapalı durumları
@@ -211,6 +214,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const configUiPath = path.join(uiDir, "config.html");
   const togglesUiPath = path.join(uiDir, "toggles.html");
   const securityUiPath = path.join(uiDir, "guvenlik.html");
+  const securityPrintPath = path.join(uiDir, "guvenlik-rapor.html");
   const themeCssPath = path.join(uiDir, "theme.css");
   const themeJsPath = path.join(uiDir, "theme.js");
   const dirPickerPath = path.join(uiDir, "dirpicker.js");
@@ -666,6 +670,45 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.method === "GET" && url.pathname === "/guvenlik") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(securityUiPath));
+      return;
+    }
+
+    // Raporun basılı şablonu: veri sayfaya gömülür, betik yükleme sırasında çizer (başsız
+    // tarayıcı beklemeden basabilsin). "<" kaçışlanır — rapor metni betiği kapatamasın
+    if (req.method === "GET" && url.pathname.startsWith("/guvenlik/rapor/")) {
+      const id = decodeURIComponent(url.pathname.slice("/guvenlik/rapor/".length));
+      const rapor = options.getSecurityReport?.(id);
+      const veri = JSON.stringify(rapor ? { rapor, surum: version } : null).replace(/</g, "\\u003c");
+      res.writeHead(rapor ? 200 : 404, { "content-type": "text/html; charset=utf-8" });
+      res.end(fs.readFileSync(securityPrintPath, "utf8").replace("/*RAPOR*/null", () => veri));
+      return;
+    }
+
+    // Raporun PDF'i: bilgisayardaki Chromium tabanlı tarayıcı şablonu başsız basar
+    if (req.method === "GET" && /^\/security-reports\/[\w-]+\/pdf$/.test(url.pathname)) {
+      const id = url.pathname.split("/")[2];
+      const rapor = options.getSecurityReport?.(id) as { targetDir?: string; createdAt?: string } | undefined;
+      if (!rapor) return json(res, 404, { ok: false, error: "rapor bulunamadı" });
+      const fallback = `/guvenlik/rapor/${encodeURIComponent(id)}?yazdir=1`;
+      const browser = findBrowser();
+      if (!browser) {
+        return json(res, 501, {
+          ok: false,
+          error: `PDF basacak tarayıcı (Edge, Chrome) bulunamadı — yolunu ${BROWSER_ENV} ortam değişkeniyle verebilirsin`,
+          fallback,
+        });
+      }
+      printPdf(browser, `http://127.0.0.1:${port}/guvenlik/rapor/${encodeURIComponent(id)}`).then(
+        (pdf) => {
+          res.writeHead(200, {
+            "content-type": "application/pdf",
+            "content-length": pdf.length,
+            "content-disposition": attachmentHeader(pdfFileName(rapor)),
+          });
+          res.end(pdf);
+        },
+        (e: unknown) => json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e), fallback }),
+      );
       return;
     }
 
