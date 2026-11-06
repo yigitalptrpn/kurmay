@@ -97,6 +97,19 @@ export function loadAppConfig(configPath: string): AppConfig {
     throw new Error(`config: "maxParallelRuns" 1 veya daha büyük bir tam sayı olmalı (verilen: ${JSON.stringify(cfg.maxParallelRuns)})`);
   }
 
+  if (cfg.planWebhook !== undefined) {
+    const w = cfg.planWebhook as { url?: unknown; apiKey?: unknown } | null;
+    if (!w || typeof w !== "object" || typeof w.url !== "string") {
+      throw new Error(`config: "planWebhook" {"url": "http://…", "apiKey"?: "…"} biçiminde olmalı (verilen: ${JSON.stringify(w)})`);
+    }
+    if (!w.url.trim()) delete cfg.planWebhook;
+    else if (!/^https?:\/\/[^\s]+$/i.test(w.url.trim())) {
+      throw new Error(`config: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`);
+    } else if (w.apiKey !== undefined && typeof w.apiKey !== "string") {
+      throw new Error(`config: "planWebhook.apiKey" metin olmalı`);
+    }
+  }
+
   if (!cfg.workflow?.entry || !cfg.workflow.agents) {
     throw new Error('config: "workflow" bölümü eksik ("entry" ve "agents" alanları zorunlu)');
   }

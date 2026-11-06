@@ -365,6 +365,10 @@ export interface AppConfig extends ProviderConfig {
    *  Zamanlanmış bekleyen görev de sayılır. Yerel model sunucusu istekleri
    *  sırayla işliyorsa yüksek değer hız kazandırmaz, kuyruk/zaman aşımı getirir. */
   maxParallelRuns?: number;
+  /** Onay kartındaki planı başka makinedeki bir ajana gönderme (Ayarlar): panelde
+   *  "Uzak ajana gönder" düğmesi planı bu adrese JSON olarak POST eder. apiKey
+   *  verilirse "Authorization: Bearer" başlığıyla gider. Akışı etkilemez. */
+  planWebhook?: { url: string; apiKey?: string };
 }
 
 export interface AgentDefinition {

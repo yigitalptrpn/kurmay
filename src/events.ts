@@ -165,6 +165,9 @@ export type OrchestratorEvent =
   /** Planı otomatik iletme açık: plan onay beklemeden sonraki adıma geçti
    *  (onay kartı açılmadı). to = devam edilen düğüm, files = plandaki dosya sayısı */
   | { type: "plan_forwarded"; agent: string; to: string | null; files: number }
+  /** Onay kartındaki plan panelden uzak ajana gönderildi (planWebhook) — akışı etkilemez.
+   *  host = hedef adresin sunucu kısmı, status = karşı tarafın HTTP kodu */
+  | { type: "plan_sent"; agent: string; ok: boolean; host: string; status?: number; error?: string }
   | {
       type: "approval_resolved";
       agent: string;

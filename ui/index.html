@@ -667,6 +667,14 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
           </select>
           <input type="datetime-local" id="whenCustom" class="hidden">
         </div>
+        <!-- Planı dışarı ver: başka bir ajana elle (indir) ya da başka makinedeki ajana (Ayarlar'daki adres) -->
+        <div class="row" id="planOut" style="margin-top:8px">
+          <span class="label">Planı dışarı ver:</span>
+          <button id="btnPlanMd" title="Planı okunur metin olarak indir — doğrudan başka bir ajana verilebilir">⬇ Planı indir (.md)</button>
+          <button id="btnPlanJson" title="Planı yapılandırılmış veri olarak indir (uzak ajana giden gövdenin aynısı)">⬇ Veri olarak (.json)</button>
+          <button id="btnPlanSend" class="hidden" title="Planı Ayarlar'daki uzak ajan adresine gönderir — akış onayını beklemeye devam eder">📤 Uzak ajana gönder</button>
+          <span id="planSendInfo" style="font-size:12px;color:var(--muted)"></span>
+        </div>
       </div>
 
       <div class="card hidden" id="schedule">
@@ -1921,6 +1929,9 @@ function handleEvent(e) {
         ? `${agentName(e.agent)} kod değişikliği gerekmediğini söylüyor`
         : `${agentName(e.agent)} ${roleOf(e.agent).base === "analist" ? "harekât planı" : "çıktısı"} onayını bekliyor`;
       approvalEndsFlow = !!e.endsFlow;
+      $("planOut").classList.toggle("hidden", !!e.endsFlow);
+      $("planSendInfo").textContent = "";
+      if (!replaying) refreshPlanSend();
       $("btnApprove").textContent = e.endsFlow ? "Bitir" : "Onayla";
       $("rejectComment").placeholder = e.endsFlow
         ? "Neden gerekli? (isteğe bağlı)"
@@ -1973,6 +1984,12 @@ function handleEvent(e) {
         ` · otomatik iletim açık`, "ok");
       break;
     }
+    case "plan_sent":
+      // Panelden uzak ajana gönderildi — akış etkilenmez, onay beklemeye devam eder
+      addLog(e.ts, e.ok
+        ? `📤 Plan uzak ajana gönderildi → <b>${esc(e.host)}</b>${e.status ? ` (${e.status})` : ""}`
+        : `📤 Plan uzak ajana gönderilemedi → <b>${esc(e.host)}</b>: ${esc(e.error || "bilinmeyen hata")}`, e.ok ? "ok" : "err");
+      break;
     case "approval_resolved":
       $("approval").classList.add("hidden");
       setStatus("çalışıyor", "run");
@@ -2259,6 +2276,35 @@ async function sendApproval(approved) {
   resetWhen();
 }
 $("btnApprove").addEventListener("click", () => sendApproval(true));
+
+// Planı dışarı ver — indirme sunucudan dosya olarak gelir (sayfa değişmez)
+const planUrl = (format) => `/plan-export?session=${encodeURIComponent(viewSessionId)}&format=${format}`;
+$("btnPlanMd").addEventListener("click", () => { location.href = planUrl("md"); });
+$("btnPlanJson").addEventListener("click", () => { location.href = planUrl("json"); });
+/** Uzak ajan adresi Ayarlar'da girilmişse gönder düğmesi görünür (ayar başka sekmede değişmiş olabilir) */
+async function refreshPlanSend() {
+  try {
+    const wf = await (await fetch("/workflow")).json();
+    $("btnPlanSend").classList.toggle("hidden", !wf.planWebhook);
+  } catch { /* eldeki hal kalsın */ }
+}
+$("btnPlanSend").addEventListener("click", async () => {
+  const b = $("btnPlanSend");
+  b.disabled = true;
+  $("planSendInfo").textContent = "gönderiliyor…";
+  try {
+    const r = await (await fetch("/plan-send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: viewSessionId }),
+    })).json();
+    // Ayrıntı sohbete plan_sent satırıyla düşer; burada kısa sonuç
+    $("planSendInfo").textContent = r.ok ? `✓ gönderildi (${r.status})` : `✗ ${r.error || "gönderilemedi"}`;
+  } catch {
+    $("planSendInfo").textContent = "✗ sunucuya ulaşılamadı";
+  }
+  b.disabled = false;
+});
 $("btnReject").addEventListener("click", () => sendApproval(false));
 
 async function sendSchedule(action) {
@@ -2419,6 +2465,8 @@ function openSession(id) {
     else setStatus("hazır", "ok");
     const r = JSON.parse(m.data);
     viewBusy = r.busy;
+    // Geçmişten açılan onay kartı: gönder düğmesi güncel ayara göre
+    if (r.busy && !$("approval").classList.contains("hidden")) refreshPlanSend();
     if (!r.busy) {
       // Yarıda kalmış koşu (servis kapanmıştı): çalışıyor görünmesin
       stopPipelineTicker();
@@ -2947,6 +2995,7 @@ async function loadFlow() {
     flowRetry = setTimeout(loadFlow, 3000);
     return;
   }
+  $("btnPlanSend").classList.toggle("hidden", !wf.planWebhook);
   if (!wf.nodes || !wf.nodes.length) { el.innerHTML = ""; return; }
   // Komut düğümleri teknik adıyla, ajan/fanout düğümleri heyetteki adıyla
   const flowName = (n) => n.type === "command" ? n.key : roleOf(n.type === "fanout" ? n.agent : n.key).ad;

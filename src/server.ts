@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
+import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -139,6 +140,8 @@ export interface UiServerOptions {
     entry: string;
     /** Analist planı onay beklemeden Saha Timi'ne geçer mi (görev kartı bunu yazar) */
     autoForwardPlan: boolean;
+    /** Uzak ajan adresi ayarlı mı — onay kartında "Uzak ajana gönder" düğmesi */
+    planWebhook: boolean;
     nodes: Array<{ key: string; type: string; disabled: boolean; agent?: string }>;
   };
   /** Düğümü devre dışı bırakır/açar: çalışan sürece uygular, config.json'a yazar */
@@ -146,6 +149,10 @@ export interface UiServerOptions {
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
   setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
   setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
+  /** Planın gönderileceği uzak ajan (planWebhook); ayarlı değilse undefined */
+  getPlanTarget?: () => { url: string; apiKey?: string } | undefined;
+  /** Uzak ajan adresini/anahtarını kaydeder (boş adres = kaldır): çalışan sürece uygular, config.json'a yazar */
+  setPlanWebhook?: (url: string, apiKey: string) => { ok: boolean; error?: string };
   /** Aynı anda koşabilecek görev sınırını değiştirir: çalışan sürece uygular, config.json'a yazar */
   setMaxParallel?: (value: number) => { ok: boolean; error?: string; value?: number };
   /** Güvenlik denetçisini açar; config'te düğümü yoksa Teftiş onayından sonraya ekler */
@@ -193,6 +200,9 @@ export interface UiServerOptions {
  *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
  *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
+ *   GET  /plan-export?session=&format=md|json  oturumun son onay planını dosya olarak indirir (başka ajana vermek için)
+ *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
+ *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
  *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
@@ -615,6 +625,59 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
           return json(res, 400, { ok: false, error: "aynı anda çalışacak görev sayısı 1 veya daha büyük bir tam sayı olmalı" });
         }
         const r = options.setMaxParallel ? options.setMaxParallel(value) : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    // Onay planını dışarı ver: indirme (başka ajana elle) ya da uzak ajana REST isteği
+    if (req.method === "GET" && url.pathname === "/plan-export") {
+      const id = url.searchParams.get("session") ?? "";
+      const format = url.searchParams.get("format") === "json" ? "json" : "md";
+      const plan = id ? findPlan(options.openSession(id)?.bus.history ?? []) : undefined;
+      if (!plan) return json(res, 404, { ok: false, error: "bu oturumda onaya gelmiş bir plan yok" });
+      const body = format === "json"
+        ? JSON.stringify(planPayload(plan, { session: id, version }), null, 2)
+        : planMarkdown(plan);
+      res.writeHead(200, {
+        "content-type": format === "json" ? "application/json; charset=utf-8" : "text/markdown; charset=utf-8",
+        "content-disposition": attachmentHeader(planFileName(plan, format)),
+        "x-content-type-options": "nosniff",
+      });
+      res.end(body);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/plan-send") {
+      readJson(req, async (parsed) => {
+        const id = String(parsed?.session ?? "");
+        const rt = id ? options.openSession(id) : undefined;
+        const plan = rt ? findPlan(rt.bus.history) : undefined;
+        if (!rt || !plan) return json(res, 404, { ok: false, error: "bu oturumda onaya gelmiş bir plan yok" });
+        const target = options.getPlanTarget?.();
+        if (!target) return json(res, 409, { ok: false, error: "uzak ajan adresi ayarlı değil (Ayarlar → Planı uzak ajana gönder)" });
+        let host = target.url;
+        try {
+          host = new URL(target.url).host;
+        } catch {
+          /* adres doğrulanmıştı; olmazsa ham haliyle yazılır */
+        }
+        const r = await sendPlan(target, planPayload(plan, { session: id, version }));
+        rt.bus.emit({
+          type: "plan_sent", agent: plan.agent, ok: r.ok, host,
+          ...(r.status ? { status: r.status } : {}), ...(r.error ? { error: r.error } : {}),
+        });
+        json(res, r.ok ? 200 : 502, { ...r, host });
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/plan-webhook") {
+      readJson(req, (parsed) => {
+        if (!parsed || typeof parsed.url !== "string" || (parsed.apiKey !== undefined && typeof parsed.apiKey !== "string")) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        const r = options.setPlanWebhook ? options.setPlanWebhook(parsed.url, parsed.apiKey ?? "") : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });
       return;

@@ -351,6 +351,27 @@ async function main() {
     }
   };
 
+  /** Planı uzak ajana gönderme adresi (Ayarlar): config.json'a yazar, hemen geçerli. Boş adres = kaldır;
+   *  boş anahtar = anahtarsız */
+  const setPlanWebhook = (url: string, apiKey: string): { ok: boolean; error?: string } => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    const u = url.trim();
+    const k = apiKey.trim();
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      if (u) parsed.planWebhook = { url: u, ...(k ? { apiKey: k } : {}) };
+      else delete parsed.planWebhook;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      loadAppConfig(resolvedConfigPath); // adres http(s) mi
+      if (parsed.planWebhook) cfg.planWebhook = parsed.planWebhook;
+      else delete cfg.planWebhook;
+      return { ok: true };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   /** Kullanıcı talimatı (Ayarlar): config.json'a yazar, sıradaki görevde her ajanın prompt'una eklenir */
   const setUserPrompt = (text: string): { ok: boolean; error?: string; text?: string } => {
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
@@ -854,6 +875,7 @@ async function main() {
       getWorkflow: () => ({
         entry: cfg.workflow.entry,
         autoForwardPlan: !!cfg.workflow.autoForwardPlan,
+        planWebhook: !!cfg.planWebhook?.url,
         nodes: mainPath(cfg.workflow).map((key) => {
           const n = cfg.workflow.agents[key];
           return {
@@ -868,6 +890,8 @@ async function main() {
       setAutoForward,
       setMaxParallel,
       setUserPrompt,
+      setPlanWebhook,
+      getPlanTarget: () => (cfg.planWebhook?.url ? cfg.planWebhook : undefined),
       addSecurityAudit,
       getToggles,
       listSecurityReports: () => securityReports.list(),
