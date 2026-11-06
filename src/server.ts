@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
+import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -78,7 +79,10 @@ export interface UiServerOptions {
     runAt?: number,
     /** Görevle yapıştırılan/sürüklenen dosyalar (src/attachments.ts) */
     files?: FileInput[],
-  ) => { ok: boolean; error?: string; session?: string; warning?: string };
+    /** Yalnızca bu görev için seçilen hedef dizin (panelde yazma kutusundaki 📁): yeni oturum
+     *  orada açılır, var olan oturumun dizini buna geçer; config.json'daki genel dizin değişmez */
+    targetDir?: string,
+  ) => { ok: boolean; error?: string; session?: string; warning?: string; dirChanged?: string; resetResume?: boolean };
   /** Görev eklerinin klasörü (runs/) — GET /ekler/<oturum>/<dosya> */
   runsDir?: string;
   /** Oturum listesi + canlı durumları (GET /sessions ve /lobby SSE) */
@@ -142,6 +146,8 @@ export interface UiServerOptions {
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
   setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
   setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
+  /** Aynı anda koşabilecek görev sınırını değiştirir: çalışan sürece uygular, config.json'a yazar */
+  setMaxParallel?: (value: number) => { ok: boolean; error?: string; value?: number };
   /** Güvenlik denetçisini açar; config'te düğümü yoksa Teftiş onayından sonraya ekler */
   addSecurityAudit?: () => { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string };
   /** Aç/Kapat sayfası verisi (GET /toggles-data): ajanlar, beceriler, MCP sunucuları */
@@ -152,6 +158,12 @@ export interface UiServerOptions {
   listSecurityReports?: () => unknown[];
   /** Tek rapor (GET /security-reports/<id>); yoksa undefined */
   getSecurityReport?: (id: string) => unknown;
+  /** Bağımsız denetimler (GET /security-audits): işler + dizin önerileri; CLI görevli modda yok */
+  listAudits?: () => unknown;
+  /** Seçilen dizinde kod tabanının tamamını denetler (POST /security-audits/start) */
+  startAudit?: (dir: string) => { ok: boolean; error?: string; job?: unknown };
+  /** Süren bağımsız denetimi durdurur (POST /security-audits/cancel) */
+  cancelAudit?: (id: string) => boolean;
 }
 
 /**
@@ -160,6 +172,7 @@ export interface UiServerOptions {
  *   GET  /          panel sayfası (ui/index.html)
  *   GET  /theme.css paylaşılan Material 3 tema (ui/theme.css)
  *   GET  /theme.js  tema seçimi: kayıtlı temayı uygular, renk örneklerini kurar (ui/theme.js)
+ *   GET  /version   { version } — çalışan Kurmay'ın sürümü (package.json); panelde marka yanında
  *   GET  /fonts/<ad>.woff2  gömülü yazı tipleri (ui/fonts) — çevrimdışı çalışır
  *   GET  /events?session=ID  SSE: o oturumun geçmişi (diskteki kayıtlar dahil) + canlı akışı
  *   GET  /lobby     SSE: oturum listesi + durumları, her değişiklikte tam liste
@@ -179,11 +192,17 @@ export interface UiServerOptions {
  *   POST /node-disabled { key: string, disabled: boolean } — düğümü kapatır/açar (canlı + config.json)
  *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
+ *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
+ *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
+ *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
+ *   POST /security-audits/cancel  { id } — süren bağımsız denetimi durdurur
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
  *   GET  /guvenlik      Güvenlik denetimi raporları sayfası (ui/guvenlik.html)
  *   GET  /security-reports       [{ id, createdAt, task, risk, counts }] — en yeni önce
+ *   GET  /guvenlik/rapor/<id>    raporun basılı şablonu (ui/guvenlik-rapor.html, veri gömülü; ?yazdir → yazdırma penceresi)
+ *   GET  /security-reports/<id>/pdf  raporun PDF'i — bilgisayardaki Edge/Chrome başsız basar; yoksa 501 + yedek adres
  *   GET  /security-reports/<id>  tam rapor (bulgular, olumlu tespitler…)
  *   GET  /toggles       Aç/Kapat sayfası (ui/toggles.html)
  *   GET  /toggles-data  { entry, agents[], skills[], mcpServers[] } — açık/kapalı durumları
@@ -195,9 +214,17 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const configUiPath = path.join(uiDir, "config.html");
   const togglesUiPath = path.join(uiDir, "toggles.html");
   const securityUiPath = path.join(uiDir, "guvenlik.html");
+  const securityPrintPath = path.join(uiDir, "guvenlik-rapor.html");
   const themeCssPath = path.join(uiDir, "theme.css");
   const themeJsPath = path.join(uiDir, "theme.js");
   const dirPickerPath = path.join(uiDir, "dirpicker.js");
+  // Sürüm package.json'dan bir kez okunur (geliştirmede depo kökü, pakette paket kökü)
+  let version = "";
+  try {
+    version = String(JSON.parse(fs.readFileSync(path.join(uiDir, "..", "package.json"), "utf8")).version ?? "");
+  } catch {
+    // okunamazsa panel sürümü göstermez
+  }
   const sseClients = new Set<http.ServerResponse>();
   const json = (res: http.ServerResponse, code: number, payload: unknown) => {
     res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
@@ -241,6 +268,10 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       res.writeHead(200, { "content-type": "text/css; charset=utf-8" });
       res.end(fs.readFileSync(themeCssPath));
       return;
+    }
+
+    if (req.method === "GET" && req.url === "/version") {
+      return json(res, 200, { version });
     }
 
     // Tema seçimi (panel + Ayarlar + Aç/Kapat ortak): kayıtlı temayı sayfa çizilmeden uygular
@@ -577,6 +608,18 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       return;
     }
 
+    if (req.method === "POST" && req.url === "/max-parallel") {
+      readJson(req, (parsed) => {
+        const value = parsed?.value;
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+          return json(res, 400, { ok: false, error: "aynı anda çalışacak görev sayısı 1 veya daha büyük bir tam sayı olmalı" });
+        }
+        const r = options.setMaxParallel ? options.setMaxParallel(value) : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/user-prompt") {
       readJson(req, (parsed) => {
         if (!parsed || typeof parsed.text !== "string") return json(res, 400, { ok: false, error: "geçersiz istek" });
@@ -585,6 +628,32 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const r = options.setUserPrompt ? options.setUserPrompt(parsed.text) : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/security-audits") {
+      if (!options.listAudits) return json(res, 409, { ok: false, error: "bağımsız denetim yalnızca sunucu modunda (görev argümanı olmadan) başlatılabilir" });
+      return json(res, 200, options.listAudits());
+    }
+
+    if (req.method === "POST" && req.url === "/security-audits/start") {
+      readJson(req, (parsed) => {
+        if (!options.startAudit) {
+          return json(res, 409, { ok: false, error: "bağımsız denetim yalnızca sunucu modunda (görev argümanı olmadan) başlatılabilir" });
+        }
+        const dir = typeof parsed?.dir === "string" ? parsed.dir.trim() : "";
+        if (!dir) return json(res, 400, { ok: false, error: "proje dizini seçilmedi" });
+        const r = options.startAudit(dir);
+        json(res, r.ok ? 202 : 409, r);
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/security-audits/cancel") {
+      readJson(req, (parsed) => {
+        const ok = typeof parsed?.id === "string" && !!options.cancelAudit?.(parsed.id);
+        json(res, ok ? 200 : 409, ok ? { ok } : { ok, error: "durdurulacak denetim yok" });
       });
       return;
     }
@@ -601,6 +670,45 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.method === "GET" && url.pathname === "/guvenlik") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(securityUiPath));
+      return;
+    }
+
+    // Raporun basılı şablonu: veri sayfaya gömülür, betik yükleme sırasında çizer (başsız
+    // tarayıcı beklemeden basabilsin). "<" kaçışlanır — rapor metni betiği kapatamasın
+    if (req.method === "GET" && url.pathname.startsWith("/guvenlik/rapor/")) {
+      const id = decodeURIComponent(url.pathname.slice("/guvenlik/rapor/".length));
+      const rapor = options.getSecurityReport?.(id);
+      const veri = JSON.stringify(rapor ? { rapor, surum: version } : null).replace(/</g, "\\u003c");
+      res.writeHead(rapor ? 200 : 404, { "content-type": "text/html; charset=utf-8" });
+      res.end(fs.readFileSync(securityPrintPath, "utf8").replace("/*RAPOR*/null", () => veri));
+      return;
+    }
+
+    // Raporun PDF'i: bilgisayardaki Chromium tabanlı tarayıcı şablonu başsız basar
+    if (req.method === "GET" && /^\/security-reports\/[\w-]+\/pdf$/.test(url.pathname)) {
+      const id = url.pathname.split("/")[2];
+      const rapor = options.getSecurityReport?.(id) as { targetDir?: string; createdAt?: string } | undefined;
+      if (!rapor) return json(res, 404, { ok: false, error: "rapor bulunamadı" });
+      const fallback = `/guvenlik/rapor/${encodeURIComponent(id)}?yazdir=1`;
+      const browser = findBrowser();
+      if (!browser) {
+        return json(res, 501, {
+          ok: false,
+          error: `PDF basacak tarayıcı (Edge, Chrome) bulunamadı — yolunu ${BROWSER_ENV} ortam değişkeniyle verebilirsin`,
+          fallback,
+        });
+      }
+      printPdf(browser, `http://127.0.0.1:${port}/guvenlik/rapor/${encodeURIComponent(id)}`).then(
+        (pdf) => {
+          res.writeHead(200, {
+            "content-type": "application/pdf",
+            "content-length": pdf.length,
+            "content-disposition": attachmentHeader(pdfFileName(rapor)),
+          });
+          res.end(pdf);
+        },
+        (e: unknown) => json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e), fallback }),
+      );
       return;
     }
 
@@ -714,7 +822,8 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const { files, error: fileError } = parseFiles(parsed.files);
         if (fileError) return json(res, 400, { ok: false, error: fileError });
-        const result = options.onTask(task, session, runAt, files);
+        const targetDir = typeof parsed.targetDir === "string" && parsed.targetDir.trim() ? parsed.targetDir.trim() : undefined;
+        const result = options.onTask(task, session, runAt, files, targetDir);
         json(res, result.ok ? 202 : 409, result);
       });
       return;

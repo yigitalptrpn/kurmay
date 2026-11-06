@@ -32,8 +32,11 @@ export interface SecurityReport {
   task: string;
   targetDir: string;
   model?: string;
-  /** Denetlenen dosyalar (saha timinin değiştirdikleri) */
+  /** Denetlenen dosyalar: akışta saha timinin değiştirdikleri, bağımsız denetimde
+   *  denetçinin okudukları (çalışma dizinine göre) */
   files: string[];
+  /** Bağımsız denetim (/guvenlik sayfasından, kod tabanının tamamı) — akıştaki değil */
+  standalone?: boolean;
   /** Genel risk düzeyi: none | low | medium | high | critical (çıktı gelmediyse yok) */
   risk?: string;
   summary?: string;
@@ -44,7 +47,7 @@ export interface SecurityReport {
 }
 
 /** Listede gösterilen özet (tam raporu sayfa ayrıca ister) */
-export type SecurityReportSummary = Pick<SecurityReport, "id" | "createdAt" | "task" | "risk" | "sessionName"> & {
+export type SecurityReportSummary = Pick<SecurityReport, "id" | "createdAt" | "task" | "risk" | "sessionName" | "standalone"> & {
   counts: Record<Severity, number>;
 };
 
@@ -112,7 +115,15 @@ export class SecurityReportStore {
     for (const n of names.sort().reverse().slice(0, limit)) {
       const r = this.get(n.slice(0, -5));
       if (r) {
-        out.push({ id: r.id, createdAt: r.createdAt, task: r.task, risk: r.risk, sessionName: r.sessionName, counts: countBySeverity(r.findings) });
+        out.push({
+          id: r.id,
+          createdAt: r.createdAt,
+          task: r.task,
+          risk: r.risk,
+          sessionName: r.sessionName,
+          ...(r.standalone ? { standalone: true } : {}),
+          counts: countBySeverity(r.findings),
+        });
       }
     }
     return out;
