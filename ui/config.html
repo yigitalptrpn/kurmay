@@ -184,6 +184,33 @@ input.sw:disabled { opacity:.5; cursor:default; }
   </div>
 </div>
 
+<!-- Planı uzak ajana gönder: onay kartındaki "Uzak ajana gönder" düğmesi planı bu adrese JSON
+     olarak POST eder (config.json planWebhook). Kaydet'e basınca anında geçerli. -->
+<div class="card" id="pwCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><rect x="18" y="5" width="3" height="14" rx="1"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Planı uzak ajana gönder <span id="pwState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Adres girilirse onay kartında <b>Uzak ajana gönder</b> düğmesi çıkar; basınca plan bu adrese JSON olarak gönderilir (görev, özet, varsayımlar, dosya planı ve okunur metni). Akış etkilenmez, onayın yine beklenir. Anahtar girilirse <code>Authorization: Bearer</code> başlığıyla gider; <code>config.json</code>'da düz metin durur. Adresi silip kaydedersen kapanır.</div>
+    </div>
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow">
+      <label class="minl">Adres</label>
+      <input type="text" id="pwUrl" spellcheck="false" placeholder="http://ajan-sunucusu:8080/plan" style="width:100%">
+    </div>
+    <div class="grow">
+      <label class="minl">Erişim anahtarı</label>
+      <div style="display:flex;gap:6px"><input type="password" id="pwKey" autocomplete="off" placeholder="isteğe bağlı" style="flex:1">
+      <button id="pwKeyShow" type="button" title="Göster / gizle" style="min-height:auto;padding:4px 12px">👁</button></div>
+    </div>
+  </div>
+  <div class="rfoot" style="margin-top:8px">
+    <button class="primary" id="pwSave" type="button" disabled>Kaydet</button>
+    <span id="pwMsg"></span>
+  </div>
+</div>
+
 <div class="card" style="margin-bottom:14px">
   <div class="gbar">
     <div class="grow">
@@ -803,6 +830,40 @@ $("upSave").addEventListener("click", async ()=>{
   renderUpCard();
 });
 
+// Planı uzak ajana gönder kartı: config.planWebhook (POST /plan-webhook, canlı)
+function fillPlanWebhook(){
+  $("pwUrl").value = (cfg && cfg.planWebhook && cfg.planWebhook.url) || "";
+  $("pwKey").value = (cfg && cfg.planWebhook && cfg.planWebhook.apiKey) || "";
+  renderPwCard();
+}
+function renderPwCard(){
+  const w = (cfg && cfg.planWebhook) || {};
+  const on = !!(w.url || "").trim();
+  $("pwState").textContent = on ? "açık" : "kapalı"; $("pwState").className = "secc-st" + (on ? " on" : "");
+  $("pwSave").disabled = $("pwUrl").value.trim() === (w.url || "") && $("pwKey").value.trim() === (w.apiKey || "");
+}
+for (const id of ["pwUrl","pwKey"]){
+  $(id).addEventListener("input", ()=>{ $("pwMsg").textContent = ""; renderPwCard(); });
+  $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("pwSave").disabled){ e.preventDefault(); $("pwSave").click(); } });
+}
+$("pwKeyShow").addEventListener("click", ()=>{ $("pwKey").type = $("pwKey").type === "password" ? "text" : "password"; });
+$("pwSave").addEventListener("click", async ()=>{
+  if (!cfg) return;
+  const url = $("pwUrl").value.trim(), apiKey = $("pwKey").value.trim();
+  $("pwSave").disabled = true;
+  try {
+    const res = await fetch("/plan-webhook", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ url, apiKey }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "kaydedilemedi");
+    // Sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa ayar geri dönmesin
+    if (url) cfg.planWebhook = { url, ...(apiKey ? { apiKey } : {}) }; else delete cfg.planWebhook;
+    $("pwMsg").innerHTML = `<span style="color:var(--teal)">✓ ${url ? "Kaydedildi — onay kartında gönder düğmesi çıkar" : "Kapatıldı"}</span>`;
+  } catch (err){
+    $("pwMsg").innerHTML = `<span style="color:var(--red)">✗ ${esc(err.message)}</span>`;
+  }
+  renderPwCard();
+});
+
 function render(){
   drawGraph();
   renderSecCard();
@@ -1296,6 +1357,7 @@ async function load(){
   fillConn();
   fillUserPrompt();
   fillPar();
+  fillPlanWebhook();
   fillResilience();
   fillContext();
   loadContextModels();
