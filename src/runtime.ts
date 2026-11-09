@@ -180,7 +180,7 @@ export class RuntimeRegistry {
 }
 
 /** Koşu kayıtlarını (JSONL) sırayla okur; bozuk satır/dosya atlanır */
-function readRunLogs(runsDir: string, files: string[]): TimedEvent[] {
+export function readRunLogs(runsDir: string, files: readonly string[]): TimedEvent[] {
   const out: TimedEvent[] = [];
   for (const f of files) {
     let text = "";

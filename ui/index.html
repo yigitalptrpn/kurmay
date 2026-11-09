@@ -28,6 +28,32 @@ body { overflow:hidden; }
 .sidebar-head .brand-ver { font:500 12px var(--font-mono); color:var(--muted); letter-spacing:.02em; text-transform:none; text-shadow:none; white-space:nowrap; }
 .sidebar-head button { padding:2px 9px; font-size:13px; min-height:auto; }
 .side-label { margin:18px 8px 8px; }
+/* Arama: sol sütunun başında kutu; sorgu varken oturum listesi yerine sonuçlar */
+.ssearch { margin:0 0 12px; display:grid; grid-template-columns:minmax(0,1fr); gap:6px; }
+.ssearch input, .ssearch select { box-sizing:border-box; max-width:100%; }
+.ssearch input { width:100%; min-width:0; font-size:13px; padding:8px 10px; }
+.ssearch-opts { display:flex; gap:6px; }
+.ssearch-opts select { flex:1; min-width:0; font-size:12px; padding:4px 6px; min-height:30px; }
+#sidebarBody.searching #sessNew, #sidebarBody.searching .side-label, #sidebarBody.searching #sessionList { display:none; }
+.sr-head { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin:2px 4px 8px; }
+.sr-head .sp { flex:1; }
+.sr-head button { min-height:auto; padding:2px 8px; font-size:12px; }
+.sr-grp { margin-bottom:12px; }
+.sr-sess { font-weight:700; font-size:13px; padding:4px 6px; cursor:pointer; border-radius:var(--md-shape-sm); overflow-wrap:anywhere; }
+.sr-sess:hover { background:var(--md-surface-container); }
+.sr-sess small { font-weight:400; color:var(--muted); }
+.sr-hit { display:block; padding:6px 8px; margin:2px 0; border-radius:var(--md-shape-sm); cursor:pointer; font-size:12.5px; line-height:1.45; border:1px solid transparent; overflow-wrap:anywhere; }
+.sr-hit:hover, .sr-hit.on { background:var(--md-surface-container); border-color:var(--md-outline-variant); }
+.sr-hit .sr-k { display:inline-block; font-size:10.5px; font-weight:700; padding:0 6px; border-radius:999px; background:var(--md-secondary-container); color:var(--md-on-surface); margin-right:4px; }
+.sr-hit .sr-a { color:var(--muted); font-size:11.5px; margin-right:4px; }
+.sr-hit .sr-t { display:block; margin-top:2px; color:var(--text); }
+.sr-more { font-size:12px; color:var(--md-primary); cursor:pointer; padding:2px 8px; }
+.sr-empty { font-size:12.5px; color:var(--muted); padding:6px 8px; }
+mark.srch, .sr-t mark { background:color-mix(in srgb, var(--md-primary) 28%, transparent); color:inherit; border-radius:2px; padding:0 1px; }
+mark.srch.cur { outline:2px solid var(--md-primary); }
+.srch-flash { animation:srch-flash 1.6s ease-out; }
+@keyframes srch-flash { 0%,30% { box-shadow:0 0 0 3px color-mix(in srgb, var(--md-primary) 55%, transparent); } 100% { box-shadow:0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .srch-flash { animation:none; outline:2px solid var(--md-primary); } }
 .sess { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:14px; cursor:pointer; margin-bottom:3px; position:relative; overflow:hidden; transition:background-color var(--md-motion), box-shadow var(--md-motion); }
 .sess:hover { background:var(--md-surface-container-high); }
 .sess.active { background:var(--md-surface-container-lowest); box-shadow:var(--md-elev-1); }
@@ -607,6 +633,29 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <button id="btnSidebar" title="Aç / kapat">⟨</button>
   </div>
   <div class="sidebar-body" id="sidebarBody">
+    <div class="ssearch" role="search">
+      <input type="search" id="srchQ" placeholder="Ara… (Ctrl+K)" autocomplete="off" spellcheck="false" aria-label="Oturumlarda ara">
+      <div class="ssearch-opts">
+        <select id="srchScope" aria-label="Nerede aransın">
+          <option value="all">Tüm oturumlar</option>
+          <option value="here">Bu oturum</option>
+        </select>
+        <select id="srchKind" aria-label="Ne aransın">
+          <option value="">Her şey</option>
+          <option value="gorev">Görev</option>
+          <option value="plan">Plan / cevap</option>
+          <option value="mesaj">Ajan mesajı</option>
+          <option value="cikti">Ajan çıktısı</option>
+          <option value="dosya">Dosya</option>
+          <option value="komut">Komut</option>
+          <option value="teftis">Teftiş</option>
+          <option value="ret">Ret gerekçesi</option>
+          <option value="hata">Hata</option>
+          <option value="guvenlik">Güvenlik</option>
+        </select>
+      </div>
+    </div>
+    <div id="srchPane" class="hidden" aria-live="polite"></div>
     <div class="sess sess-new active" data-id="" id="sessNew">＋ Yeni görev</div>
     <div class="label side-label">Oturumlar</div>
     <div id="sessionList"></div>
@@ -2400,6 +2449,231 @@ function renderSessions() {
   document.title = bekleyen ? `(${bekleyen}) Kurmay — onay bekliyor` : "Kurmay";
 }
 
+// ── Arama ────────────────────────────────────────────────────────────────
+// Sunucu (GET /search) oturumların olay geçmişinde arar; sonuçtaki `ei` olayın geçmişteki
+// sırası. Panel her olayla eklenen satırlara bu sırayı `data-ei` olarak yazar — sonuca
+// tıklayınca o satıra kayılır, eşleşen kelimeler vurgulanır.
+let evIndex = 0, curEi = 0, pendingJump = null;
+const eiObs = new MutationObserver(() => {});
+eiObs.observe($("stream"), { childList: true, subtree: true });
+/** Son olayla sohbete eklenen öğelere olay sırasını yaz (yalnızca yeni eklenenler — maliyet küçük) */
+function tagNewRows() {
+  for (const r of eiObs.takeRecords()) {
+    for (const n of r.addedNodes) if (n.nodeType === 1 && !n.dataset.ei) n.dataset.ei = String(curEi);
+  }
+}
+const SR_KIND = { gorev: "Görev", plan: "Plan", cikti: "Çıktı", mesaj: "Mesaj", dosya: "Dosya", komut: "Komut",
+  teftis: "Teftiş", ret: "Ret", hata: "Hata", guvenlik: "Güvenlik" };
+// Sunucudaki fold() ile aynı: küçük harf + Türkçe harfler sade, uzunluk korunur
+const SR_FOLD = { ç:"c", ğ:"g", ı:"i", ö:"o", ş:"s", ü:"u", â:"a", î:"i", û:"u", Ç:"c", Ğ:"g", I:"i", İ:"i", Ö:"o", Ş:"s", Ü:"u", Â:"a", Î:"i", Û:"u" };
+function srFold(t) {
+  let o = "";
+  for (const c of t) { const m = SR_FOLD[c] ?? c.toLowerCase(); o += m.length === c.length ? m : c; }
+  return o;
+}
+function srTerms(q) {
+  const out = [], re = /"([^"]+)"|(\S+)/g;
+  for (let m = re.exec(q); m; m = re.exec(q)) { const t = srFold((m[1] ?? m[2]).trim()); if (t) out.push(t); }
+  return out;
+}
+function srchScope() { return $("srchScope").value; }
+try { const k = localStorage.getItem("kurmay-arama-kapsam"); if (k === "here" || k === "all") $("srchScope").value = k; } catch {}
+let srTimer = 0, srAbort = null, srHits = [], srActive = -1, srLast = null;
+
+function markSnippet(text, marks) {
+  let o = "", at = 0;
+  for (const [a, b] of marks || []) { o += esc(text.slice(at, a)) + "<mark>" + esc(text.slice(a, b)) + "</mark>"; at = b; }
+  return o + esc(text.slice(at));
+}
+function clearSearch() {
+  $("srchQ").value = "";
+  if (srAbort) srAbort.abort();
+  clearTimeout(srTimer);
+  $("srchPane").classList.add("hidden");
+  $("srchPane").innerHTML = "";
+  $("sidebarBody").classList.remove("searching");
+  srHits = []; srActive = -1; srLast = null;
+  clearMarks();
+}
+function scheduleSearch() { clearTimeout(srTimer); srTimer = setTimeout(runSearch, 250); }
+async function runSearch() {
+  const q = $("srchQ").value.trim();
+  if (!q) return clearSearch();
+  const pane = $("srchPane");
+  $("sidebarBody").classList.add("searching");
+  pane.classList.remove("hidden");
+  const here = srchScope() === "here";
+  if (here && !viewSessionId) {
+    pane.innerHTML = `<div class="sr-empty">Bu oturumda aramak için önce soldan bir oturum aç ya da “Tüm oturumlar”ı seç.</div>`;
+    return;
+  }
+  if (q.length < 2) { pane.innerHTML = `<div class="sr-empty">En az 2 karakter yaz.</div>`; return; }
+  if (srAbort) srAbort.abort();
+  srAbort = new AbortController();
+  const p = new URLSearchParams({ q });
+  if (here) p.set("session", viewSessionId);
+  if ($("srchKind").value) p.set("kind", $("srchKind").value);
+  let r;
+  try { r = await (await fetch("/search?" + p, { signal: srAbort.signal })).json(); }
+  catch (err) { if (err.name !== "AbortError") pane.innerHTML = `<div class="sr-empty">Aranamadı — sunucuya ulaşılamadı.</div>`; return; }
+  if (!r.ok) { pane.innerHTML = `<div class="sr-empty">${esc(r.error || "aranamadı")}</div>`; return; }
+  srLast = { q, terms: srTerms(q), here, r };
+  renderSearch();
+}
+function renderSearch() {
+  const { here, r } = srLast, pane = $("srchPane");
+  srHits = [];
+  const n = (x) => x.toLocaleString("tr-TR");
+  if (!r.results.length) {
+    pane.innerHTML = `<div class="sr-head"><span class="sp">Sonuç yok</span><button id="srClear" title="Aramayı kapat (Esc)">Kapat</button></div>` +
+      `<div class="sr-empty">${here ? "Bu oturumda" : "Hiçbir oturumda"} eşleşme bulunamadı.${$("srchKind").value ? " Türü “Her şey” yapmayı dene." : ""}</div>`;
+    return;
+  }
+  const hitHtml = (s, h) => {
+    srHits.push({ session: s.session, ei: h.ei });
+    const ad = h.agent ? `<span class="sr-a">${esc(agentName(h.agent))}</span>` : "";
+    return `<div class="sr-hit" data-i="${srHits.length - 1}" title="${esc(fmt(Date.parse(h.ts)))}"><span class="sr-k">${SR_KIND[h.kind] || h.kind}</span>${ad}` +
+      `<span class="sr-t">${markSnippet(h.snippet, h.marks)}</span></div>`;
+  };
+  let html = "";
+  if (here) {
+    const s = r.results[0];
+    html = s.hits.map((h) => hitHtml(s, h)).join("") +
+      (s.total > s.hits.length ? `<div class="sr-empty">İlk ${n(s.hits.length)} eşleşme gösteriliyor — aramayı daralt.</div>` : "");
+  } else {
+    html = r.results.map((s) =>
+      `<div class="sr-grp"><div class="sr-sess" data-open="${esc(s.session)}" title="Oturumu aç">${esc(s.name)} <small>· ${n(s.total)} eşleşme · ${esc(fmt(Date.parse(s.updatedAt)))}</small></div>` +
+      s.hits.map((h) => hitHtml(s, h)).join("") +
+      (s.total > s.hits.length ? `<div class="sr-more" data-here="${esc(s.session)}">Bu oturumdaki ${n(s.total)} eşleşmenin hepsi →</div>` : "") +
+      `</div>`).join("");
+  }
+  const head = here
+    ? `<span class="sp" id="srCount">${n(r.hits)} eşleşme</span><button id="srPrev" title="Önceki (↑)">↑</button><button id="srNext" title="Sonraki (↓ / Enter)">↓</button>`
+    : `<span class="sp">${n(r.hits)} eşleşme · ${n(r.sessions)} oturum${r.truncated ? " (bir kısmı)" : ""}</span>`;
+  pane.innerHTML = `<div class="sr-head">${head}<button id="srClear" title="Aramayı kapat (Esc)">Kapat</button></div>` + html;
+  srActive = -1;
+}
+function selectHit(i, go) {
+  if (!srHits.length) return;
+  srActive = (i + srHits.length) % srHits.length;
+  document.querySelectorAll("#srchPane .sr-hit").forEach((el) => el.classList.toggle("on", Number(el.dataset.i) === srActive));
+  const el = document.querySelector(`#srchPane .sr-hit[data-i="${srActive}"]`);
+  if (el) el.scrollIntoView({ block: "nearest" });
+  const c = $("srCount");
+  if (c && srLast) c.textContent = `${srActive + 1} / ${srLast.r.hits.toLocaleString("tr-TR")} eşleşme`;
+  if (go) openHit(srHits[srActive]);
+}
+function openHit(h) {
+  const terms = srLast ? srLast.terms : [];
+  if (h.session !== viewSessionId) { pendingJump = { ei: h.ei, terms }; openSession(h.session); return; }
+  if (replaying) { pendingJump = { ei: h.ei, terms }; return; }
+  jumpToEvent(h.ei, terms);
+}
+function clearMarks() {
+  for (const m of document.querySelectorAll("#stream mark.srch")) m.replaceWith(document.createTextNode(m.textContent));
+  $("stream").normalize();
+}
+/** Olayın satırını bulur (data-ei ≤ hedef olan son öğe), kelimeleri vurgular, kapalı bölümleri açar ve kaydırır */
+function jumpToEvent(ei, terms) {
+  if (logFilter) setLogFilter(null);
+  clearMarks();
+  // Olayla eklenen öğeler (bir olay birden çok öğe ekleyebilir; metin akışı sonradan eklenen
+  // olaylar önceki öğeye yazılır) — hedefe en yakın önceki sıra
+  let bestEi = -1, cands = [];
+  for (const el of $("stream").querySelectorAll("[data-ei]")) {
+    const v = Number(el.dataset.ei);
+    if (v > ei || v < bestEi) continue;
+    if (v > bestEi) { bestEi = v; cands = []; }
+    cands.push(el);
+  }
+  if (!cands.length) return;
+  // Üstteki öğe önce (içindekiler de onun parçası), bulunamazsa balonun tamamı
+  const tops = cands.filter((el) => !cands.some((o) => o !== el && o.contains(el)));
+  let first = null, best = tops[0];
+  for (const el of tops) if ((first = markTerms(el, terms))) { best = el; break; }
+  if (!first) for (const el of tops) {
+    const m = el.closest(".msg");
+    if (m && (first = markTerms(m, terms))) { best = m; break; }
+  }
+  const box = best.closest(".msg") || best;
+  if (first) {
+    for (let d = first.parentElement; d && d !== $("stream"); d = d.parentElement) if (d.tagName === "DETAILS") d.open = true;
+    first.classList.add("cur");
+  }
+  const target = first || best;
+  target.scrollIntoView({ block: "center", behavior: "instant" });
+  box.classList.remove("srch-flash"); void box.offsetWidth; box.classList.add("srch-flash");
+}
+/** Öğenin içindeki metinde terimleri <mark> ile sarar; ilk işareti döndürür */
+function markTerms(root, terms) {
+  if (!terms.length) return null;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) if (t.nodeValue.trim()) nodes.push(t);
+  let first = null;
+  for (const t of nodes) {
+    const text = t.nodeValue, f = srFold(text);
+    const ranges = [];
+    for (const term of terms) for (let i = f.indexOf(term); i >= 0; i = f.indexOf(term, i + term.length)) ranges.push([i, i + term.length]);
+    if (!ranges.length) continue;
+    ranges.sort((a, b) => a[0] - b[0]);
+    const frag = document.createDocumentFragment();
+    let at = 0;
+    for (const [a, b] of ranges) {
+      if (a < at) continue;
+      frag.append(text.slice(at, a));
+      const m = document.createElement("mark");
+      m.className = "srch";
+      m.textContent = text.slice(a, b);
+      frag.append(m);
+      if (!first) first = m;
+      at = b;
+    }
+    frag.append(text.slice(at));
+    t.replaceWith(frag);
+  }
+  return first;
+}
+
+$("srchQ").addEventListener("input", scheduleSearch);
+$("srchKind").addEventListener("change", () => { if ($("srchQ").value.trim()) runSearch(); });
+$("srchScope").addEventListener("change", () => {
+  try { localStorage.setItem("kurmay-arama-kapsam", srchScope()); } catch {}
+  if ($("srchQ").value.trim()) runSearch();
+});
+$("srchQ").addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") { ev.preventDefault(); if ($("srchQ").value) clearSearch(); else $("srchQ").blur(); return; }
+  if (!srHits.length) { if (ev.key === "Enter") { ev.preventDefault(); runSearch(); } return; }
+  const here = srLast && srLast.here;
+  if (ev.key === "ArrowDown" || (ev.key === "Enter" && !ev.shiftKey && here)) { ev.preventDefault(); selectHit(srActive + 1, here); }
+  else if (ev.key === "ArrowUp" || (ev.key === "Enter" && ev.shiftKey && here)) { ev.preventDefault(); selectHit(srActive - 1, here); }
+  else if (ev.key === "Enter") { ev.preventDefault(); openHit(srHits[srActive < 0 ? 0 : srActive]); }
+});
+$("srchPane").addEventListener("click", (ev) => {
+  if (ev.target.closest("#srClear")) return clearSearch();
+  if (ev.target.closest("#srPrev")) return selectHit(srActive - 1, true);
+  if (ev.target.closest("#srNext")) return selectHit(srActive + 1, true);
+  const hit = ev.target.closest(".sr-hit");
+  if (hit) { selectHit(Number(hit.dataset.i), true); return; }
+  const op = ev.target.closest("[data-open]");
+  if (op) { if (op.dataset.open !== viewSessionId) openSession(op.dataset.open); return; }
+  const more = ev.target.closest("[data-here]");
+  if (more) {
+    $("srchScope").value = "here";
+    try { localStorage.setItem("kurmay-arama-kapsam", "here"); } catch {}
+    if (more.dataset.here !== viewSessionId) openSession(more.dataset.here); else runSearch();
+  }
+});
+// Ctrl+K (Mac'te ⌘K): arama kutusuna geç — sol sütun kapalıysa açılır
+document.addEventListener("keydown", (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === "k" || ev.key === "K" || ev.code === "KeyK")) {
+    ev.preventDefault();
+    if ($("sidebar").classList.contains("collapsed")) $("btnSidebar").click();
+    $("srchQ").focus();
+    $("srchQ").select();
+  }
+});
+
 // İzlenen oturum boştaysa (görev tutmuyorsa) görev kartı açılır, koşuyorsa gizlenir
 function syncTaskCard() {
   if (viewBusy) $("taskCard").classList.add("hidden");
@@ -2428,6 +2702,7 @@ function openSession(id) {
   replaying = false;
   $("loadInfo").classList.add("hidden");
   viewSessionId = id || "";
+  evIndex = 0;
   try { history.replaceState(null, "", viewSessionId ? "#" + viewSessionId : location.pathname); } catch {}
   taskDir = ""; // görevle seçilen dizin o görünüme özel
   closeDirMenu();
@@ -2451,11 +2726,13 @@ function openSession(id) {
   showLoadInfo();
   es = new EventSource("/events?session=" + encodeURIComponent(viewSessionId));
   // Yeniden bağlanınca sunucu geçmişi baştan gönderir — çift kayıt olmasın
-  es.onopen = () => { replaying = true; replayStatus = null; loadDone = 0; resetView(); showLoadInfo(); };
+  es.onopen = () => { replaying = true; replayStatus = null; loadDone = 0; evIndex = 0; resetView(); showLoadInfo(); };
   // Sunucu geçmişten önce kaç olay geleceğini söyler (eski sunucu söylemezse sayı yazılmaz)
   es.addEventListener("history", (m) => { loadTotal = JSON.parse(m.data).count || 0; showLoadInfo(); });
   es.onmessage = (m) => {
+    curEi = evIndex++;
     handle(JSON.parse(m.data));
+    tagNewRows();
     if (replaying && ++loadDone % 250 === 0) showLoadInfo();
   };
   es.addEventListener("ready", (m) => {
@@ -2467,6 +2744,9 @@ function openSession(id) {
     viewBusy = r.busy;
     // Geçmişten açılan onay kartı: gönder düğmesi güncel ayara göre
     if (r.busy && !$("approval").classList.contains("hidden")) refreshPlanSend();
+    // Arama sonucundan gelindiyse o satıra atla — bu işleyicinin sonundaki "en alta kaydır"dan sonra
+    if (pendingJump) { const j = pendingJump; pendingJump = null; setTimeout(() => jumpToEvent(j.ei, j.terms), 0); }
+    if (srchScope() === "here" && $("srchQ").value.trim()) runSearch();
     if (!r.busy) {
       // Yarıda kalmış koşu (servis kapanmıştı): çalışıyor görünmesin
       stopPipelineTicker();

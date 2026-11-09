@@ -7,6 +7,7 @@ import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
+import { SEARCH_KINDS, type SearchKind } from "./search.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -149,6 +150,8 @@ export interface UiServerOptions {
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
   setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
   setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
+  /** Oturum arama (GET /search): session verilirse yalnızca o oturumda */
+  search?: (q: string, session?: string, kind?: SearchKind) => unknown;
   /** Planın gönderileceği uzak ajan (planWebhook); ayarlı değilse undefined */
   getPlanTarget?: () => { url: string; apiKey?: string } | undefined;
   /** Uzak ajan adresini/anahtarını kaydeder (boş adres = kaldır): çalışan sürece uygular, config.json'a yazar */
@@ -200,6 +203,8 @@ export interface UiServerOptions {
  *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
  *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
+ *   GET  /search?q=&session=&kind=  oturumlarda arama (görev, plan, mesaj, dosya, komut, Teftiş, ret, hata, güvenlik);
+ *                   session verilirse yalnızca o oturum. Sonuç oturum oturum, olay sırasıyla (panel o satıra atlar)
  *   GET  /plan-export?session=&format=md|json  oturumun son onay planını dosya olarak indirir (başka ajana vermek için)
  *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
  *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
@@ -628,6 +633,19 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         json(res, r.ok ? 200 : 400, r);
       });
       return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/search") {
+      const q = (url.searchParams.get("q") ?? "").trim();
+      if (q.length < 2) return json(res, 400, { ok: false, error: "en az 2 karakter yaz" });
+      if (q.length > 200) return json(res, 400, { ok: false, error: "arama metni çok uzun (en fazla 200 karakter)" });
+      const k = url.searchParams.get("kind") ?? "";
+      const kind = (SEARCH_KINDS as readonly string[]).includes(k) ? (k as SearchKind) : undefined;
+      const session = url.searchParams.get("session") || undefined;
+      if (!options.search) return json(res, 409, { ok: false, error: "arama kapalı" });
+      const t0 = Date.now();
+      const r = options.search(q, session, kind) as Record<string, unknown>;
+      return json(res, 200, { ok: true, ...r, ms: Date.now() - t0 });
     }
 
     // Onay planını dışarı ver: indirme (başka ajana elle) ya da uzak ajana REST isteği

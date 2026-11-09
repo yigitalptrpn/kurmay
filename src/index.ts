@@ -16,6 +16,7 @@ import { RuntimeRegistry, type SessionRuntime } from "./runtime.js";
 import { startUiServer, type ToggleKind, type UiServer } from "./server.js";
 import { SecurityReportStore, watchSecurityReports } from "./securityReport.js";
 import { SecurityAuditRunner } from "./securityAudit.js";
+import { searchSessions } from "./search.js";
 import { SessionStore, sessionRecap, type SessionEntry } from "./sessions.js";
 import { attachmentSection, saveFiles, type Attachment, type FileInput } from "./attachments.js";
 import { isFanoutNode, mainPath, type AgentDefinition, type AppConfig, type WorkflowConfig } from "./types.js";
@@ -892,6 +893,15 @@ async function main() {
       setUserPrompt,
       setPlanWebhook,
       getPlanTarget: () => (cfg.planWebhook?.url ? cfg.planWebhook : undefined),
+      search: (q, session, kind) => {
+        const list = session ? sessions.all().filter((s) => s.id === session) : sessions.all();
+        // Bellekteki oturumda panelin oynattığı geçmişin kendisi aranır (olay sırası birebir aynı)
+        const sources = list.map((s) => ({
+          id: s.id, name: s.name, updatedAt: s.updatedAt, targetDir: s.targetDir,
+          runLogs: s.runLogs ?? [], history: runtimes.peek(s.id)?.bus.history,
+        }));
+        return searchSessions(runsDir, sources, q, session ? { kind, perSession: 300 } : { kind });
+      },
       addSecurityAudit,
       getToggles,
       listSecurityReports: () => securityReports.list(),
