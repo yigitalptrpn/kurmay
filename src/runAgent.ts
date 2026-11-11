@@ -97,6 +97,40 @@ interface SessionHolder {
   contextTokens?: number;
   /** Bu ajan koşusunda bilinen bağlam penceresi — sonraki denemede liste alınamasa da kalsın */
   ctxInfo?: ContextInfo;
+  /** Bu ajan koşusunda yazılan/düzenlenen dosyalar (tam yol → kaç kez) — konuşma bırakılıp
+   *  yenisi açılırsa yeni konuşmaya "bunları zaten yaptın" diye bildirilir */
+  written?: Map<string, number>;
+  /** Yazma kapsamı dışında kaldığı için engellenen dosyalar (yazılmış sayılmaz) */
+  blockedWrites?: Set<string>;
+}
+
+/** Dosya yazan araçlar */
+const WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+/** Yeni konuşmaya bildirilecek en fazla dosya */
+const WRITTEN_NOTE_MAX = 50;
+
+/**
+ * Konuşma bırakılıp yenisi açılınca (bağlam doldu, kayıp/bozuk konuşma) yeni konuşmanın
+ * görevine eklenen not: önceki konuşmada yazılan dosyalar diskte, model bunu bilmeden
+ * baştan başlarsa aynı değişikliği ikinci kez uygular ya da üzerine yazar.
+ */
+function writtenNote(session: SessionHolder, cwd: string): { text: string; files: number } | undefined {
+  const files = [...(session.written ?? new Map<string, number>()).keys()].filter((f) => !session.blockedWrites?.has(f));
+  if (!files.length) return undefined;
+  const shown = files.slice(0, WRITTEN_NOTE_MAX).map((f) => {
+    const rel = path.relative(cwd, f);
+    return `- ${rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : f}`;
+  });
+  if (files.length > WRITTEN_NOTE_MAX) shown.push(`- … ve ${files.length - WRITTEN_NOTE_MAX} dosya daha`);
+  const text =
+    "# Not: bu görevin bir kısmı önceki konuşmada yapıldı\n" +
+    "Bu görev üzerinde çalıştığın önceki konuşma kapatıldı (bağlam doldu ya da sunucu o konuşmayı " +
+    "sürdüremedi); bu yeni bir konuşma ve o konuşmayı hatırlamıyorsun. O konuşmada şu dosyalara " +
+    "yazdın ya da onları düzenledin — değişiklikler diskte duruyor:\n" +
+    shown.join("\n") +
+    "\nÖnce bu dosyaların şimdiki halini oku; yapılmış olanı tekrarlama, üzerine yazma. Görevin " +
+    "kalanını tamamla. Çıktında yaptığın değişiklikleri sayarken bu dosyaları da say.";
+  return { text, files: files.length };
 }
 
 /** Eklenti bağlantı durumlarının ekrandaki adı */
@@ -371,7 +405,7 @@ async function compactWithRetry(
 function writeScopeHook(
   scope: string,
   cwd: string,
-  info: { agent: string; bus: EventBus; repo: boolean },
+  info: { agent: string; bus: EventBus; repo: boolean; session?: SessionHolder },
 ): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
   const root = path.resolve(scope);
   return {
@@ -388,6 +422,7 @@ function writeScopeHook(
               const full = path.resolve(cwd, target);
               const rel = path.relative(root, full);
               if (!rel.startsWith("..") && !path.isAbsolute(rel)) return { continue: true };
+              (info.session && (info.session.blockedWrites ??= new Set()))?.add(full);
               info.bus.emit({
                 type: "write_blocked",
                 agent: info.agent,
@@ -462,7 +497,7 @@ async function executeQuery(
     // Config hook'larına ek olarak yazma kapsamı kapısı (ikisi de çalışır): fanout kopyası
     // kendi mıntıkasıyla, diğer ajanlar hedef dizinle sınırlı — dışarı yazma girişimi
     // ajanı düşürmez, engellenip kullanıcıya gösterilir
-    const scope = writeScopeHook(opts.writeScope ?? cwd, cwd, { agent: agent.key, bus, repo: !!opts.writeScope });
+    const scope = writeScopeHook(opts.writeScope ?? cwd, cwd, { agent: agent.key, bus, repo: !!opts.writeScope, session });
     hooks = { ...hooks, PreToolUse: [...(hooks?.PreToolUse ?? []), ...scope.PreToolUse!] };
   }
   const result: AgentRunResult = { text: "" };
@@ -601,6 +636,13 @@ async function executeQuery(
           bus.emit({ type: "agent_text", agent: agent.key, text: block.text });
         } else if (block.type === "tool_use") {
           const detail = toolDetail(block.input);
+          if (WRITE_TOOLS.has(block.name)) {
+            const f = toolFacts(block.name, block.input).file;
+            if (f) {
+              const full = path.resolve(cwd, f);
+              (session.written ??= new Map()).set(full, (session.written.get(full) ?? 0) + 1);
+            }
+          }
           console.log(`  🔧 ${block.name}${detail ? `: ${detail}` : ""}`);
           // Detaysız araç çağrıları loglanmaz — panelde gürültü yaratıyordu
           if (detail) {
@@ -789,17 +831,23 @@ async function executeWithRetry(
   let switched = false; // bu ilerlemesiz seride konuşma zaten yenilendi — tekrar yenileme
   let attemptPrompt = prompt;
 
-  /** Konuşmayı bırakıp yenisini aç; varsa önceki görevler özeti başa konur. Özet verildi mi */
-  const freshConversation = (): boolean => {
+  /** Konuşmayı bırakıp yenisini aç; varsa önceki görevler özeti başa, bu koşuda yazılan
+   *  dosyaların notu sona konur. Dönen metin panelde deneme satırına eklenir */
+  const freshConversation = (): { note: string; recap: boolean } => {
     session.id = undefined;
     session.contextTokens = undefined;
     origin = undefined;
     before = 0;
     switched = true;
     const recap = base ? opts.recap?.() : undefined;
-    taskText = recap ? `${recap}\n\n${prompt}` : prompt;
+    const written = writtenNote(session, cwd);
+    taskText = [recap, prompt, written?.text].filter(Boolean).join("\n\n");
     attemptPrompt = taskText;
-    return !!recap;
+    return {
+      recap: !!recap,
+      note: (recap ? ", önceki görevlerin özeti verildi" : "") +
+        (written ? `, önceki konuşmada yazdığı ${written.files} dosya kendisine bildirildi` : ""),
+    };
   };
 
   while (true) {
@@ -835,8 +883,7 @@ async function executeWithRetry(
         // (sınır sayacı da sıfırlanır: yeni konuşmanın kendi hakkı olsun)
         permanentRun = 0;
         suspect = 0;
-        const recap = freshConversation();
-        note = "konuşma sunucuya gönderilemiyor — yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
+        note = "konuşma sunucuya gönderilemiyor — yeni konuşmayla başlanacak" + freshConversation().note;
         decided = true;
       } else if (info.kind === "permanent" && s.permanentMaxAttempts > 0 && permanentRun >= s.permanentMaxAttempts) {
         throw new Error(`${error} — ${info.reason}: üst üste ${permanentRun} denemede düzelmedi, ayarları kontrol et`);
@@ -851,9 +898,9 @@ async function executeWithRetry(
           attemptPrompt = taskText;
           note = "önceki konuşmadan sürdürülecek";
         } else {
-          const recap = freshConversation();
-          note = "yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
-          if (lostBase) await reportLostSession(agent, base!, cwd, bus, recap);
+          const extra = freshConversation();
+          note = "yeni konuşmayla başlanacak" + extra.note;
+          if (lostBase) await reportLostSession(agent, base!, cwd, bus, extra.recap);
         }
         decided = true;
       } else if (info.kind === "context_full") {
@@ -876,8 +923,7 @@ async function executeWithRetry(
           });
         }
         if (!compacted) {
-          const recap = freshConversation();
-          note = "bağlam doldu — yeni konuşmayla başlanacak" + (recap ? ", önceki görevlerin özeti verildi" : "");
+          note = "bağlam doldu — yeni konuşmayla başlanacak" + freshConversation().note;
           decided = true;
         }
       }
