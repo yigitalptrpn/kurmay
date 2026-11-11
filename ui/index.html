@@ -343,7 +343,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .kv > span:first-child { color:var(--muted); flex:none; }
 .kv b { font:600 12.5px var(--font-mono); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .kv.col { flex-direction:column; align-items:stretch; gap:4px; }
-.rail :is(#modelSel, #effortSel) { font-size:12.5px; padding:4px 10px; min-height:32px; max-width:190px; }
+.rail :is(#modelSel, #effortSel, #fwdSel) { font-size:12.5px; padding:4px 10px; min-height:32px; max-width:190px; }
 .rail .dir-wrap { display:flex; align-items:center; gap:6px; min-width:0; }
 .rail .dir { font:12.5px var(--font-mono); color:var(--text); cursor:pointer; border-bottom:1px dashed var(--border); overflow-wrap:anywhere; }
 .rail .dir:hover { color:var(--blue); border-bottom-color:var(--blue); }
@@ -822,6 +822,8 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <h4>Oturum</h4>
     <div class="kv"><span>Model</span><select id="modelSel" title="Model — sıradaki görevde kullanılır"></select></div>
     <div class="kv"><span>Akıl yürütme</span><select id="effortSel" title="Akıl yürütme derinliği — sıradaki görevde kullanılır"></select></div>
+    <div class="kv"><span>Plan onayı</span><select id="fwdSel" title="Analist'in planı onay kartında beklesin mi, onaysız Saha Timi'ne mi geçsin">
+      <option value="0">onay bekle</option><option value="1">onaysız ilet</option></select></div>
     <div class="kv col"><span id="dirLabel">Hedef dizin</span>
       <span class="dir-wrap">
         <span class="dir" id="dir" title="Değiştirmek için tıkla"></span>
@@ -1568,11 +1570,19 @@ function bubbleTool(b, e) {
 
 // ── Sağ sütun: koşu özeti ─────────────────────────────────────────
 let changedFiles = new Map(); // yol → {added, removed, write}
+// Yazma kapsamı dışında kaldığı için engellenen dosyalar (değişen dosyalar listesine girmesin)
+let blockedFiles = new Set();
+function fileKey(p) {
+  const s = String(p || "").replace(/\\/g, "/");
+  const abs = /^([a-z]:)?\//i.test(s) ? s : runDir.replace(/\\/g, "/").replace(/\/+$/, "") + "/" + s.replace(/^\.\//, "");
+  return abs.toLowerCase();
+}
 let runTokens = { in: 0, out: 0 };
 let runStart = 0, runEnd = 0, runDir = "";
 const FILE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
 function trackFile(e) {
   if (!FILE_TOOLS.has(e.tool) || !e.file) return;
+  if (blockedFiles.has(fileKey(e.file))) return;
   const f = changedFiles.get(e.file) || { added: 0, removed: 0, write: false };
   f.added += e.added || 0;
   f.removed += e.removed || 0;
@@ -1623,6 +1633,7 @@ function renderStats() {
 setInterval(() => { if (runStart && !runEnd) renderStats(); }, 1000);
 function resetRail() {
   changedFiles = new Map();
+  blockedFiles = new Set();
   runTokens = { in: 0, out: 0 };
   runStart = 0; runEnd = 0; runDir = "";
   renderFiles();
@@ -1827,6 +1838,19 @@ function handleEvent(e) {
           ? `✂ Yanıt sınırına takıldı (${sinir}) ve sürdürülemedi — yanıt yarım kaldı. `
           : `✂ Yanıt ${kac}sınıra takılıp kesildi (${sinir}); kaldığı yerden devam ettirildi. `) +
         `Sık oluyorsa <b>Ayarlar → Bağlam penceresi → yanıta ayrılan pay</b>ı artır.`, "warn");
+      break;
+    }
+    case "write_blocked": {
+      // Ajan yazma kapsamı dışındaki dosyaya yazmak istedi: araç engellendi, ajan sürüyor
+      const key = fileKey(e.file);
+      blockedFiles.add(key);
+      for (const p of [...changedFiles.keys()]) if (fileKey(p) === key) changedFiles.delete(p);
+      renderFiles();
+      const yer = e.repo ? "mıntıkasının" : "hedef dizinin";
+      bubbleNote(bubbleOf(e.agent, e.ts),
+        `🚫 ${yer} dışına yazmak istedi — engellendi: <code>${esc(e.file)}</code>` +
+        (e.tool ? ` (${esc(TOOL_NAMES[e.tool] || e.tool)})` : "") +
+        `. Ajan durmadı; oraya yazamayacağı kendisine söylendi. ${e.repo ? "Mıntıka" : "Hedef dizin"}: <code>${esc(e.scope)}</code>`, "err");
       break;
     }
     case "session_lost": {
@@ -3008,6 +3032,7 @@ function applyViewModel() {
   currentModel = viewModel();
   fillModelSelect(modelList, modelListError);
   fillEffortSelect();
+  fillFwdSelect();
   applyViewDir(); // hedef dizin de oturuma özel
   updateStartGate();
 }
@@ -3131,6 +3156,46 @@ $("effortSel").addEventListener("change", async () => {
   } catch {
     alert("akıl yürütme derinliği kaydedilemedi");
     $("effortSel").value = currentEffort;
+  }
+});
+
+// Planı onaysız iletme: model gibi oturuma özel (taslakta yeni oturumların varsayılanı =
+// Ayarlar'daki "Planı Saha Timi'ne otomatik ilet"). Boş/okunamayan planda onay yine sorulur.
+let globalAutoForward = false;
+let flowSkipped = []; // akış çiplerinde kapalı (atlanacak) adımların adları
+function viewAutoForward() {
+  const s = sessionsById[viewSessionId];
+  return s && typeof s.autoForward === "boolean" ? s.autoForward : globalAutoForward;
+}
+function fillFwdSelect() {
+  const sel = $("fwdSel");
+  sel.value = viewAutoForward() ? "1" : "0";
+  sel.title = (viewSessionId
+    ? "Bu oturumda Analist'in planı onay beklesin mi, onaysız Saha Timi'ne mi geçsin — oturumdaki sıradaki görevde geçerli (diğer oturumlar etkilenmez)"
+    : "Yeni oturumlarda Analist'in planı onay beklesin mi, onaysız Saha Timi'ne mi geçsin (Ayarlar'daki ayarla aynı)") +
+    ". Plan boş ya da okunamazsa onay yine sorulur.";
+  renderFlowNote();
+}
+$("fwdSel").addEventListener("change", async () => {
+  const enabled = $("fwdSel").value === "1";
+  const s = sessionsById[viewSessionId];
+  try {
+    const res = await fetch("/auto-forward", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled, session: viewSessionId || undefined }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.error || "kaydedilemedi");
+    if (s) s.autoForward = enabled;
+    else globalAutoForward = enabled;
+    fillFwdSelect();
+    addLog(new Date().toISOString(), (s ? "bu oturumda " : "yeni oturumlarda ") +
+      (enabled ? "Analist'in planı onay beklemeden Saha Timi'ne iletilecek" : "Analist'in planı onay bekleyecek") +
+      (s ? " — oturumdaki sıradaki görevde geçerli" : ""), "ok");
+  } catch (e) {
+    alert("plan onayı ayarı kaydedilemedi: " + (e.message || e));
+    fillFwdSelect();
   }
 });
 loadModels();
@@ -3290,13 +3355,20 @@ async function loadFlow() {
     return `<button class="fchip${n.disabled ? " off" : ""}${n.disabled && !fan ? " skip" : ""}" data-node="${esc(n.key)}" ` +
       `data-off="${n.disabled ? 1 : 0}" title="${esc(n.key)} — ${ipucu}"><span class="nm">${esc(flowName(n))}</span><small>${durum}</small></button>`;
   });
-  const atlanan = wf.nodes.filter((n) => n.disabled && n.type !== "fanout").map(flowName);
+  flowSkipped = wf.nodes.filter((n) => n.disabled && n.type !== "fanout").map(flowName);
+  globalAutoForward = !!wf.autoForwardPlan;
+  el.innerHTML = `<span class="lbl">Akış:</span>` + chips.join("<span>→</span>") + `<span id="flowNote"></span>`;
+  fillFwdSelect();
+}
+// Akış çiplerinin yanındaki not: atlanan adımlar + planın onaysız iletilmesi (oturuma göre)
+function renderFlowNote() {
+  const el = $("flowNote");
+  if (!el) return;
   const notlar = [];
-  if (atlanan.length) notlar.push(`${atlanan.map(esc).join(", ")} atlanacak`);
-  // Planı otomatik iletme (Ayarlar): kullanıcı onay kartını beklemesin
-  if (wf.autoForwardPlan) notlar.push(`<span title="Ayarlar'dan kapatılabilir">plan onay beklemeden iletilecek</span>`);
-  el.innerHTML = `<span class="lbl">Akış:</span>` + chips.join("<span>→</span>") +
-    (notlar.length ? `<span style="margin-left:6px">— ${notlar.join(" · ")}</span>` : "");
+  if (flowSkipped.length) notlar.push(`${flowSkipped.map(esc).join(", ")} atlanacak`);
+  if (viewAutoForward()) notlar.push(`<span title="Sağdaki Oturum kutusunda “Plan onayı”ndan değiştirilebilir">plan onay beklemeden iletilecek</span>`);
+  el.style.marginLeft = notlar.length ? "6px" : "";
+  el.innerHTML = notlar.length ? `— ${notlar.join(" · ")}` : "";
 }
 $("flowChips").addEventListener("click", async (ev) => {
   const b = ev.target.closest(".fchip");

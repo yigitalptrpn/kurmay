@@ -104,6 +104,16 @@ export type OrchestratorEvent =
       exhausted?: boolean;
     }
   | {
+      /** Ajan yazma kapsamı dışındaki bir dosyaya yazmak istedi, araç engellendi
+       *  (ajan durmaz, gerekçe modele döner). repo: kapsam fanout mıntıkası; değilse hedef dizin */
+      type: "write_blocked";
+      agent: string;
+      tool: string;
+      file: string;
+      scope: string;
+      repo?: boolean;
+    }
+  | {
       /** Sürdürülecek konuşmanın kaydı bulunamadı — ajan yeni konuşmayla başlıyor.
        *  foundDir: kayıt başka bir proje klasöründe bulunduysa oradaki çalışma dizini */
       type: "session_lost";

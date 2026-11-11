@@ -148,7 +148,7 @@ export interface UiServerOptions {
   /** Düğümü devre dışı bırakır/açar: çalışan sürece uygular, config.json'a yazar */
   setNodeDisabled?: (key: string, disabled: boolean) => { ok: boolean; error?: string };
   /** Planı otomatik iletmeyi açar/kapatır: çalışan sürece uygular, config.json'a yazar */
-  setAutoForward?: (enabled: boolean) => { ok: boolean; error?: string; enabled?: boolean };
+  setAutoForward?: (enabled: boolean, session?: string) => { ok: boolean; error?: string; enabled?: boolean };
   setUserPrompt?: (text: string) => { ok: boolean; error?: string; text?: string };
   /** Oturum arama (GET /search): session verilirse yalnızca o oturumda */
   search?: (q: string, session?: string, kind?: SearchKind) => unknown;
@@ -200,7 +200,7 @@ export interface UiServerOptions {
  *   POST /effort      { effort: string, session? } — oturumun ya da genel akıl yürütme derinliği
  *   GET  /workflow      { entry, autoForwardPlan, nodes[] } — ana yol sırasıyla düğümler ve açık/kapalı durumları
  *   POST /node-disabled { key: string, disabled: boolean } — düğümü kapatır/açar (canlı + config.json)
- *   POST /auto-forward  { enabled: boolean } — Analist planı onaysız Saha Timi'ne geçsin mi (canlı + config.json)
+ *   POST /auto-forward  { enabled: boolean, session? } — Analist planı onaysız Saha Timi'ne geçsin mi (session: yalnızca o oturum; yoksa genel, canlı + config.json)
  *   POST /user-prompt   { text: string } — kullanıcı talimatı, her ajanın prompt'una eklenir (canlı + config.json; boş = sil)
  *   POST /max-parallel  { value: number } — aynı anda koşabilecek görev sınırı, 1 veya daha büyük (canlı + config.json)
  *   GET  /search?q=&session=&kind=  oturumlarda arama (görev, plan, mesaj, dosya, komut, Teftiş, ret, hata, güvenlik);
@@ -617,7 +617,8 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.method === "POST" && req.url === "/auto-forward") {
       readJson(req, (parsed) => {
         if (!parsed || typeof parsed.enabled !== "boolean") return json(res, 400, { ok: false, error: "geçersiz istek" });
-        const r = options.setAutoForward ? options.setAutoForward(parsed.enabled) : { ok: false, error: "kapalı" };
+        const session = typeof parsed.session === "string" && parsed.session ? parsed.session : undefined;
+        const r = options.setAutoForward ? options.setAutoForward(parsed.enabled, session) : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });
       return;
