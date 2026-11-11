@@ -245,6 +245,8 @@ async function main() {
         runs: e.runLogs?.length ?? 0,
         model: e.model,
         effort: e.effort,
+        // Planı onaysız iletme (oturumda yoksa genel ayar)
+        autoForward: e.autoForward ?? !!cfg.workflow.autoForwardPlan,
         // Oturumun hedef dizini (yoksa genel dizin geçerli) ve diskte var mı — panel uyarısı için
         targetDir: e.targetDir,
         dirExists: dirOk(e.targetDir ?? cwd),
@@ -257,13 +259,18 @@ async function main() {
   const launch = (task: string, entry: SessionEntry | undefined, runAt?: number, files: FileInput[] = [], dir?: string) => {
     // Yeni oturum o anki genel model/derinlik/dizinle (ya da görevle seçilen dizinle) açılır;
     // sonra panelden yalnızca kendisi için değişebilir
-    const e = entry ?? sessions.create(task, cfg.model, cfg.effort, dir ?? cwd);
+    const e = entry ?? sessions.create(task, cfg.model, cfg.effort, dir ?? cwd, !!cfg.workflow.autoForwardPlan);
     // Eski kayıt (dizinsiz): o anki genel dizine sabitlenir — konuşması da o dizinde
     if (!e.targetDir) sessions.setTargetDir(e.id, cwd, true);
     const runDir = e.targetDir ?? cwd;
     const runCfg = snapshotConfig(cfg);
     if (e.model) runCfg.model = e.model;
     if (e.effort) runCfg.effort = e.effort;
+    // Oturuma özel planı onaysız iletme genel ayarı ezer (koşunun kendi workflow kopyasında)
+    if (e.autoForward !== undefined) {
+      if (e.autoForward) runCfg.workflow.autoForwardPlan = true;
+      else delete runCfg.workflow.autoForwardPlan;
+    }
     const runtime = runtimes.get(e.id, e.runLogs);
     const run = executeRun({
       task,
@@ -315,8 +322,14 @@ async function main() {
     }
   };
 
-  /** Planı otomatik iletme (Ayarlar): config.json'a yazar, sıradaki görev görür */
-  const setAutoForward = (enabled: boolean): { ok: boolean; error?: string; enabled?: boolean } => {
+  /** Planı otomatik iletme: session verilirse yalnızca o oturum (config.json'a dokunmaz),
+   *  yoksa genel ayar (Ayarlar) — config.json'a yazar, yeni oturumlar bunu alır */
+  const setAutoForward = (enabled: boolean, sessionId?: string): { ok: boolean; error?: string; enabled?: boolean } => {
+    if (sessionId) {
+      if (!sessions.setAutoForward(sessionId, enabled)) return { ok: false, error: "oturum bulunamadı" };
+      runtimes.notify();
+      return { ok: true, enabled };
+    }
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     try {
       const parsed = JSON.parse(prev) as AppConfig;

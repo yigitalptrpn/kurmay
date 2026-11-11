@@ -29,6 +29,10 @@ export interface SessionEntry {
   /** Oturumun hedef dizini — model gibi: açılırken genel dizinden alınır, sonra panelden
    *  yalnızca bu oturum için değişir. Eski kayıtlarda yoksa ilk koşuda o anki genel dizine sabitlenir. */
   targetDir?: string;
+  /** Analist planı bu oturumda onay beklemeden Saha Timi'ne geçer mi — model gibi:
+   *  açılırken genel ayardan (Ayarlar → Planı otomatik ilet) alınır, sonra panelden
+   *  yalnızca bu oturum için değişir. Eski kayıtlarda yoksa genel ayar geçerli. */
+  autoForward?: boolean;
   /** Entry ajanın (Analist) konuşmasının bilinen boyutu, token — panelde doluluk,
    *  eşiği geçmişse sıradaki görevden önce özetlenir */
   contextTokens?: number;
@@ -77,12 +81,13 @@ export class SessionStore {
   }
 
   /** İlk görevle yeni bir oturum açar (henüz SDK oturumu yok) */
-  create(task: string, model?: string, effort?: EffortSetting, targetDir?: string): SessionEntry {
+  create(task: string, model?: string, effort?: EffortSetting, targetDir?: string, autoForward?: boolean): SessionEntry {
     const now = new Date().toISOString();
     const entry: SessionEntry = { id: randomUUID(), name: nameFromTask(task), createdAt: now, updatedAt: now, runLogs: [] };
     if (model) entry.model = model;
     if (effort) entry.effort = effort;
     if (targetDir) entry.targetDir = targetDir;
+    if (autoForward !== undefined) entry.autoForward = autoForward;
     this.list.push(entry);
     this.persist();
     return entry;
@@ -140,6 +145,15 @@ export class SessionStore {
     if (!s) return false;
     if (effort) s.effort = effort;
     else delete s.effort;
+    this.persist();
+    return true;
+  }
+
+  /** Oturumda planın onaysız iletilmesini açar/kapatır; sıradaki görevde geçerli */
+  setAutoForward(id: string, enabled: boolean): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    s.autoForward = enabled;
     this.persist();
     return true;
   }

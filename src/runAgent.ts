@@ -179,7 +179,8 @@ function mergeMetrics(a: AgentMetrics | undefined, b: AgentMetrics | undefined):
 /** runAgent'ın isteğe bağlı ayarları */
 export interface RunAgentOptions {
   /** Verilirse Write/Edit/MultiEdit/NotebookEdit bu dizin DIŞINA engellenir
-   *  (fanout kopyası kendi reposunda kalsın — kardeş kopyalar aynı anda çalışıyor) */
+   *  (fanout kopyası kendi reposunda kalsın — kardeş kopyalar aynı anda çalışıyor).
+   *  Verilmezse kapsam ajanın çalışma dizini (hedef dizin) */
   writeScope?: string;
   /** Sürdürülen konuşmanın (resume) bilinen boyutu, token — eşiği geçmişse ajan
    *  çalışmadan önce konuşma özetlenir */
@@ -363,9 +364,15 @@ async function compactWithRetry(
 
 /**
  * Dosya yazan araçları bir dizinle sınırlayan PreToolUse hook'u. Yol cwd'ye göre
- * çözülür; kapsam dışıysa araç engellenir ve gerekçe modele döner.
+ * çözülür; kapsam dışıysa araç engellenir, gerekçe modele döner (ajan durmaz, başka
+ * yoldan devam eder) ve kullanıcıya `write_blocked` olayıyla gösterilir.
+ * Her ajan en azından hedef dizinle sınırlıdır; fanout kopyası kendi mıntıkasıyla.
  */
-function writeScopeHook(scope: string, cwd: string): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+function writeScopeHook(
+  scope: string,
+  cwd: string,
+  info: { agent: string; bus: EventBus; repo: boolean },
+): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
   const root = path.resolve(scope);
   return {
     PreToolUse: [
@@ -373,17 +380,36 @@ function writeScopeHook(scope: string, cwd: string): Partial<Record<HookEvent, H
         matcher: "Write|Edit|MultiEdit|NotebookEdit",
         hooks: [
           async (input) => {
-            const ti = ((input as { tool_input?: Record<string, unknown> }).tool_input ?? {});
-            const target = ti.file_path ?? ti.notebook_path;
-            if (typeof target !== "string") return { continue: true };
-            const rel = path.relative(root, path.resolve(cwd, target));
-            if (!rel.startsWith("..") && !path.isAbsolute(rel)) return { continue: true };
-            return {
-              decision: "block",
-              reason:
-                `Bu kopyanın yazma kapsamı yalnızca "${root}". "${target}" kapsam dışı — ` +
-                `o repo başka bir geliştiriciye atandı, dokunma. Gerekiyorsa deviations'a yaz.`,
-            };
+            try {
+              const i = input as { tool_name?: string; tool_input?: Record<string, unknown> };
+              const ti = i.tool_input ?? {};
+              const target = ti.file_path ?? ti.notebook_path;
+              if (typeof target !== "string" || !target) return { continue: true };
+              const full = path.resolve(cwd, target);
+              const rel = path.relative(root, full);
+              if (!rel.startsWith("..") && !path.isAbsolute(rel)) return { continue: true };
+              info.bus.emit({
+                type: "write_blocked",
+                agent: info.agent,
+                tool: i.tool_name ?? "",
+                file: full,
+                scope: root,
+                repo: info.repo,
+              });
+              console.log(`\n🚫 ${info.agent}: ${full} ${info.repo ? "mıntıkası" : "hedef dizin"} dışında — yazma engellendi`);
+              return {
+                decision: "block",
+                reason: info.repo
+                  ? `Bu kopyanın yazma kapsamı yalnızca "${root}". "${target}" kapsam dışı — ` +
+                    `o repo başka bir geliştiriciye atandı, dokunma. Gerekiyorsa deviations'a yaz.`
+                  : `Yazma kapsamı yalnızca hedef dizin "${root}". "${target}" bu dizinin dışında — ` +
+                    `oraya yazamazsın. Değişikliği hedef dizin içinde yap; gerekmiyorsa bu adımı atla ` +
+                    `ve gerekçesini çıktında belirt.`,
+              };
+            } catch {
+              // Kapının kendi hatası ajanı düşürmesin
+              return { continue: true };
+            }
           },
         ],
       },
@@ -432,9 +458,11 @@ async function executeQuery(
   const env = agentEnv(cfg, ctxInfo);
   const effort = agent.config.effort ?? cfg.effort;
   let hooks = buildHooks(agent.config.hooks, cwd);
-  if (opts.writeScope) {
-    // Config hook'larına ek olarak yazma kapsamı kapısı (ikisi de çalışır)
-    const scope = writeScopeHook(opts.writeScope, cwd);
+  {
+    // Config hook'larına ek olarak yazma kapsamı kapısı (ikisi de çalışır): fanout kopyası
+    // kendi mıntıkasıyla, diğer ajanlar hedef dizinle sınırlı — dışarı yazma girişimi
+    // ajanı düşürmez, engellenip kullanıcıya gösterilir
+    const scope = writeScopeHook(opts.writeScope ?? cwd, cwd, { agent: agent.key, bus, repo: !!opts.writeScope });
     hooks = { ...hooks, PreToolUse: [...(hooks?.PreToolUse ?? []), ...scope.PreToolUse!] };
   }
   const result: AgentRunResult = { text: "" };
