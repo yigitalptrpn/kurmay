@@ -273,10 +273,15 @@ async function compactSession(
   cwd: string,
   cfg: ProviderConfig,
   abortController: AbortController,
+  knownInfo?: ContextInfo,
 ): Promise<CompactResult> {
+  // Ajanın kendi istekleriyle AYNI model, pencere ve akıl yürütme ayarı — özetleme de
+  // aynı model sunucusuna gidiyor. Eskiden effort/thinking verilmiyordu: akıl yürütme
+  // "kapalı" iken özetleme isteği yine thinking:adaptive ile gidiyordu (sahte API ile ölçüldü)
   const model = agent.config.model ?? cfg.model;
-  const info = contextInfo(model, withLiveResilience(cfg));
+  const info = contextInfo(model, withLiveResilience(cfg)) ?? knownInfo;
   const env = agentEnv(cfg, info);
+  const effort = agent.config.effort ?? cfg.effort;
   const ac = new AbortController();
   const relay = () => ac.abort();
   abortController.signal.addEventListener("abort", relay, { once: true });
@@ -300,6 +305,9 @@ async function compactSession(
         strictMcpConfig: true,
         ...(env ? { env } : {}),
         ...(model ? { model } : {}),
+        ...(effort === "off"
+          ? { thinking: { type: "disabled" as const } }
+          : effort ? { effort } : {}),
       },
     });
     for await (const m of q) {
@@ -357,14 +365,15 @@ async function compactWithRetry(
   abortController: AbortController,
   reason: "esik" | "dolu",
   tokens: number | undefined,
+  knownInfo?: ContextInfo,
 ): Promise<CompactResult> {
-  const info = contextInfo(agent.config.model ?? cfg.model, withLiveResilience(cfg));
+  const info = contextInfo(agent.config.model ?? cfg.model, withLiveResilience(cfg)) ?? knownInfo;
   console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : "bağlam doldu"})…`);
   bus.emit({ type: "context_compacting", agent: agent.key, tokens: tokens ?? 0, limit: info?.limit, reason });
   let step = 0;
   let suspect = 0;
   for (let attempt = 1; ; attempt++) {
-    const r = await compactSession(agent, sessionId, cwd, cfg, abortController);
+    const r = await compactSession(agent, sessionId, cwd, cfg, abortController, info);
     const f = r.failure;
     const s = retrySettings(cfg.retry);
     const giveUp =
@@ -914,7 +923,7 @@ async function executeWithRetry(
         }
         let compacted = false;
         if (contextFull === 1) {
-          const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "dolu", session.contextTokens);
+          const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "dolu", session.contextTokens, session.ctxInfo);
           compacted = r.ok;
           if (r.ok) session.contextTokens = r.post;
           bus.emit({
