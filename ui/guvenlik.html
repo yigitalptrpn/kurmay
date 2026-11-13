@@ -145,6 +145,20 @@ ul.pos { list-style:none; margin:0; padding:0; }
 .clean { display:flex; align-items:center; gap:14px; padding:18px; border-radius:12px; background:rgba(47,191,113,.07); border:1px solid rgba(47,191,113,.28); color:#cfe9da; }
 .clean svg { color:var(--good); width:28px; height:28px; }
 .raw { white-space:pre-wrap; font:13px/1.6 var(--mono); color:#cfd8e8; background:#060a13; border:1px solid var(--line); border-radius:10px; padding:14px; }
+/* E-posta penceresi: önizleme + kopyala / taslak indir */
+.mdlg { width:min(780px, calc(100vw - 24px)); max-height:calc(100vh - 24px); padding:0; border:1px solid var(--line2); border-radius:16px;
+  background:var(--panel); color:var(--text); box-shadow:0 24px 60px rgba(0,0,0,.6); }
+.mdlg::backdrop { background:rgba(2,6,23,.72); }
+.mdlg-in { display:flex; flex-direction:column; max-height:calc(100vh - 24px); }
+.mdlg-bas { display:flex; align-items:flex-start; gap:12px; padding:16px 18px 12px; }
+.mdlg-bas .konu { font-weight:600; font-size:14.5px; line-height:1.4; overflow-wrap:anywhere; }
+.mdlg-bas .sp { flex:1; }
+.mdlg iframe { display:block; width:100%; height:min(60vh, 680px); border:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:#eef2f7; }
+.mdlg-alt { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 18px 6px; }
+.mdlg-alt .sp { flex:1; }
+.mdlg .durum { font-size:13px; color:var(--good); }
+.mdlg .durum.hata { color:#ff9ea1; }
+.mdlg .ipucu { padding:0 18px 16px; font-size:12.5px; color:var(--muted); line-height:1.5; }
 .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--line2); padding:9px 16px; border-radius:10px; font-size:13px; display:none; }
 .toast.show { display:block; }
 
@@ -253,6 +267,25 @@ ol.steps { list-style:none; margin:0; padding:0; }
   <main id="main"></main>
 </div>
 <div class="toast" id="toast"></div>
+<dialog class="mdlg" id="mailDlg" aria-label="E-posta">
+  <div class="mdlg-in">
+    <div class="mdlg-bas">
+      <div><div class="label" style="margin:0 0 4px"><svg class="i" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>E-posta — konu</div>
+        <div class="konu" id="mailKonu"></div></div>
+      <span class="sp"></span>
+      <button class="btn" type="button" data-mail-kapat aria-label="Kapat" style="padding:6px 11px">✕</button>
+    </div>
+    <iframe id="mailOnizleme" title="E-posta önizlemesi"></iframe>
+    <div class="mdlg-alt">
+      <span class="durum" id="mailDurum" role="status"></span>
+      <span class="sp"></span>
+      <button class="btn" type="button" id="mailKopyala"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>İçeriği kopyala</button>
+      <button class="btn primary" type="button" id="mailTaslak"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Taslak indir (.eml)</button>
+    </div>
+    <div class="ipucu"><b>İçeriği kopyala:</b> Outlook'ta yeni iletinin gövdesine yapıştır (Ctrl+V).
+      <b>Taslak:</b> indirilen dosyayı açınca Outlook gönderilmeye hazır yeni ileti açar — alıcıyı yazıp gönder; bu bilgisayarda Edge/Chrome varsa PDF rapor ekli gelir.</div>
+  </div>
+</dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -296,6 +329,8 @@ const I = {
   redo:  '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  mail:  '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  copy:  '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
 };
 const fmtDate = (iso) => new Date(iso).toLocaleString("tr-TR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
@@ -377,6 +412,7 @@ function renderReport(r) {
       <div class="actions" style="margin-top:16px">
         <button class="btn primary" data-pdf="${esc(r.id)}">${icon(I.download)}PDF indir</button>
         <a class="btn" href="/guvenlik/rapor/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${icon(I.file)}Baskı önizleme</a>
+        <button class="btn" data-mail="${esc(r.id)}">${icon(I.mail)}E-posta</button>
         ${r.standalone && !auditError ? `<button class="btn" data-reaudit="${esc(r.targetDir)}">${icon(I.redo)}Yeniden denetle</button>` : ""}
       </div>
     </div>
@@ -628,6 +664,77 @@ async function downloadPdf(id, b) {
   }
 }
 
+// E-posta: sunucu raporun e-posta hâlini üretir (tablo düzenli HTML); pencerede önizlenir,
+// panoya kopyalanır ya da gönderilmemiş taslak (.eml) olarak indirilir
+let mailId = null, mailHtml = "";
+const mailDurum = (m, hata) => { $("mailDurum").textContent = m; $("mailDurum").classList.toggle("hata", !!hata); };
+async function openMail(id) {
+  mailId = id; mailHtml = "";
+  mailDurum("");
+  $("mailKonu").textContent = "Hazırlanıyor…";
+  $("mailOnizleme").srcdoc = "";
+  $("mailDlg").showModal();
+  try {
+    const res = await fetch(`/guvenlik/eposta/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error("e-posta hazırlanamadı");
+    mailHtml = await res.text();
+    $("mailKonu").textContent = decodeURIComponent(res.headers.get("x-kurmay-konu") || "");
+    $("mailOnizleme").srcdoc = mailHtml;
+  } catch (err) { mailDurum(err.message, true); }
+}
+async function copyMail() {
+  if (!mailHtml) return;
+  const d = $("mailOnizleme").contentDocument;
+  try {
+    // Pano erişimi yalnızca güvenli adreste (https ya da localhost) — yoksa önizlemeyi seçip kopyala
+    if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error("pano yok");
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([mailHtml], { type: "text/html" }),
+      "text/plain": new Blob([d.body.innerText], { type: "text/plain" }),
+    })]);
+  } catch {
+    const sec = d.getSelection(), aralik = d.createRange();
+    aralik.selectNodeContents(d.body);
+    sec.removeAllRanges(); sec.addRange(aralik);
+    const ok = d.execCommand("copy");
+    sec.removeAllRanges();
+    if (!ok) return mailDurum("Kopyalanamadı — önizlemeyi seçip Ctrl+C ile kopyalayabilirsin", true);
+  }
+  mailDurum("Kopyalandı — Outlook'ta yeni iletinin gövdesine yapıştır");
+}
+async function downloadEml(b) {
+  if (!mailId) return;
+  b.disabled = true;
+  const eski = b.innerHTML;
+  b.innerHTML = `<i class="spin"></i>Taslak hazırlanıyor…`;
+  mailDurum("");
+  try {
+    const res = await fetch(`/guvenlik/eposta/${encodeURIComponent(mailId)}/eml`);
+    if (!res.ok) throw new Error("taslak hazırlanamadı");
+    const ad = decodeURIComponent((res.headers.get("content-disposition") || "").match(/filename\*=UTF-8''([^;]+)/)?.[1] || "guvenlik-raporu.eml");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = ad;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    mailDurum(res.headers.get("x-kurmay-pdf") === "eklendi"
+      ? "Taslak indirildi — PDF rapor ekli"
+      : "Taslak indirildi — PDF eklenemedi (bu bilgisayarda Edge/Chrome bulunamadı)");
+  } catch (err) {
+    mailDurum(err.message, true);
+  } finally {
+    b.disabled = false;
+    b.innerHTML = eski;
+  }
+}
+$("mailKopyala").addEventListener("click", copyMail);
+$("mailTaslak").addEventListener("click", (ev) => downloadEml(ev.currentTarget));
+$("mailDlg").addEventListener("click", (ev) => {
+  if (ev.target === $("mailDlg") || ev.target.closest("[data-mail-kapat]")) $("mailDlg").close();
+});
+
 let toastT;
 function toast(m) { $("toast").textContent = m; $("toast").classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => $("toast").classList.remove("show"), 1800); }
 
@@ -654,6 +761,8 @@ document.addEventListener("click", (ev) => {
   if (dc) { launchDir = dc.dataset.dir; return renderLaunch(); }
   const cancel = ev.target.closest("[data-cancel]");
   if (cancel) { cancel.disabled = true; return cancelJob(cancel.dataset.cancel); }
+  const mail = ev.target.closest("[data-mail]");
+  if (mail) return openMail(mail.dataset.mail);
   const pdf = ev.target.closest("[data-pdf]");
   if (pdf) return downloadPdf(pdf.dataset.pdf, pdf);
   const rp = ev.target.closest("[data-report]");
