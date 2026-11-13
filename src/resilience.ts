@@ -236,3 +236,9 @@ export const CONTINUE_PROMPT =
 
 /** Devam mesajı zaten gitmiş ve arada model hiç yanıt verememişse: uzun metin birikmesin */
 export const CONTINUE_PROMPT_SHORT = "Devam et.";
+
+/** İş ortasında özetlemeden sonra ajanı sürdürmek için gönderilen mesaj */
+export const MID_COMPACT_PROMPT =
+  "Konuşma bağlam sınırına yaklaştığı için özetlendi; görevin ve şimdiye kadar yaptıkların " +
+  "yukarıdaki özette. Kaldığın yerden devam et: tamamladığın adımları ve araç çağrılarını " +
+  "tekrarlama, diskteki dosyaların şimdiki halini gerekirse oku, işi bitir ve sonucunu istenen biçimde ver.";

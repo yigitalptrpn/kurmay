@@ -13,6 +13,7 @@ import {
   classifyError,
   type ClassifiedError,
   CONTINUE_PROMPT,
+  MID_COMPACT_PROMPT,
   CONTINUE_PROMPT_SHORT,
   retrySettings,
   StallError,
@@ -102,6 +103,19 @@ interface SessionHolder {
   written?: Map<string, number>;
   /** Yazma kapsamı dışında kaldığı için engellenen dosyalar (yazılmış sayılmaz) */
   blockedWrites?: Set<string>;
+  /** İş ortasında özetleme bu ajan koşusunda kapatıldı (özetleme başarısız ya da işe yaramadı) */
+  midCompactOff?: boolean;
+}
+
+/**
+ * İş ortasında özetleme sinyali: ajanın konuşması eşiği (Ayarlar → özetleme eşiği)
+ * geçti, tur Kurmay tarafından düzgünce kesildi (SDK `interrupt()`, Esc gibi) —
+ * özetlenip kaldığı yerden sürdürülecek. Hata değil, deneme sayılmaz.
+ */
+class MidCompactSignal extends Error {
+  constructor(readonly tokens: number) {
+    super("bağlam eşiği geçti — özetlenecek");
+  }
 }
 
 /** Dosya yazan araçlar */
@@ -363,12 +377,12 @@ async function compactWithRetry(
   cfg: ProviderConfig,
   bus: EventBus,
   abortController: AbortController,
-  reason: "esik" | "dolu",
+  reason: "esik" | "is" | "dolu",
   tokens: number | undefined,
   knownInfo?: ContextInfo,
 ): Promise<CompactResult> {
   const info = contextInfo(agent.config.model ?? cfg.model, withLiveResilience(cfg)) ?? knownInfo;
-  console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : "bağlam doldu"})…`);
+  console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : reason === "is" ? "iş ortasında eşik aşıldı" : "bağlam doldu"})…`);
   bus.emit({ type: "context_compacting", agent: agent.key, tokens: tokens ?? 0, limit: info?.limit, reason });
   let step = 0;
   let suspect = 0;
@@ -501,6 +515,13 @@ async function executeQuery(
   // Zaman aşımı / iç deneme sayısı Ayarlar'dan canlı değişebilir — her denemede güncel değer
   const env = agentEnv(cfg, ctxInfo);
   const effort = agent.config.effort ?? cfg.effort;
+  // İş ortasında özetleme eşiği (jeton): konuşma bunu geçince, o an çalışan araç bitip
+  // sonucu kayda yazıldıktan sonra tur kesilir, konuşma özetlenip sürdürülür — sunucu
+  // "bağlam doldu" demeden, özetleme isteği de henüz sığarken. 0 = kapalı
+  const midPercent = compactPercent(withLiveResilience(cfg));
+  const midLimit = ctxInfo && midPercent > 0 && !session.midCompactOff ? (ctxInfo.limit * midPercent) / 100 : 0;
+  let midPending = false; // eşik geçildi, araç sonucunu bekliyoruz
+  let midRequested = false; // tur kesildi
   let hooks = buildHooks(agent.config.hooks, cwd);
   {
     // Config hook'larına ek olarak yazma kapsamı kapısı (ikisi de çalışır): fanout kopyası
@@ -639,6 +660,13 @@ async function executeQuery(
         session.contextTokens = tokens;
         bus.emit({ type: "context_usage", agent: agent.key, tokens, window: ctxInfo?.window, limit: ctxInfo?.limit });
       }
+      // Eşik geçildi ve model araç kullanıyor (iş sürüyor): araç bitince turu kes.
+      // Şema çıktısı (StructuredOutput) ya da araçsız yanıt = iş bitiyor, kesilmez
+      if (midLimit && !midRequested && tokens && tokens >= midLimit) {
+        const blocks = message.message.content as Array<{ type: string; name?: string }>;
+        const working = blocks.some((b) => b.type === "tool_use" && !/StructuredOutput/i.test(b.name ?? ""));
+        midPending = working;
+      }
       for (const block of message.message.content) {
         if (block.type === "text" && block.text.trim()) {
           console.log(block.text);
@@ -659,7 +687,17 @@ async function executeQuery(
           }
         }
       }
+    } else if (message.type === "user" && midPending && !midRequested && !message.parent_tool_use_id) {
+      // Araç sonucu kayda geçti — sıradaki model isteğinden önce turu düzgünce kes
+      midRequested = true;
+      midPending = false;
+      console.log(`  📦 ${agent.name}: bağlam eşiği geçti (${session.contextTokens} jeton) — tur kesiliyor, konuşma özetlenecek`);
+      void iterator.interrupt().catch(() => {});
     } else if (message.type === "result") {
+      // Kurmay'ın kestiği tur: hata değil — özetlenip sürdürülecek
+      if (midRequested && (message.subtype !== "success" || message.is_error)) {
+        throw new MidCompactSignal(session.contextTokens ?? 0);
+      }
       if (message.subtype === "success") {
         // Hata sonucu (CLI denemeleri tükendi): metin "API Error: …" — çıktı sayılmaz
         if (message.is_error) throw new Error(message.result || "model sunucusu hata döndürdü");
@@ -699,6 +737,7 @@ async function executeQuery(
     // Kullanıcı iptali (abort) → koşuyu temiz durdur; takılma → yeniden denensin
     if (abortController.signal.aborted) throw new RunCancelledError();
     if (stalledMs) throw new StallError(stalledMs);
+    if (midRequested && !(err instanceof MidCompactSignal)) throw new MidCompactSignal(session.contextTokens ?? 0);
     throw err;
   } finally {
     queryDone = true;
@@ -709,6 +748,8 @@ async function executeQuery(
   // Döngü hatasız bitse bile abort edildiyse iptal say
   if (abortController.signal.aborted) throw new RunCancelledError();
   if (stalledMs) throw new StallError(stalledMs);
+  // Kesilen tur sonuç vermeden bittiyse özetle ve sürdür (iş bitmiş olabilir: sonuç geldiyse dön)
+  if (midRequested && !result.sessionId) throw new MidCompactSignal(session.contextTokens ?? 0);
   return result;
 }
 
@@ -867,6 +908,27 @@ async function executeWithRetry(
     } catch (err) {
       // Kullanıcının Durdur'u tek çıkış kapısı — onu asla yutma
       if (err instanceof RunCancelledError) throw err;
+      if (err instanceof MidCompactSignal && session.id) {
+        // İş ortasında eşik geçti: özetle ve aynı konuşmadan kaldığı yerden sürdür.
+        // Deneme/hata sayılmaz. Özetlenemezse ya da işe yaramazsa bu koşuda bir daha
+        // denenmez — duvara çarparsa "bağlam doldu" kurtarması devrede
+        const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "is", err.tokens, session.ctxInfo);
+        const lim = session.ctxInfo?.limit;
+        const pct = compactPercent(withLiveResilience(cfg));
+        if (!r.ok || !r.post || (lim && pct > 0 && r.post >= (lim * pct) / 100 * 0.9)) session.midCompactOff = true;
+        bus.emit({
+          type: "context_compacted", agent: agent.key, ok: r.ok, pre: r.pre, post: r.post, error: r.error,
+          ...(r.ok ? {} : { fallback: "devam" as const }),
+        });
+        if (r.ok && r.post) {
+          session.contextTokens = r.post;
+          bus.emit({ type: "context_usage", agent: agent.key, tokens: r.post, window: session.ctxInfo?.window, limit: lim });
+        }
+        // Görev konuşmada (özetin içinde) — tekrar gönderilmez, kaldığı yerden.
+        // Özetlenemediyse konuşma olduğu gibi duruyor: yalnızca "devam et"
+        attemptPrompt = r.ok ? MID_COMPACT_PROMPT : CONTINUE_PROMPT_SHORT;
+        continue;
+      }
       const s = retrySettings(cfg.retry); // canlı ayar
       const info = classifyError(err, session.apiError);
       attempt++;
