@@ -76,8 +76,9 @@ export type OrchestratorEvent =
       agent: string;
       tokens: number;
       limit?: number;
-      /** esik: sıradaki görevden önce eşik aşıldı; dolu: sunucu "bağlam doldu" dedi */
-      reason: "esik" | "dolu";
+      /** esik: sıradaki görevden önce eşik aşıldı; is: ajan çalışırken eşik aşıldı (tur kesildi);
+       *  dolu: sunucu "bağlam doldu" dedi */
+      reason: "esik" | "is" | "dolu";
     }
   | {
       type: "context_compacted";

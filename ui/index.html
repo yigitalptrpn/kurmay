@@ -1911,7 +1911,9 @@ function handleEvent(e) {
       const oran = e.limit ? ` — ${fmtK(e.tokens)} / ${fmtK(e.limit)} (%${Math.round((e.tokens / e.limit) * 100)})` : "";
       d.textContent = e.reason === "dolu"
         ? `📦 Bağlam doldu — konuşma özetleniyor${oran}…`
-        : `📦 Konuşma sınıra yaklaştı, özetleniyor${oran}…`;
+        : e.reason === "is"
+          ? `📦 Konuşma iş ortasında sınıra yaklaştı${oran} — ajan durduruldu, konuşma özetleniyor; sonra kaldığı yerden devam edecek…`
+          : `📦 Konuşma sınıra yaklaştı, özetleniyor${oran}…`;
       bubbleAdd(bubbleOf(e.agent, e.ts), d);
       compactNotes[e.agent] = d;
       break;
