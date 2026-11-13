@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kurmay sürüm notları</title>
+<meta name="description" content="Kurmay'ın her sürümünde neyin değiştiği: yeni özellikler, iyileştirmeler ve düzeltmeler. En yeni sürüm en üstte.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kurmay sürüm notları">
+<meta property="og:description" content="Kurmay'ın her sürümünde neyin değiştiği. En yeni sürüm en üstte.">
+<meta property="og:image" content="https://yigitalptrpn.github.io/kurmay/gorseller/onay-evrak.jpg">
+<link rel="icon" href="data:,">
+<script>
+  // Kurmay paneli bu sayfayı /surumler adresinden sunarken aşağıdaki null'u {surum} ile değiştirir
+  var PANEL = /*PANEL*/null;
+  // Kayıtlı tema sayfa boyanmadan önce uygulanır (tanıtım sayfasıyla aynı anahtar); panelde
+  // burada seçim yapılmadıysa panel temasının açık/koyu oluşuna uyulur
+  try {
+    var t = localStorage.getItem("kurmay-tanitim-tema");
+    if (!t && PANEL) { var pt = localStorage.getItem("kurmay-theme"); if (pt) t = /^(radar|karargah|gece|dark|lacivert|teskilat)$/.test(pt) ? "dark" : "light"; }
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  } catch (e) {}
+  document.documentElement.classList.add("js");
+  if (PANEL) document.documentElement.classList.add("panelde");
+</script>
+<style>
+/* Yazı tipleri, renk değişkenleri ve üst çubuk index.html ile aynı — orada değişirse burada da değişmeli. */
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(yazi-tipleri/archivo-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Archivo"; font-style:normal; font-weight:100 900; font-stretch:62% 125%; font-display:swap; src:url(yazi-tipleri/archivo-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-400.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-ext-400.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-700.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Courier Prime"; font-style:normal; font-weight:700; font-display:swap; src:url(yazi-tipleri/courier-prime-latin-ext-700.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/saira-stencil-one-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"Saira Stencil One"; font-style:normal; font-weight:400; font-display:swap; src:url(yazi-tipleri/saira-stencil-one-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(yazi-tipleri/jetbrains-mono-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:100 800; font-display:swap; src:url(yazi-tipleri/jetbrains-mono-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+/* Yerleşim: değişiklik defteri — her sürüm bir kayıt; solda şablon harfli sürüm numarası ve
+   tarih, sağda başlık ve türüne göre etiketli maddeler. Açık = Gizli Evrak, koyu = Radar. */
+:root {
+  --kagit:#E7DFC6; --yaprak:#F6F1E2; --murekkep:#211C14; --soluk:#5C5343; --cizgi:#CABF9F;
+  --vurgu:#8B1E1E; --vurgu-uzeri:#FFF8EE; --muhur:#9B2420; --saha:#24476B;
+  --kod-zemin:#211D17; --kod-yazi:#EFE7D2; --kod-soluk:#A99F88;
+  --t-yeni:#8B1E1E; --t-iyi:#24476B; --t-duz:#6E4600;   /* madde türü etiketleri */
+  --golge:0 1px 0 rgba(60,45,20,.08), 0 10px 28px -12px rgba(60,45,20,.45);
+  --doku:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .26 0 0 0 0 .14 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --f-govde:"Archivo",system-ui,"Segoe UI",Roboto,sans-serif;
+  --f-daktilo:"Courier Prime","Courier New",Courier,monospace;
+  --f-sablon:"Saira Stencil One","Archivo",Impact,sans-serif;
+  --f-kod:"JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --kagit:#06100A; --yaprak:#0C1A12; --murekkep:#D2F0DC; --soluk:#86AE95; --cizgi:#21402E;
+    --vurgu:#4BE38A; --vurgu-uzeri:#03140A; --muhur:#FFC857; --saha:#6FD3FF;
+    --kod-zemin:#030805; --kod-yazi:#BFF3D1; --kod-soluk:#5E8A70;
+    --t-yeni:#4BE38A; --t-iyi:#6FD3FF; --t-duz:#FFC857;
+    --golge:0 0 0 1px rgba(75,227,138,.06), 0 12px 30px -14px rgba(0,0,0,.9);
+    --doku:repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --kagit:#06100A; --yaprak:#0C1A12; --murekkep:#D2F0DC; --soluk:#86AE95; --cizgi:#21402E;
+  --vurgu:#4BE38A; --vurgu-uzeri:#03140A; --muhur:#FFC857; --saha:#6FD3FF;
+  --kod-zemin:#030805; --kod-yazi:#BFF3D1; --kod-soluk:#5E8A70;
+  --t-yeni:#4BE38A; --t-iyi:#6FD3FF; --t-duz:#FFC857;
+  --golge:0 0 0 1px rgba(75,227,138,.06), 0 12px 30px -14px rgba(0,0,0,.9);
+  --doku:repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px);
+  color-scheme:dark;
+}
+
+:root { padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+*, *::before, *::after { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:84px; -webkit-text-size-adjust:100%; }
+body { margin:0; background-color:var(--kagit); background-image:var(--doku); color:var(--murekkep);
+  font:400 17px/1.65 var(--f-govde); font-stretch:100%; }
+main { overflow-x:clip; }
+a { color:var(--vurgu); text-underline-offset:3px; text-decoration-thickness:1px; }
+a:hover { text-decoration-thickness:2px; }
+:focus-visible { outline:2px solid var(--vurgu); outline-offset:3px; }
+::selection { background:var(--vurgu); color:var(--vurgu-uzeri); }
+code { font-family:var(--f-kod); font-size:.86em; padding:.1em .35em; background:var(--yaprak); border:1px solid var(--cizgi); border-radius:3px; overflow-wrap:anywhere; }
+h1, h2, h3 { text-wrap:balance; margin:0; }
+p { margin:0; }
+[hidden] { display:none !important; }
+/* Sayfa iki yerde açılır: tanıtım sitesi ve Kurmay paneli (/surumler) — yalnızca birine ait öğeler */
+html:not(.panelde) .yalniz-panel, .panelde .yalniz-site { display:none !important; }
+
+.kap { max-width:1180px; margin-inline:auto;
+  padding-left:max(clamp(16px, 4vw, 40px), env(safe-area-inset-left, 0px));
+  padding-right:max(clamp(16px, 4vw, 40px), env(safe-area-inset-right, 0px)); }
+.etiket { font:700 13px/1.3 var(--f-daktilo); letter-spacing:.09em; text-transform:uppercase; color:var(--soluk); }
+.ince { color:var(--soluk); }
+
+/* — Üst çubuk — */
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--kagit); }
+.ust { position:sticky; top:env(safe-area-inset-top, 0px); z-index:9; background:var(--kagit); background:color-mix(in srgb, var(--kagit) 92%, transparent);
+  backdrop-filter:blur(6px); border-bottom:1px solid var(--cizgi); }
+.ust .kap { display:flex; align-items:center; gap:18px; min-height:60px; }
+.marka { font:400 22px/1 var(--f-sablon); letter-spacing:.06em; color:var(--murekkep); text-decoration:none; text-transform:uppercase; flex:none; }
+.gez { display:flex; gap:4px; overflow-x:auto; flex:1; min-width:0; scrollbar-width:none; margin-inline:auto; justify-content:center; }
+.gez::-webkit-scrollbar { display:none; }
+.gez a { font:700 13px/1 var(--f-daktilo); letter-spacing:.06em; text-transform:uppercase; color:var(--soluk); text-decoration:none;
+  padding:9px 10px; border-radius:3px; white-space:nowrap; }
+.gez a:hover, .gez a.su { color:var(--murekkep); background:var(--yaprak); }
+.tema { display:flex; gap:6px; flex:none; }
+.tema button { width:26px; height:26px; border-radius:50%; border:1px solid var(--cizgi); cursor:pointer; padding:0; }
+.tema [data-t="light"] { background:linear-gradient(135deg, #E7DFC6 0 50%, #8B1E1E 50%); }
+.tema [data-t="dark"] { background:linear-gradient(135deg, #06100A 0 50%, #4BE38A 50%); }
+.tema button[aria-pressed="true"] { outline:2px solid var(--murekkep); outline-offset:2px; }
+
+/* — Giriş — */
+.giris { padding-block:clamp(36px, 6vw, 68px) clamp(36px, 5vw, 60px); }
+.giris .kap { display:grid; grid-template-columns:minmax(0, 7fr) minmax(0, 5fr); gap:clamp(28px, 4vw, 56px); align-items:end; }
+.ust-satir { font:400 14px/1.6 var(--f-daktilo); color:var(--soluk); display:flex; flex-wrap:wrap; gap:4px 18px;
+  border-top:2px solid var(--murekkep); border-bottom:1px solid var(--murekkep); padding-block:7px; }
+.ust-satir b { color:var(--murekkep); font-weight:700; }
+.baslik { font:400 clamp(50px, 7vw, 96px)/.88 var(--f-sablon); letter-spacing:.015em; text-transform:uppercase; margin:22px 0 18px; }
+.lede { font:400 clamp(18px, 1.5vw, 20px)/1.55 var(--f-govde); max-width:44ch; }
+.kunye { margin:26px 0 0; display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font:400 14.5px/1.5 var(--f-daktilo); }
+.kunye dt { font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--soluk); font-size:12.5px; padding-top:2px; }
+.kunye dd { margin:0; }
+
+.guncelle { background:var(--yaprak); border:1px solid var(--cizgi); box-shadow:var(--golge); padding:20px 22px 22px; display:grid; gap:14px; }
+.guncelle h2 { font:800 22px/1.2 var(--f-govde); font-stretch:80%; }
+.guncelle p { font-size:15px; line-height:1.55; color:var(--soluk); }
+.kod { position:relative; background:var(--kod-zemin); color:var(--kod-yazi); border-radius:4px; overflow-x:auto; }
+.kod pre { margin:0; padding:16px 92px 16px 18px; font:400 14px/1.75 var(--f-kod); white-space:pre; }
+.kod .is, .kod .yorum { color:var(--kod-soluk); }
+.kod .is { user-select:none; }
+.kopyala { position:absolute; top:10px; right:10px; font:700 12px/1 var(--f-daktilo); letter-spacing:.06em; text-transform:uppercase; background:transparent;
+  color:var(--kod-yazi); border:1px solid var(--kod-soluk); border-radius:3px; padding:8px 10px; cursor:pointer; }
+.kopyala:hover { border-color:var(--kod-yazi); }
+
+/* — Kayıt: solda dizin + süzgeç, sağda sürümler — */
+.kayit { border-top:2px solid var(--murekkep); padding-bottom:clamp(48px, 7vw, 88px); }
+.kayit .kap { display:grid; grid-template-columns:minmax(0, 1fr); }
+.js .kayit .kap { grid-template-columns:220px minmax(0, 1fr); gap:clamp(24px, 4vw, 52px); }
+
+.dizin { position:sticky; top:84px; align-self:start; max-height:calc(100vh - 100px); overflow:auto; padding:28px 4px 20px 0; scrollbar-width:thin; }
+.dizin .etiket { margin-bottom:10px; }
+.suzgec { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:26px; }
+.suzgec button { font:700 12px/1 var(--f-daktilo); letter-spacing:.06em; text-transform:uppercase; color:var(--soluk); background:transparent;
+  border:1px solid var(--cizgi); border-radius:3px; padding:8px 9px 7px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+.suzgec button span { font-weight:400; }
+.suzgec button:hover { color:var(--murekkep); border-color:var(--soluk); }
+.suzgec button[aria-pressed="true"] { color:var(--vurgu-uzeri); background:var(--vurgu); border-color:var(--vurgu); }
+.ay + .ay { margin-top:18px; }
+.ay h3 { font:700 12px/1.3 var(--f-daktilo); letter-spacing:.09em; text-transform:uppercase; color:var(--soluk); padding-bottom:6px; border-bottom:1px solid var(--cizgi); margin-bottom:4px; }
+.ay ul { list-style:none; margin:0; padding:0; }
+.ay a { display:flex; justify-content:space-between; gap:10px; padding:6px 8px; text-decoration:none; color:var(--murekkep);
+  font:700 14.5px/1.3 var(--f-daktilo); border-left:2px solid transparent; }
+.ay a small { font-weight:400; font-size:13px; color:var(--soluk); }
+.ay a:hover { background:var(--yaprak); }
+.ay a.su { background:var(--yaprak); border-left-color:var(--vurgu); }
+.ay a.gizli { opacity:.4; }
+
+.surumler { min-width:0; }
+.surum { display:grid; grid-template-columns:170px minmax(0, 1fr); gap:clamp(18px, 3vw, 34px); padding-block:34px 38px; }
+.surum + .surum { border-top:1px dashed var(--cizgi); }
+.sol { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+.no { font:400 clamp(40px, 4vw, 52px)/.9 var(--f-sablon); color:var(--vurgu); text-decoration:none; letter-spacing:.01em; }
+.no:hover { text-decoration:underline; text-decoration-thickness:2px; }
+.sol time { font:400 14px/1.4 var(--f-daktilo); color:var(--soluk); }
+.surum:first-of-type .sol::after { content:"Son sürüm"; margin-top:12px; font:700 12px/1 var(--f-daktilo); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muhur); border:3px double var(--muhur); padding:7px 9px 6px; transform:rotate(-4deg); transform-origin:left center; }
+.sag h2 { font:800 clamp(24px, 2.6vw, 30px)/1.12 var(--f-govde); font-stretch:78%; }
+.sag .ozet { margin-top:8px; color:var(--soluk); font-size:16px; max-width:68ch; }
+.maddeler { list-style:none; margin:18px 0 0; padding:0; display:grid; gap:12px; max-width:72ch; }
+.maddeler li { position:relative; padding-left:120px; font-size:16.5px; line-height:1.6; }
+.maddeler li::before { position:absolute; left:0; top:.28em; font:700 11px/1 var(--f-daktilo); letter-spacing:.08em; text-transform:uppercase;
+  padding:5px 7px 4px; border:1px solid currentColor; border-radius:2px; background:color-mix(in srgb, currentColor 9%, transparent); }
+.maddeler li[data-tur="yeni"]::before { content:"Yeni"; color:var(--t-yeni); }
+.maddeler li[data-tur="iyi"]::before { content:"İyileştirme"; color:var(--t-iyi); }
+.maddeler li[data-tur="duz"]::before { content:"Düzeltme"; color:var(--t-duz); }
+.maddeler b { font-weight:700; }
+
+.oncesi { margin-top:10px; padding:20px 22px; border:1px dashed var(--cizgi); font:400 14.5px/1.6 var(--f-daktilo); color:var(--soluk); }
+.bos { padding:40px 0; font:400 15px/1.6 var(--f-daktilo); color:var(--soluk); }
+
+/* Alt */
+.alt-bilgi { border-top:2px solid var(--murekkep); padding-block:28px 40px; font:400 14px/1.6 var(--f-daktilo); color:var(--soluk); }
+.alt-bilgi .kap { display:flex; flex-wrap:wrap; gap:10px 32px; justify-content:space-between; }
+.alt-bilgi .marka { font-size:26px; }
+
+@media (max-width: 860px) {
+  .giris .kap { grid-template-columns:minmax(0, 1fr); align-items:start; }
+  .js .kayit .kap { grid-template-columns:minmax(0, 1fr); gap:0; }
+  .dizin { position:static; max-height:none; overflow:visible; padding:22px 0 8px; border-bottom:1px solid var(--cizgi); }
+  .suzgec { margin-bottom:16px; }
+  .ay { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+  .ay + .ay { margin-top:10px; }
+  .ay h3 { border:0; padding:0; margin:0; flex-basis:100%; }
+  .ay ul { display:flex; flex-wrap:wrap; gap:6px; }
+  .ay a { border:1px solid var(--cizgi); border-radius:3px; padding:6px 8px; font-size:13.5px; }
+  .ay a small { display:none; }
+  .ay a.su { border-color:var(--vurgu); }
+  .gez { justify-content:flex-start; }
+}
+@media (max-width: 600px) {
+  body { font-size:16px; }
+  .ust .kap { gap:10px; }
+  .marka { font-size:18px; }
+  .gez { gap:0; }
+  .gez a { padding-inline:6px; letter-spacing:.02em; }
+  .surum { grid-template-columns:minmax(0, 1fr); gap:14px; padding-block:28px 30px; }
+  .sol { flex-direction:row; flex-wrap:wrap; align-items:baseline; gap:6px 14px; }
+  .surum:first-of-type .sol::after { margin-top:0; transform:rotate(-3deg); align-self:center; }
+  .maddeler li { padding-left:0; font-size:16px; }
+  .maddeler li::before { position:static; display:inline-block; margin-right:8px; vertical-align:2px; }
+  .kod pre { padding-right:18px; padding-top:46px; }
+  .panelde .gez a[aria-current] { display:none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior:auto; }
+}
+</style>
+</head>
+<body>
+
+<header class="ust">
+  <div class="kap">
+    <a class="marka" href="index.html" data-panel-href="/">Kurmay</a>
+    <nav class="gez" aria-label="Site">
+      <a href="index.html" class="yalniz-site">Tanıtım</a>
+      <a href="/" class="yalniz-panel">Panel</a>
+      <a href="/config" class="yalniz-panel">Ayarlar</a>
+      <a href="surumler.html" data-panel-href="/surumler" class="su" aria-current="page">Sürüm notları</a>
+    </nav>
+    <div class="tema" role="group" aria-label="Görünüm">
+      <button type="button" data-t="light" aria-label="Açık görünüm (Gizli Evrak)" title="Gizli Evrak"></button>
+      <button type="button" data-t="dark" aria-label="Koyu görünüm (Radar)" title="Radar"></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="giris">
+    <div class="kap">
+      <div>
+        <div class="ust-satir"><span><b>SAYI:</b> <span id="kSayi">KRM-0.1.24</span></span><span><b>KONU:</b> Değişiklik kaydı</span></div>
+        <h1 class="baslik">Sürüm notları</h1>
+        <p class="lede">Kurmay'ın her sürümünde neyin değiştiği. En yeni sürüm en üstte; her sürüm npm'de <code>kurmay-ai</code> paketi olarak yayımlanır.</p>
+        <dl class="kunye">
+          <dt>Son sürüm</dt><dd id="kSon">0.1.24 · 13 Kasım 2026</dd>
+          <dt>Kayıt</dt><dd id="kSay">25 sürüm · ilki 19 Ekim 2026</dd>
+          <dt class="yalniz-site">Panelde</dt><dd class="yalniz-site">Sol üstteki “Kurmay v0.1.x” etiketine ya da Ayarlar'daki sürüme tıkla</dd>
+          <dt class="yalniz-panel">Kurulu sürüm</dt><dd class="yalniz-panel" id="kKurulu">—</dd>
+        </dl>
+      </div>
+      <aside class="guncelle">
+        <h2>Nasıl güncellenir</h2>
+        <div class="kod"><pre><span class="is">$ </span>npm install -g kurmay-ai@latest
+<span class="is">$ </span>cd kurmay-calisma
+<span class="is">$ </span>kurmay update</pre><button class="kopyala" type="button">Kopyala</button></div>
+        <p><code>kurmay update</code>, <code>config.json</code>'un bulunduğu çalışma klasöründeki rol, kural, beceri ve koruma kapısı şablonlarını tazeler. Senin değiştirdiğin dosyaya dokunmaz, yenisini <code>.yeni</code> uzantısıyla yanına koyar; <code>config.json</code>'a hiç dokunmaz. Ardından servisi yeniden başlat.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="kayit" aria-label="Sürümler">
+    <div class="kap">
+      <nav class="dizin" id="dizin" aria-label="Sürüm dizini" hidden>
+        <p class="etiket">Süz</p>
+        <div class="suzgec" role="group" aria-label="Değişiklik türü">
+          <button type="button" data-tur="" aria-pressed="true">Tümü <span></span></button>
+          <button type="button" data-tur="yeni" aria-pressed="false">Yeni <span></span></button>
+          <button type="button" data-tur="iyi" aria-pressed="false">İyileştirme <span></span></button>
+          <button type="button" data-tur="duz" aria-pressed="false">Düzeltme <span></span></button>
+        </div>
+        <p class="etiket">Sürümler</p>
+        <div id="dizinListe"></div>
+      </nav>
+
+      <div class="surumler" id="surumler">
+<!--
+  YENİ SÜRÜM: aşağıdaki kalıbı bu yorumun hemen altına (en üste) kopyala. Sol dizin, süzgeç
+  sayıları, "Son sürüm" damgası ve giriş künyesi betikle bu girdilerden üretilir.
+  Madde türü (data-tur): yeni | iyi (iyileştirme) | duz (düzeltme). Maddeler kullanıcının
+  gözünden, Türkçe; olay/uç adı, dosya yolu yazma. Tanıtım sayfasındaki SAYI ve alt bilgi
+  sürümünü de güncelle (index.html).
+
+  <article class="surum" id="v0.1.X">
+    <div class="sol"><a class="no" href="#v0.1.X">0.1.X</a><time datetime="YYYY-AA-GG">GG Ay YYYY</time></div>
+    <div class="sag">
+      <h2>Kısa başlık</h2>
+      <ul class="maddeler">
+        <li data-tur="yeni">…</li>
+      </ul>
+    </div>
+  </article>
+-->
+        <article class="surum" id="v0.1.24">
+          <div class="sol"><a class="no" href="#v0.1.24">0.1.24</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Sürüm notları panelde</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Sürüm notları: her sürümde neyin değiştiği, yeni / iyileştirme / düzeltme süzgeciyle. Tanıtım sitesinde ve panelin içinde aynı sayfa.</li>
+              <li data-tur="yeni">Panelde sol üstteki sürüm etiketine (“Kurmay v0.1.24”) ya da Ayarlar başlığındaki sürüme tıklayınca açılır. Kurulu paketle birlikte gelir, internet gerekmez.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.23">
+          <div class="sol"><a class="no" href="#v0.1.23">0.1.23</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Rapor e-postası her alıcıda okunur</h2>
+            <ul class="maddeler">
+              <li data-tur="duz">Güvenlik raporu e-postası bazı alıcılarda boş ekran olarak açılıyordu: e-posta istemcisi ya da posta süzgeci koyu zemini atınca beyaz sayfada açık renkli yazılar kalıyordu. Şablon açık zemine geçti; siber görünüm korundu.</li>
+              <li data-tur="duz">Zemin ya da stil atan istemcilerde de her yazı okunur (en az 4,5:1 karşıtlık, üç durumda ölçüldü). Risk ölçeği zemin rengine değil çizgiye dayanıyor, soluk yazılar koyulaştı.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.22">
+          <div class="sol"><a class="no" href="#v0.1.22">0.1.22</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Güvenlik raporu e-postayla</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Rapor sayfasında <b>E-posta</b> düğmesi: raporun e-posta hâli önizlenir, içerik kopyalanıp Outlook iletisine yapıştırılır ya da gönderilmemiş taslak (<code>.eml</code>) olarak indirilir. Bilgisayarda Edge ya da Chrome varsa taslakta PDF rapor eklidir.</li>
+              <li data-tur="yeni">Şablon e-posta istemcilerine uygun (tablo düzeni, satır içi stil, betik yok) ve siber güvenlik görünümünde: risk düzeyi ve ölçeği, önem dağılımı, özet, öne çıkan bulgular, künye. Düz metin hâli de üretilir.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.21">
+          <div class="sol"><a class="no" href="#v0.1.21">0.1.21</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Sonuç kartları sohbette yerinde kalır</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Cevap, Teftiş kararı ve derleme kartları oluştukları yerde kalır. Red sonrasında ajan yeniden çalışınca yeni mesajlar kartın altına eklenir; eskiden kart en altta takılı kalıyordu. Onay ve zamanlama kartları (bekleyen eylem) yine altta.</li>
+              <li data-tur="duz">Dar ekranda önem etiketi (“yüksek”) iki satıra bölünmüyor.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.20">
+          <div class="sol"><a class="no" href="#v0.1.20">0.1.20</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>İş ortasında özetleme</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Ajan çalışırken konuşma özetleme eşiğini (varsayılan %75) geçerse, çalışan araç bitince tur durdurulur, konuşma özetlenir ve aynı konuşma kaldığı yerden sürer. Bütün ajanlarda geçerli; deneme hakkından yemez.</li>
+              <li data-tur="iyi">Eskiden özetleme yalnızca sıradaki görevin başında ya da sunucu “bağlam doldu” dediğinde yapılıyordu; o anda özetleme isteği de çoğu zaman sığmadığı için konuşma bırakılıyordu.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.19">
+          <div class="sol"><a class="no" href="#v0.1.19">0.1.19</a><time datetime="2026-11-12">12 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Yeni konuşmada iş tekrarlanmaz</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Bağlam dolup özetlenemeyince ya da konuşma kaybolunca yeni konuşmaya geçen ajana, bu görevde hangi dosyalara yazdığı bildirilir. Saha ajanı aynı değişikliği ikinci kez uygulamaz, kalanı tamamlar. Panel kaç dosya bildirildiğini yazar.</li>
+              <li data-tur="duz">Özetleme isteği ajanın akıl yürütme ayarıyla gider. Akıl yürütmesi kapalı oturumda özetleme düşünme açık gidiyordu; düşünmeyi desteklemeyen sunucu bunu reddediyordu.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.18">
+          <div class="sol"><a class="no" href="#v0.1.18">0.1.18</a><time datetime="2026-11-11">11 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Hedef dizin dışına yazma engeli</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Hiçbir ajan hedef dizinin dışına dosya yazamaz. Deneyince araç engellenir, gerekçe modele döner ve ajan çalışmayı sürdürür; panelde kırmızı uyarı çıkar, dosya “Değişen dosyalar”a girmez. Eskiden tek kopya çalışan saha ajanı dışarı yazabiliyordu.</li>
+              <li data-tur="yeni">Planı onaysız iletme oturuma özel: sağ sütunda <b>Plan onayı</b> seçicisi (onay bekle / onaysız ilet). Yeni oturum genel ayarı alır, değişiklik yalnızca o oturumu etkiler.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.17">
+          <div class="sol"><a class="no" href="#v0.1.17">0.1.17</a><time datetime="2026-11-09">9 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Arama</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Sol sütunda arama kutusu (<b>Ctrl+K</b>): tüm oturumlarda ya da yalnızca bu oturumda. Görev, plan, ajan mesajı, dosya, komut, Teftiş kararı, ret gerekçesi, hata ve güvenlik raporunda arar; tür süzgeci var.</li>
+              <li data-tur="yeni">Büyük/küçük harfe ve Türkçe harflere duyarsız. Sonuca tıklayınca oturum açılır, ilgili satıra gidilir, kelimeler vurgulanır; oturum içinde ↑ ↓ ile eşleşmeler arasında gezilir.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.16">
+          <div class="sol"><a class="no" href="#v0.1.16">0.1.16</a><time datetime="2026-11-06">6 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Planı dışarı ver</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Onay kartında planı indir: okunur metin (<code>.md</code>) ya da veri (<code>.json</code>) olarak, başka bir ajana vermek için.</li>
+              <li data-tur="yeni"><b>Uzak ajana gönder</b>: Ayarlar'da adres girildiyse plan başka makinedeki bir ajana istek olarak gönderilir (erişim anahtarı isteğe bağlı). Akış onay beklemeye devam eder; sonuç sohbete yazılır.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.15">
+          <div class="sol"><a class="no" href="#v0.1.15">0.1.15</a><time datetime="2026-11-02">2 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Güvenlik raporu PDF olarak</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Her raporda <b>PDF indir</b> ve <b>Baskı önizleme</b>. A4 şablon: künye, bulgu dağılımı, yönetici özeti, bulgu listesi ve ayrıntıları, doğru yapılanlar, incelenen dosyalar, yöntem notu; her sayfada rapor numarası ve sayfa sayısı.</li>
+              <li data-tur="yeni">PDF'i bilgisayarda kurulu Edge ya da Chrome basar; internet ve ek kurulum gerekmez. Tarayıcı bulunamazsa şablon yazdırma penceresiyle açılır.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.14">
+          <div class="sol"><a class="no" href="#v0.1.14">0.1.14</a><time datetime="2026-10-23">23 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Bağımsız güvenlik denetimi</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Güvenlik sayfasında <b>Yeni denetim</b>: seçilen dizindeki kod tabanının tamamı akıştan bağımsız denetlenir. Okunan dosya ve son adımlar canlı izlenir, denetim durdurulabilir; rapor akıştakiyle aynı biçimde yazılır, raporda “Yeniden denetle” var.</li>
+              <li data-tur="iyi">Denetçi akışta kapalı olsa da çalışır; akışta hiç yoksa aynı ayarlarla geçici olarak kurulur, <code>config.json</code> değişmez. Bağımsız denetimler aynı anda çalışan görev sınırına dahildir.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.13">
+          <div class="sol"><a class="no" href="#v0.1.13">0.1.13</a><time datetime="2026-10-23">23 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Aynı anda çalışan görev sayısı ayarlanabilir</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Ayarlar'da <b>Aynı anda çalışan görev sayısı</b> kartı: yeniden başlatmadan değişir, üst sınır yok. Düşürmek çalışan görevleri durdurmaz; sınır dolunca verilen uyarı Ayarlar'ı gösterir.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.12">
+          <div class="sol"><a class="no" href="#v0.1.12">0.1.12</a><time datetime="2026-10-23">23 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Her görev için dizin seçimi</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Yazma kutusunun altında dizin çipi: görevin hangi dizinde çalışacağını gösterir, tıklayınca son kullanılan dizinler ve klasör seçici açılır. Seçim yalnızca sıradaki görev içindir; yeni oturum o dizinde açılır, varsayılan dizin değişmez.</li>
+              <li data-tur="iyi">Var olan oturumda başka dizin seçilirse oturumun dizini değişir ve Analist orada yeni konuşmayla başlar; panel bunu sohbete yazar. Sağ sütundaki dizin yeni oturum taslağında “Varsayılan dizin” olarak görünür.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.11">
+          <div class="sol"><a class="no" href="#v0.1.11">0.1.11</a><time datetime="2026-10-21">21 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Sürüm panelde görünür</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Panelin sol üstünde, markanın yanında çalışan sürüm: “Kurmay v0.1.11”. Sunucudan okunur, internet gerekmez.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.10">
+          <div class="sol"><a class="no" href="#v0.1.10">0.1.10</a><time datetime="2026-10-21">21 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Yanıt sınırı görünür, ret zamanlanabilir</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Ajanın yanıtı yanıt sınırına (varsayılan 32 bin jeton) takılıp kesilince balonda “Yanıt sınıra takılıp kesildi” yazar; plan gelmediyse onay kartı “plan yarıda kesilmiş olabilir” der ve ayarın yerini gösterir. Bu kesilme eskiden hiç görünmüyordu.</li>
+              <li data-tur="yeni">Ret de zamanlanabilir: onay kartındaki zaman seçimi “Reddet” ve “Hayır, yeniden planla”ya da uygulanır; yeniden planlama seçilen saatte başlar.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.9">
+          <div class="sol"><a class="no" href="#v0.1.9">0.1.9</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Kullanıcı talimatı, yeniden deneme modları</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Ayarlar'da <b>Kullanıcı talimatı</b>: bütün ajanlara her zaman geçerli bir talimat (ör. hitap biçimi). Yeniden başlatmadan, sıradaki görevde geçerli; en fazla 4000 karakter.</li>
+              <li data-tur="yeni">Bağlantı dayanıklılığında hazır modlar: <b>Dengeli</b>, <b>Sürekli dene</b>, <b>Sakince dene</b>, <b>Çabuk vazgeç</b> ve ayrıntılı <b>Özel</b>. Mod tıklanınca hemen uygulanır.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.8">
+          <div class="sol"><a class="no" href="#v0.1.8">0.1.8</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Bekleme oyunu</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Uzun beklemede (ajan çalışıyor, oturum yükleniyor) <b>Ctrl+Alt+X</b> küçük bir koşu oyunu açar; Esc ya da aynı kısayol kapatır. Başlık beklemenin durumunu canlı gösterir, renkler temadan gelir, rekor saklanır.</li>
+              <li data-tur="yeni">Tanıtım sitesi yayında: <a href="https://yigitalptrpn.github.io/kurmay/">yigitalptrpn.github.io/kurmay</a>. Tek klasördür, indirilip internetsiz de açılır.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.7">
+          <div class="sol"><a class="no" href="#v0.1.7">0.1.7</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Görev ekleri, sorunlu sunucuya dayanıklılık</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Görev ekleri: ekran görüntüsü yapıştır (Ctrl+V), dosyayı görev kartına sürükle. PDF ve Word belgelerinin metni çıkarılıp ajanlara verilir; görseller görsel destekli modelde okunur.</li>
+              <li data-tur="iyi">Özetleme sunucu meşgulken bekleyip yeniden denenir; eskiden ilk hatada konuşma bırakılıyordu.</li>
+              <li data-tur="iyi">Sunucunun sürekli reddettiği bozuk konuşma kendiliğinden yenilenir; sunucu yalnızca meşgulse konuşmaya dokunulmaz, beklenir.</li>
+              <li data-tur="iyi">Kaybolan konuşmanın yerine açılan yeni konuşma, oturumdaki önceki görevlerin özetiyle başlar; konuşma kimliği görev bitmeden kaydedilir.</li>
+              <li data-tur="duz">“Bağlam doldu” yanlış alarmı: sunucu meşgul hatalarında konuşma artık boşuna özetlenmiyor; vLLM'in ikinci hata biçimi de tanınıyor.</li>
+              <li data-tur="duz">Ek önizlemesindeki × düğmesi basınca kayıyordu.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.6">
+          <div class="sol"><a class="no" href="#v0.1.6">0.1.6</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Dört yeni tema, gömülü yazı tipleri, planı otomatik iletme</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Dört yeni tema: <b>Harita</b>, <b>Karargâh</b>, <b>Sade</b>, <b>Gece</b>. Gizli Evrak ve Radar yerinde.</li>
+              <li data-tur="yeni">Yazı tipleri pakete gömülü: panel açılırken dış adrese hiç istek gitmez, kapalı ağda da aynı görünür.</li>
+              <li data-tur="yeni">Ayarlar'da <b>Planı Saha Timi'ne otomatik ilet</b> (varsayılan kapalı): dolu plan onay beklemeden uygulanır; plan boş ya da okunamazsa ve bilgi cevabında onay yine sorulur.</li>
+              <li data-tur="duz">Koyu temalarda kaydırma çubuğu ve açılır listeler açık renk geliyordu; klavye odak halkası eklendi; kod yazısında <code>!=</code> artık “≠” olarak görünmüyor; balon başlığında ad harf harf bölünmüyor; Gizli Evrak'ta soluk yazılar okunur.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.5">
+          <div class="sol"><a class="no" href="#v0.1.5">0.1.5</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>kurmay update</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni"><code>kurmay update</code>: paket güncellenince çalışma klasöründeki rol, kural, beceri ve koruma kapısı şablonlarını tazeler. Eksik dosyayı ekler, değiştirmediğin dosyayı yeniler; senin değiştirdiğine dokunmaz, yenisini <code>.yeni</code> olarak yanına koyar. <code>config.json</code>'a dokunmaz.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.4">
+          <div class="sol"><a class="no" href="#v0.1.4">0.1.4</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Kayıp konuşmanın sebebi görünür</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Analist'in sürdürülecek konuşması bulunamazsa panel sebebini yazar (başka klasöre bağlı / bu bilgisayarda yok / duruyor ama sürdürülemedi) ve beklemeden yeni konuşmaya geçer.</li>
+              <li data-tur="duz">Dizini kayıtlı olmayan eski oturumlar konuşmanın gerçek dizinine bağlanır; genel dizin değiştiyse konuşma kayboluyordu.</li>
+              <li data-tur="duz">Konteynerde konuşma kayıtları kalıcı birimde; yeniden kurulumda silinmiyor.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.3">
+          <div class="sol"><a class="no" href="#v0.1.3">0.1.3</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Büyük oturumlar hızlı açılır</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Çok uzun oturumların geçmişi saniyeler içinde yüklenir (24 bin olaylık oturum 3 dakikada açılmıyordu, artık yaklaşık 4 saniye). Yüklenirken “n / N olay” ilerleme şeridi görünür.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.2">
+          <div class="sol"><a class="no" href="#v0.1.2">0.1.2</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Akış çipleri hep görünür</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Görev kartındaki akış çipleri (ajanı tek tıkla aç/kapat) görev kutusu boşken de görünür.</li>
+              <li data-tur="duz">Güvenlik denetimi anahtarı, denetçiden önce oluşturulmuş <code>config.json</code>'larda da çalışır: açınca denetçi akışa kendiliğinden eklenir.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.1">
+          <div class="sol"><a class="no" href="#v0.1.1">0.1.1</a><time datetime="2026-10-20">20 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>Otomatik yayın</h2>
+            <ul class="maddeler">
+              <li data-tur="iyi">Her sürüm, ana dala birleştirilince npm'e kendiliğinden yayımlanır. Kullanıcıya görünen değişiklik yok.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="surum" id="v0.1.0">
+          <div class="sol"><a class="no" href="#v0.1.0">0.1.0</a><time datetime="2026-10-19">19 Ekim 2026</time></div>
+          <div class="sag">
+            <h2>İlk yayın: npm'de kurmay-ai</h2>
+            <p class="ozet"><code>npm install -g kurmay-ai</code> → <code>kurmay init</code> → <code>kurmay serve</code>. Panelsiz tek görev için <code>kurmay "görev"</code>.</p>
+            <ul class="maddeler">
+              <li data-tur="yeni"><b>Satır satır onay</b>: kod yazılmadan önce Analist'in planı onayına gelir; her dosyada önce ve sonra hali yan yana, her değişiklik parçasına ayrı yorum. Onayla, reddet ya da ileri bir saate zamanla.</li>
+              <li data-tur="yeni"><b>Heyet</b>: Analist planlar (dosya yazamaz) → Saha Timi uygular (her mıntıkaya ayrı ajan, en fazla üçü aynı anda, yalnızca kendi mıntıkasına yazar) → Teftiş denetler (red gelirse yalnızca sorunlu mıntıka yeniden çalışır) → isteğe bağlı Güvenlik Denetçisi rapor yazar.</li>
+              <li data-tur="yeni"><b>Panel</b>: ekip sohbeti görünümü, aynı anda birden fazla oturum, oturuma özel model, akıl yürütme ve hedef dizin, klasör seçici, Durdur, soruya Markdown cevap kartı.</li>
+              <li data-tur="yeni"><b>Dayanıklılık</b>: sunucu meşgulken, zaman aşımında ya da bağlantı kopunca bekleyip konuşmayı kaldığı yerden sürdürür, görevi baştan göndermez. Bağlam penceresi model listesinden okunur, eşikte konuşma özetlenir.</li>
+              <li data-tur="yeni"><b>Ayarlar</b>: görsel akış şeması, rol tanımlarını düzenleme, bağlantı ayarları; <b>Aç/Kapat</b> sayfasında ajan, kural, beceri ve eklenti anahtarları; eklenti durum ışıkları ve araç listesi. Gizli Evrak ve Radar temaları.</li>
+            </ul>
+          </div>
+        </article>
+
+        <p class="oncesi">0.1.0'dan önce: proje Temmuz 2026'da başladı; önce “alpai”, sonra “yaver” adını taşıdı, 9 Ekim 2026'dan beri Kurmay. Yayın öncesi geliştirme kaydı <a href="https://github.com/yigitalptrpn/kurmay/commits/main">git geçmişinde</a>.</p>
+        <p class="bos" id="bos" hidden>Bu türde değişiklik yok.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="alt-bilgi">
+  <div class="kap">
+    <div><span class="marka">Kurmay</span><br>npm paketi <code>kurmay-ai</code><span class="yalniz-site"> · <a href="index.html">Tanıtım</a></span></div>
+    <div>Kaynak kod: <a href="https://github.com/yigitalptrpn/kurmay">github.com/yigitalptrpn/kurmay</a><span class="yalniz-site"><br>Bu sayfa tanıtım klasörünün parçasıdır, internetsiz de açılır.</span></div>
+    <div class="yalniz-site">Yazı tipleri SIL Açık Yazı Tipi Lisansı 1.1 ile:<br><a href="yazi-tipleri/lisans/archivo.txt">Archivo</a>, <a href="yazi-tipleri/lisans/courier-prime.txt">Courier Prime</a>, <a href="yazi-tipleri/lisans/saira-stencil-one.txt">Saira Stencil One</a>, <a href="yazi-tipleri/lisans/jetbrains-mono.txt">JetBrains Mono</a>.</div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+  var surumler = Array.prototype.slice.call(document.querySelectorAll(".surum"));
+
+  // Görünüm: açık (Gizli Evrak) / koyu (Radar); seçim yoksa işletim sistemine uyar
+  var dugmeler = document.querySelectorAll(".tema button");
+  function koyuMu() {
+    if (root.dataset.theme) return root.dataset.theme === "dark";
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function isaretle() {
+    var koyu = koyuMu();
+    dugmeler.forEach(function (b) { b.setAttribute("aria-pressed", String((b.dataset.t === "dark") === koyu)); });
+  }
+  dugmeler.forEach(function (b) {
+    b.addEventListener("click", function () {
+      root.dataset.theme = b.dataset.t;
+      try { localStorage.setItem("kurmay-tanitim-tema", b.dataset.t); } catch (e) {}
+      isaretle();
+    });
+  });
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", isaretle); } catch (e) {}
+  isaretle();
+
+  // Kopyala: komut satırlarındaki "$ " işaretleri ve # yorumları kopyalanmaz
+  document.querySelectorAll(".kopyala").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var pre = b.parentElement.querySelector("pre");
+      var metin = Array.prototype.map.call(pre.childNodes, function (n) {
+        return n.nodeType === 1 && n.classList.contains("is") ? "" : n.textContent;
+      }).join("").replace(/[ \t]+#.*$/gm, "");
+      function oldu() { b.textContent = "Kopyalandı"; setTimeout(function () { b.textContent = "Kopyala"; }, 1600); }
+      function sec() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { if (document.execCommand("copy")) { oldu(); return; } } catch (e) {}
+        b.textContent = "Seçildi, Ctrl+C";
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(metin).then(oldu, sec);
+      else sec();
+    });
+  });
+
+  // Panelde: bağlantılar panelin adreslerine, künyede kurulu sürüm
+  if (PANEL) {
+    document.querySelectorAll("[data-panel-href]").forEach(function (a) { a.setAttribute("href", a.dataset.panelHref); });
+    if (PANEL.surum) document.getElementById("kKurulu").textContent = "v" + PANEL.surum;
+  }
+
+  if (!surumler.length) return;
+  function bilgi(el) {
+    var t = el.querySelector("time").getAttribute("datetime").split("-");
+    return { id: el.id, no: el.querySelector(".no").textContent, yil: +t[0], ay: +t[1] - 1, gun: +t[2] };
+  }
+  var liste = surumler.map(bilgi);
+
+  // Giriş künyesi girdilerden: son sürüm, sayı, ilk yayın
+  var son = liste[0], ilk = liste[liste.length - 1];
+  document.getElementById("kSayi").textContent = "KRM-" + son.no;
+  document.getElementById("kSon").textContent = son.no + " · " + son.gun + " " + AYLAR[son.ay] + " " + son.yil;
+  document.getElementById("kSay").textContent = liste.length + " sürüm · ilki " + ilk.gun + " " + AYLAR[ilk.ay] + " " + ilk.yil;
+
+  // Sol dizin: aylara göre gruplu sürüm listesi
+  var kutu = document.getElementById("dizinListe"), linkler = {}, grup = null, anahtar = "";
+  liste.forEach(function (s) {
+    var k = s.yil + "-" + s.ay;
+    if (k !== anahtar) {
+      anahtar = k;
+      var ay = document.createElement("div"); ay.className = "ay";
+      var h = document.createElement("h3"); h.textContent = AYLAR[s.ay] + " " + s.yil;
+      grup = document.createElement("ul");
+      ay.appendChild(h); ay.appendChild(grup); kutu.appendChild(ay);
+    }
+    var li = document.createElement("li"), a = document.createElement("a");
+    a.href = "#" + s.id; a.textContent = s.no;
+    var tarih = document.createElement("small"); tarih.textContent = s.gun + " " + AYLAR[s.ay].slice(0, 3);
+    a.appendChild(tarih); li.appendChild(a); grup.appendChild(li);
+    linkler[s.id] = a;
+  });
+  document.getElementById("dizin").hidden = false;
+
+  // Süzgeç: türe göre maddeleri gizle; maddesi kalmayan sürümü de gizle
+  var suzDugmeleri = document.querySelectorAll(".suzgec button");
+  var tumMaddeler = document.querySelectorAll(".maddeler li");
+  var sayilar = { "": tumMaddeler.length, yeni: 0, iyi: 0, duz: 0 };
+  tumMaddeler.forEach(function (li) { if (li.dataset.tur in sayilar) sayilar[li.dataset.tur]++; });
+  suzDugmeleri.forEach(function (b) {
+    b.querySelector("span").textContent = sayilar[b.dataset.tur];
+    b.addEventListener("click", function () { suz(b.dataset.tur); });
+  });
+  function suz(tur) {
+    suzDugmeleri.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.tur === tur)); });
+    var gorunen = 0;
+    surumler.forEach(function (el) {
+      var dolu = false;
+      el.querySelectorAll(".maddeler li").forEach(function (li) {
+        var uy = !tur || li.dataset.tur === tur;
+        li.hidden = !uy; if (uy) dolu = true;
+      });
+      var oz = el.querySelector(".ozet"); if (oz) oz.hidden = !!tur;
+      el.hidden = !dolu;
+      linkler[el.id].classList.toggle("gizli", !dolu);
+      if (dolu) gorunen++;
+    });
+    document.getElementById("bos").hidden = gorunen > 0;
+  }
+
+  // Dizinde ekrandaki sürüm
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (girdiler) {
+      girdiler.forEach(function (g) {
+        if (!g.isIntersecting) return;
+        Object.keys(linkler).forEach(function (k) { linkler[k].classList.toggle("su", k === g.target.id); });
+      });
+    }, { rootMargin: "-25% 0px -65% 0px" });
+    surumler.forEach(function (el) { io.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

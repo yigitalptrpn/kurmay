@@ -119,6 +119,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
 
 <div class="hdr">
   <span class="brand">Kurmay</span>
+  <a class="pill" id="verLink" href="/surumler" title="Sürüm notları" style="display:none;background:var(--bg);color:var(--muted);text-decoration:none"></a>
   <span class="pill" id="prov" style="background:var(--bg);color:var(--muted)"></span>
   <span class="pill" id="dir" style="background:var(--bg);color:var(--muted)"></span>
   <span class="sp"></span>
@@ -1346,6 +1347,13 @@ $("ndAddBtn").addEventListener("click", async ()=>{
   $("addForm").classList.add("hidden");
   selected = key; markDirty(); refreshEntry(); render();
 });
+
+// Çalışan sürüm başlıkta; tıklayınca sürüm notları (alınamazsa hiç görünmez)
+fetch("/version").then((r) => r.json()).then((d) => {
+  if (!d.version) return;
+  $("verLink").textContent = "v" + d.version + " · sürüm notları";
+  $("verLink").style.display = "";
+}).catch(() => {});
 
 async function load(){
   const d = await (await fetch("/config-data")).json();

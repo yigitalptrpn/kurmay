@@ -186,6 +186,7 @@ export interface UiServerOptions {
  *   GET  /theme.js  tema seçimi: kayıtlı temayı uygular, renk örneklerini kurar (ui/theme.js)
  *   GET  /version   { version } — çalışan Kurmay'ın sürümü (package.json); panelde marka yanında
  *   GET  /fonts/<ad>.woff2  gömülü yazı tipleri (ui/fonts) — çevrimdışı çalışır
+ *   GET  /surumler  sürüm notları (tanitim/surumler.html — tanıtım sitesindekinin aynısı, pakete de girer)
  *   GET  /events?session=ID  SSE: o oturumun geçmişi (diskteki kayıtlar dahil) + canlı akışı
  *   GET  /lobby     SSE: oturum listesi + durumları, her değişiklikte tam liste
  *   POST /approval  { session, approved, comment?, runAt? } — o oturumun bekleyen onayını çözer
@@ -237,6 +238,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const themeCssPath = path.join(uiDir, "theme.css");
   const themeJsPath = path.join(uiDir, "theme.js");
   const dirPickerPath = path.join(uiDir, "dirpicker.js");
+  const releaseNotesPath = path.join(uiDir, "..", "tanitim", "surumler.html");
   // Sürüm package.json'dan bir kez okunur (geliştirmede depo kökü, pakette paket kökü)
   let version = "";
   try {
@@ -311,6 +313,23 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       res.writeHead(200, { "content-type": "font/woff2", "cache-control": "public, max-age=86400" });
       res.end(fs.readFileSync(file));
+      return;
+    }
+
+    // Sürüm notları: tek kaynak tanıtım sitesindeki sayfa. Yazı tipleri sitede yanındaki
+    // klasörden, burada panelin /fonts/ ucundan (aynı dosyalar); sayfa panelde açıldığını ve
+    // kurulu sürümü gömülen veriden öğrenir (bağlantılarını panele çevirir)
+    if (req.method === "GET" && (url.pathname === "/surumler" || url.pathname === "/surumler.html")) {
+      let html: string;
+      try {
+        html = fs.readFileSync(releaseNotesPath, "utf8");
+      } catch {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("sürüm notları bulunamadı");
+      }
+      const veri = JSON.stringify({ surum: version }).replace(/</g, "\\u003c");
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(html.replace(/url\(yazi-tipleri\//g, "url(/fonts/").replace("/*PANEL*/null", () => veri));
       return;
     }
 

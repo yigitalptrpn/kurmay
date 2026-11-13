@@ -25,7 +25,8 @@ body { overflow:hidden; }
 .layout:has(.sidebar.collapsed) { grid-template-columns:64px minmax(0,1fr) 320px; }
 .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 4px 18px; }
 .sidebar-head .brand { font:800 18px var(--font-display); display:flex; align-items:baseline; gap:8px; min-width:0; }
-.sidebar-head .brand-ver { font:500 12px var(--font-mono); color:var(--muted); letter-spacing:.02em; text-transform:none; text-shadow:none; white-space:nowrap; }
+.sidebar-head .brand-ver { font:500 12px var(--font-mono); color:var(--muted); letter-spacing:.02em; text-transform:none; text-shadow:none; white-space:nowrap; text-decoration:none; }
+.sidebar-head .brand-ver:hover { color:var(--text); text-decoration:underline; text-underline-offset:3px; }
 .sidebar-head button { padding:2px 9px; font-size:13px; min-height:auto; }
 .side-label { margin:18px 8px 8px; }
 /* Arama: sol sütunun başında kutu; sorgu varken oturum listesi yerine sonuçlar */
@@ -630,7 +631,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 <div class="layout">
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-head">
-    <span class="brand"><span class="brand-name">Kurmay</span><span class="brand-ver" id="brandVer" hidden></span></span>
+    <span class="brand"><span class="brand-name">Kurmay</span><a class="brand-ver" id="brandVer" href="/surumler" hidden></a></span>
     <button id="btnSidebar" title="Aç / kapat">⟨</button>
   </div>
   <div class="sidebar-body" id="sidebarBody">
@@ -3241,11 +3242,11 @@ $("fwdSel").addEventListener("change", async () => {
 });
 loadModels();
 
-// Çalışan Kurmay'ın sürümü marka yazısının yanında (alınamazsa hiç görünmez)
+// Çalışan Kurmay'ın sürümü marka yazısının yanında (alınamazsa hiç görünmez); tıklayınca sürüm notları
 fetch("/version").then((r) => r.json()).then((d) => {
   if (!d.version) return;
   $("brandVer").textContent = "v" + d.version;
-  $("brandVer").title = "Kurmay sürümü " + d.version;
+  $("brandVer").title = "Kurmay sürümü " + d.version + " — sürüm notları";
   $("brandVer").hidden = false;
 }).catch(() => {});
 
