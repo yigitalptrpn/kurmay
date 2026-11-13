@@ -36,6 +36,11 @@ export interface SessionEntry {
   /** Entry ajanın (Analist) konuşmasının bilinen boyutu, token — panelde doluluk,
    *  eşiği geçmişse sıradaki görevden önce özetlenir */
   contextTokens?: number;
+  /** TFS modu: oturumun bağlı olduğu iş öğesi (son iş öğesi görevi). Oturumda iş öğesi
+   *  seçmeden verilen sonraki görevler onun devamı sayılır, sonuç bu öğeye yazılır */
+  workItem?: { id: number; type: string; title: string; state: string; url: string; project: string };
+  /** TFS modu: oturumun bağlı olduğu çekme isteği (son PR görevi); sonraki görevler onun devamı */
+  pr?: { id: number; title: string; url: string; repository: string; mode: "yorum" | "incele" };
 }
 
 /** Görev metninden kısa bir oturum ismi türetir */
@@ -145,6 +150,26 @@ export class SessionStore {
     if (!s) return false;
     if (effort) s.effort = effort;
     else delete s.effort;
+    this.persist();
+    return true;
+  }
+
+  /** Oturumu bir TFS iş öğesine bağlar (iş öğesinden görev başlatılınca) */
+  setWorkItem(id: string, workItem: NonNullable<SessionEntry["workItem"]>): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    s.workItem = workItem;
+    delete s.pr; // oturum tek bir TFS kaydına bağlı: en son görev verilen
+    this.persist();
+    return true;
+  }
+
+  /** Oturumu bir TFS çekme isteğine bağlar (PR'dan görev başlatılınca); iş öğesi bağı kalkar */
+  setPr(id: string, pr: NonNullable<SessionEntry["pr"]>): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    s.pr = pr;
+    delete s.workItem;
     this.persist();
     return true;
   }

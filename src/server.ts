@@ -10,6 +10,8 @@ import { buildEml, renderReportEmail } from "./reportEmail.js";
 import type { SecurityReport } from "./securityReport.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import { SEARCH_KINDS, type SearchKind } from "./search.js";
+import { parseWorkItemRef } from "./tfs.js";
+import { parsePrRef } from "./tfsPr.js";
 import type { ModelInfo } from "./models.js";
 import type { McpLight, McpToolInfo } from "./mcpStatus.js";
 
@@ -72,6 +74,43 @@ function browseDir(requested: string, fallback: string) {
 /** Aç/Kapat sayfasındaki anahtar türleri: ajan düğümü, kural, beceri, MCP sunucusu */
 export type ToggleKind = "agent" | "rule" | "skill" | "mcp";
 
+/** POST /task yanıtı */
+export interface TaskResult {
+  ok: boolean;
+  error?: string;
+  session?: string;
+  warning?: string;
+  dirChanged?: string;
+  resetResume?: boolean;
+  /** TFS görevinde oturumun/koşunun görünen adı ("#123 · Başlık") */
+  display?: string;
+}
+
+/** TFS modu uçları (src/index.ts kurar; src/tfs.ts + src/tfsTask.ts) */
+export interface TfsApi {
+  view(): unknown;
+  save(input: Record<string, unknown>): Promise<{ ok: boolean; error?: string; view?: unknown }>;
+  probe(input: Record<string, unknown>): Promise<{ ok: boolean; error?: string; probe?: unknown }>;
+  preview(id: number): Promise<unknown>;
+  mine(done: boolean): Promise<unknown>;
+  search(q: string): Promise<unknown>;
+  attachment(guid: string, name: string): Promise<{ data: Buffer; type: string }>;
+  states(session: string): Promise<unknown>;
+  write(session: string, text: string, state?: string, pr?: { open?: boolean; target?: string; draft?: boolean }): Promise<{ ok: boolean; error?: string }>;
+  dismiss(session: string): { ok: boolean; error?: string };
+  prPreview(id: number, dir?: string): Promise<unknown>;
+  prMine(): Promise<unknown>;
+  prCheckout(id: number, dir?: string): Promise<unknown>;
+  prWrite(session: string, input: {
+    push: boolean;
+    message?: string;
+    replies: Array<{ threadId: number; firstCommentId: number; text: string; resolve: boolean; send: boolean }>;
+    comments: Array<{ file?: string; line?: number; text: string; send: boolean }>;
+    general?: string;
+  }): Promise<{ ok: boolean; error?: string }>;
+  prDismiss(session: string): { ok: boolean; error?: string };
+}
+
 export interface UiServerOptions {
   /** Oturum çalışma zamanları — olay akışı, onay/zamanlama/iptal oturum başına */
   runtimes: RuntimeRegistry;
@@ -86,7 +125,12 @@ export interface UiServerOptions {
     /** Yalnızca bu görev için seçilen hedef dizin (panelde yazma kutusundaki 📁): yeni oturum
      *  orada açılır, var olan oturumun dizini buna geçer; config.json'daki genel dizin değişmez */
     targetDir?: string,
-  ) => { ok: boolean; error?: string; session?: string; warning?: string; dirChanged?: string; resetResume?: boolean };
+    /** TFS modu: görev bu iş öğesinden kurulur (task = kullanıcının ek talimatı, boş olabilir) */
+    workItem?: number,
+    /** TFS modu: görev bu çekme isteğinden kurulur; kip: yorum (açık yorumları ele al) | incele */
+    pr?: number,
+    prMode?: "yorum" | "incele",
+  ) => TaskResult | Promise<TaskResult>;
   /** Görev eklerinin klasörü (runs/) — GET /ekler/<oturum>/<dosya> */
   runsDir?: string;
   /** Oturum listesi + canlı durumları (GET /sessions ve /lobby SSE) */
@@ -176,6 +220,8 @@ export interface UiServerOptions {
   startAudit?: (dir: string) => { ok: boolean; error?: string; job?: unknown };
   /** Süren bağımsız denetimi durdurur (POST /security-audits/cancel) */
   cancelAudit?: (id: string) => boolean;
+  /** TFS modu: ayarlar, iş öğesi önizleme/arama, eklerin önizlemesi, sonucu yazma */
+  tfs?: TfsApi;
 }
 
 /**
@@ -224,6 +270,21 @@ export interface UiServerOptions {
  *   GET  /guvenlik/eposta/<id>       raporun e-posta hâli (tablo düzenli HTML — önizleme / kopyala-yapıştır)
  *   GET  /guvenlik/eposta/<id>/eml   gönderilmemiş e-posta taslağı (.eml, Outlook düzenlenebilir açar); tarayıcı varsa PDF ekli
  *   GET  /security-reports/<id>  tam rapor (bulgular, olumlu tespitler…)
+ *   GET  /tfs           TFS modu ayarları (anahtarın kendisi yok: hasToken, tokenHint) — Ayarlar kartı ve panel
+ *   POST /tfs           { enabled?, url?, project?, token? (null = sil), writeBack?, insecureTls?, caFile? } — kaydeder (canlı)
+ *   POST /tfs/dene      { url?, project?, token?, … } — bağlantıyı dener: kimlik, sunucu sürümü, projeler
+ *   GET  /tfs/is-ogesi?id=      iş öğesi önizlemesi (bölümler Markdown, ekler, yorumlar, bağlı öğeler)
+ *   GET  /tfs/benimkiler?tumu=  bana atanan iş öğeleri (tumu=1: tamamlananlar dahil)
+ *   GET  /tfs/ara?q=            başlıkta arama (projede)
+ *   GET  /tfs/ek/<guid>?ad=     iş öğesi eki (önizlemede görsel) — anahtarla, yalnızca ayarlardaki sunucudan
+ *   GET  /tfs/durumlar?session= yazma kartı: iş öğesinin güncel durumu + türünün durumları
+ *   POST /tfs/yaz       { session, text, state? } — sonucu iş öğesine yazar (tfs_written olayı)
+ *   POST /tfs/yazma     { session } — bu sonucu yazma (kart kapanır)
+ *   GET  /tfs/pr?id=&dizin=     çekme isteği kartı: PR, açık yorum dizileri, değişen dosyalar, yerel deponun durumu
+ *   GET  /tfs/pr-benim          açık PR'larım (açtıklarım + inceleyeni olduklarım)
+ *   POST /tfs/pr-dal    { id, dizin? } — yerel depoyu PR'ın dalına geçirir (çalışma ağacı temizse)
+ *   POST /tfs/pr-yaz    { session, push, message?, replies[], comments[], general? } — PR'a yazar (tfs_pr_written)
+ *   POST /tfs/pr-yazma  { session } — PR'a yazma (kart kapanır)
  *   GET  /toggles       Aç/Kapat sayfası (ui/toggles.html)
  *   GET  /toggles-data  { entry, agents[], skills[], mcpServers[] } — açık/kapalı durumları
  *   POST /toggle        { kind: "agent"|"rule"|"skill"|"mcp", name, disabled } — açar/kapatır (canlı + config.json)
@@ -505,7 +566,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", () => {
-        let dir = "";
+        let dir: string;
         let session: string | undefined;
         try {
           const parsed = JSON.parse(body) as { dir?: unknown; session?: unknown };
@@ -547,7 +608,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", () => {
-        let model = "";
+        let model: string;
         let session: string | undefined;
         try {
           const parsed = JSON.parse(body) as { model?: unknown; session?: unknown };
@@ -569,7 +630,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", () => {
-        let effort = "";
+        let effort: string;
         let session: string | undefined;
         try {
           const parsed = JSON.parse(body) as { effort?: unknown; session?: unknown };
@@ -619,8 +680,8 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", () => {
-        let key = "";
-        let disabled = false;
+        let key: string;
+        let disabled: boolean;
         try {
           const parsed = JSON.parse(body) as { key?: unknown; disabled?: unknown };
           key = String(parsed.key ?? "");
@@ -953,7 +1014,21 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         if (!parsed) return json(res, 400, { ok: false, error: "geçersiz istek" });
         const task = typeof parsed.task === "string" ? parsed.task.trim() : "";
-        if (!task) return json(res, 400, { ok: false, error: "görev boş olamaz" });
+        // TFS: iş öğesi numarası (ya da "#123", iş öğesi adresi) — görev ondan kurulur, metin ek talimattır
+        let workItem: number | undefined;
+        if (parsed.workItem !== undefined && parsed.workItem !== null && parsed.workItem !== "") {
+          workItem = typeof parsed.workItem === "number" ? parsed.workItem : parseWorkItemRef(String(parsed.workItem));
+          if (!workItem || !Number.isInteger(workItem) || workItem < 1) return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+        }
+        // TFS: çekme isteği numarası ("!45", PR adresi) + kip
+        let pr: number | undefined;
+        if (parsed.pr !== undefined && parsed.pr !== null && parsed.pr !== "") {
+          pr = typeof parsed.pr === "number" ? parsed.pr : parsePrRef(String(parsed.pr)) ?? (/^\d+$/.test(String(parsed.pr).trim()) ? Number(parsed.pr) : undefined);
+          if (!pr || !Number.isInteger(pr) || pr < 1) return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+        }
+        const prMode = parsed.prMode === "incele" ? "incele" : "yorum";
+        if (workItem !== undefined && pr !== undefined) return json(res, 400, { ok: false, error: "aynı görevde hem iş öğesi hem çekme isteği seçilemez" });
+        if (!task && workItem === undefined && pr === undefined) return json(res, 400, { ok: false, error: "görev boş olamaz" });
         const session = typeof parsed.session === "string" && parsed.session ? parsed.session : undefined;
         // runAt: ileri bir başlangıç zamanı (epoch ms ya da "+30m"/"2026-07-10 14:00" metni)
         let runAt: number | undefined;
@@ -967,10 +1042,143 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         const { files, error: fileError } = parseFiles(parsed.files);
         if (fileError) return json(res, 400, { ok: false, error: fileError });
         const targetDir = typeof parsed.targetDir === "string" && parsed.targetDir.trim() ? parsed.targetDir.trim() : undefined;
-        const result = options.onTask(task, session, runAt, files, targetDir);
-        json(res, result.ok ? 202 : 409, result);
+        Promise.resolve(options.onTask(task, session, runAt, files, targetDir, workItem, pr, prMode)).then(
+          (result) => json(res, result.ok ? 202 : 409, result),
+          (e: unknown) => json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) }),
+        );
       });
       return;
+    }
+
+    // ── TFS modu ──
+    if (url.pathname === "/tfs" || url.pathname.startsWith("/tfs/")) {
+      const tfs = options.tfs;
+      if (!tfs) return json(res, 409, { ok: false, error: "TFS modu kapalı" });
+      /** Hata: TFS'in kendi hatası (yetki, bulunamadı…) 4xx, beklenmeyen 500 */
+      const fail = (e: unknown) => {
+        const status = (e as { status?: number }).status;
+        const code = e instanceof Error && e.name === "TfsError" ? (status === 404 ? 404 : status === 401 || status === 403 ? 403 : 502) : 500;
+        json(res, code, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      };
+      const p = url.pathname;
+      if (req.method === "GET" && p === "/tfs") return json(res, 200, tfs.view());
+      if (req.method === "POST" && p === "/tfs") {
+        readJson(req, (b) => {
+          if (!b) return json(res, 400, { ok: false, error: "geçersiz istek" });
+          tfs.save(b).then((r) => json(res, r.ok ? 200 : 400, r), fail);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/dene") {
+        readJson(req, (b) => tfs.probe(b ?? {}).then((r) => json(res, r.ok ? 200 : 400, r), fail));
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/is-ogesi") {
+        const id = parseWorkItemRef(url.searchParams.get("id") ?? "");
+        if (!id) return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+        tfs.preview(id).then((item) => json(res, 200, { ok: true, item }), fail);
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/benimkiler") {
+        tfs.mine(url.searchParams.get("tumu") === "1").then((items) => json(res, 200, { ok: true, items }), fail);
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/ara") {
+        const q = (url.searchParams.get("q") ?? "").trim();
+        if (q.length < 2) return json(res, 400, { ok: false, error: "en az 2 karakter yaz" });
+        tfs.search(q).then((items) => json(res, 200, { ok: true, items }), fail);
+        return;
+      }
+      const ek = /^\/tfs\/ek\/([0-9a-fA-F-]{36})$/.exec(p);
+      if (req.method === "GET" && ek) {
+        const name = (url.searchParams.get("ad") ?? "ek").replace(/[\\/\r\n"]/g, "_").slice(0, 200);
+        tfs.attachment(ek[1], name).then(({ data, type }) => {
+          const image = type.startsWith("image/") && type !== "image/svg+xml";
+          res.writeHead(200, {
+            "content-type": image ? type : "application/octet-stream",
+            "cache-control": "private, max-age=3600",
+            "x-content-type-options": "nosniff",
+            ...(image ? {} : { "content-disposition": attachmentHeader(name) }),
+          });
+          res.end(data);
+        }, fail);
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/durumlar") {
+        tfs.states(url.searchParams.get("session") ?? "").then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/yaz") {
+        readJson(req, (b) => {
+          const session = typeof b?.session === "string" ? b.session : "";
+          const text = typeof b?.text === "string" ? b.text : "";
+          const state = typeof b?.state === "string" && b.state.trim() ? b.state.trim() : undefined;
+          const prb = b?.pr && typeof b.pr === "object" ? (b.pr as Record<string, unknown>) : undefined;
+          const prOpts = prb?.open === true ? { open: true, ...(typeof prb.target === "string" ? { target: prb.target } : {}), draft: prb.draft === true } : undefined;
+          if (!session) return json(res, 400, { ok: false, error: "oturum belirtilmedi" });
+          if (text.length > 20_000) return json(res, 400, { ok: false, error: "not çok uzun (en fazla 20 000 karakter)" });
+          tfs.write(session, text, state, prOpts).then((r) => json(res, r.ok ? 200 : 400, r), fail);
+        });
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/pr") {
+        const raw = url.searchParams.get("id") ?? "";
+        const id = parsePrRef(raw) ?? (/^\d+$/.test(raw.trim()) ? Number(raw.trim()) : undefined);
+        if (!id) return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+        tfs.prPreview(id, url.searchParams.get("dizin") || undefined).then((pr) => json(res, 200, { ok: true, pr }), fail);
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/pr-benim") {
+        tfs.prMine().then((items) => json(res, 200, { ok: true, items }), fail);
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/pr-dal") {
+        readJson(req, (b) => {
+          const id = typeof b?.id === "number" ? b.id : Number(b?.id);
+          if (!Number.isInteger(id) || id < 1) return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+          tfs.prCheckout(id, typeof b?.dizin === "string" ? b.dizin : undefined).then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/pr-yaz") {
+        readJson(req, (b) => {
+          const session = typeof b?.session === "string" ? b.session : "";
+          if (!session) return json(res, 400, { ok: false, error: "oturum belirtilmedi" });
+          const arr = (v: unknown) => (Array.isArray(v) ? (v as Array<Record<string, unknown>>) : []);
+          const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+          const input = {
+            push: b?.push === true,
+            message: str(b?.message, 4000),
+            replies: arr(b?.replies)
+              .filter((r) => typeof r.threadId === "number")
+              .map((r) => ({ threadId: r.threadId as number, firstCommentId: typeof r.firstCommentId === "number" ? r.firstCommentId : 1, text: str(r.text, 20_000), resolve: r.resolve === true, send: r.send !== false })),
+            comments: arr(b?.comments).map((c) => ({
+              ...(typeof c.file === "string" && c.file ? { file: c.file } : {}),
+              ...(typeof c.line === "number" && c.line > 0 ? { line: c.line } : {}),
+              text: str(c.text, 20_000),
+              send: c.send !== false,
+            })),
+            general: str(b?.general, 20_000),
+          };
+          tfs.prWrite(session, input).then((r) => json(res, r.ok ? 200 : 400, r), fail);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/pr-yazma") {
+        readJson(req, (b) => {
+          const r = tfs.prDismiss(typeof b?.session === "string" ? b.session : "");
+          json(res, r.ok ? 200 : 400, r);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/yazma") {
+        readJson(req, (b) => {
+          const r = tfs.dismiss(typeof b?.session === "string" ? b.session : "");
+          json(res, r.ok ? 200 : 400, r);
+        });
+        return;
+      }
+      return json(res, 404, { ok: false, error: "bilinmeyen TFS ucu" });
     }
 
     res.writeHead(404);

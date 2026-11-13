@@ -86,11 +86,12 @@ export function saveFiles(runsDir: string, sessionId: string, files: FileInput[]
   });
 }
 
-/** Ajanlara giden görev metninin sonuna eklenen bölüm */
-export function attachmentSection(atts: Attachment[]): string {
+/** Ajanlara giden görev metninin sonuna eklenen bölüm. intro: ilk cümle (TFS iş öğesinin
+ *  ekleri için farklı) — verilmezse "Kullanıcı görevle birlikte N dosya verdi." */
+export function attachmentSection(atts: Attachment[], intro?: string): string {
   if (atts.length === 0) return "";
   return (
-    `\n\n# Ekler\nKullanıcı görevle birlikte ${atts.length} dosya verdi. Read aracıyla aç ve incele — ` +
+    `\n\n# Ekler\n${intro ?? `Kullanıcı görevle birlikte ${atts.length} dosya verdi.`} Read aracıyla aç ve incele — ` +
     "görev bunlara atıf yapıyor olabilir:\n" +
     atts
       .map((a) =>

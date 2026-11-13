@@ -251,12 +251,12 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
   <section class="giris">
     <div class="kap">
       <div>
-        <div class="ust-satir"><span><b>SAYI:</b> <span id="kSayi">KRM-0.1.24</span></span><span><b>KONU:</b> Değişiklik kaydı</span></div>
+        <div class="ust-satir"><span><b>SAYI:</b> <span id="kSayi">KRM-0.1.25</span></span><span><b>KONU:</b> Değişiklik kaydı</span></div>
         <h1 class="baslik">Sürüm notları</h1>
         <p class="lede">Kurmay'ın her sürümünde neyin değiştiği. En yeni sürüm en üstte; her sürüm npm'de <code>kurmay-ai</code> paketi olarak yayımlanır.</p>
         <dl class="kunye">
-          <dt>Son sürüm</dt><dd id="kSon">0.1.24 · 13 Kasım 2026</dd>
-          <dt>Kayıt</dt><dd id="kSay">25 sürüm · ilki 19 Ekim 2026</dd>
+          <dt>Son sürüm</dt><dd id="kSon">0.1.25 · 13 Kasım 2026</dd>
+          <dt>Kayıt</dt><dd id="kSay">26 sürüm · ilki 19 Ekim 2026</dd>
           <dt class="yalniz-site">Panelde</dt><dd class="yalniz-site">Sol üstteki “Kurmay v0.1.x” etiketine ya da Ayarlar'daki sürüme tıkla</dd>
           <dt class="yalniz-panel">Kurulu sürüm</dt><dd class="yalniz-panel" id="kKurulu">—</dd>
         </dl>
@@ -303,6 +303,23 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
     </div>
   </article>
 -->
+        <article class="surum" id="v0.1.25">
+          <div class="sol"><a class="no" href="#v0.1.25">0.1.25</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>TFS modu: iş öğeleri ve çekme istekleri</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">TFS modu (Ayarlar): görev kutusunda bir iş öğesi seçersin — numarasıyla (#1201), adresiyle, başlıkta arayarak ya da sana atananlardan. Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve metindeki görselleri TFS'ten kendisi alıp ekibe görev yapar; elle kopyalamak gerekmez.</li>
+              <li data-tur="yeni">İş bitince sonuç iş öğesine yazılır: panelde not hazır gelir, düzenleyip gönderirsin, istersen durumunu da değiştirirsin. Ayarlar'dan kendiliğinden yazacak şekilde de açılabilir.</li>
+              <li data-tur="yeni">İş öğesinden çekme isteği: değişiklikler yeni bir dala gönderilir, iş öğesine bağlı çekme isteği açılır, bağlantısı iş öğesine yazılır.</li>
+              <li data-tur="yeni">Çekme istekleri (!45): açık inceleme yorumlarını ele alır — kodu isteğin dalında düzeltir, her yoruma ne yapıldığını yazar, “düzeltildi” olarak işaretler, değişikliği dala gönderir. Ya da isteği inceler, bulduklarını ilgili satıra yorum olarak yazar.</li>
+              <li data-tur="yeni">Bilgisayardaki kopya isteğin dalında değilse kart bunu söyler; “Dala geç” ile tek tıkla geçilir. Kaydedilmemiş değişiklik varsa dala dokunulmaz.</li>
+              <li data-tur="yeni">Kurmay'ın TFS'e yazdığı her mesaj “KURMAY POSTA KOMUTANI” başlığıyla başlar; rapor kısa, askerî düzende ve sade Türkçeyle yazılır.</li>
+              <li data-tur="iyi">Erişim anahtarı ayar dosyasına yazılmaz, tarayıcıya gönderilmez. TFS'in 2017 ve sonraki bütün sürümleriyle çalışır, sunucunun sürümünü kendisi anlar. Kurumun kök sertifikası Windows sertifika deposundan da okunur.</li>
+              <li data-tur="iyi">Oturum araması, görevin geldiği iş öğesinin ve çekme isteğinin içeriğinde de arar.</li>
+            </ul>
+          </div>
+        </article>
+
         <article class="surum" id="v0.1.24">
           <div class="sol"><a class="no" href="#v0.1.24">0.1.24</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
           <div class="sag">

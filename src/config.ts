@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLI_STALL_MIN_MS } from "./resilience.js";
-import { EFFORT_LEVELS, isCommandNode, isFanoutNode, type AppConfig, type EffortSetting, type McpServerJson, type ProviderConfig } from "./types.js";
+import { EFFORT_LEVELS, isCommandNode, isFanoutNode, TFS_WRITE_BACK, type AppConfig, type EffortSetting, type McpServerJson, type ProviderConfig } from "./types.js";
 
 /**
  * Tek config dosyasını yükler ve doğrular: sağlayıcı bilgileri (adres, token,
@@ -107,6 +107,30 @@ export function loadAppConfig(configPath: string): AppConfig {
       throw new Error(`config: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`);
     } else if (w.apiKey !== undefined && typeof w.apiKey !== "string") {
       throw new Error(`config: "planWebhook.apiKey" metin olmalı`);
+    }
+  }
+
+  if (cfg.tfs !== undefined) {
+    const t = cfg.tfs as Record<string, unknown> | null;
+    if (!t || typeof t !== "object" || Array.isArray(t)) {
+      throw new Error(`config: "tfs" bir nesne olmalı ({"enabled", "url", "project", …}) (verilen: ${JSON.stringify(t)})`);
+    }
+    for (const k of ["enabled", "insecureTls"]) {
+      if (t[k] !== undefined && typeof t[k] !== "boolean") throw new Error(`config: "tfs.${k}" true/false olmalı (verilen: ${JSON.stringify(t[k])})`);
+    }
+    for (const k of ["url", "project", "caFile"]) {
+      if (t[k] !== undefined && typeof t[k] !== "string") throw new Error(`config: "tfs.${k}" metin olmalı (verilen: ${JSON.stringify(t[k])})`);
+      if (t[k] === "") delete t[k];
+    }
+    if (typeof t.url === "string" && !/^https?:\/\/[^\s]+$/i.test(t.url.trim())) {
+      throw new Error(`config: "tfs.url" http:// ya da https:// ile başlayan koleksiyon adresi olmalı (verilen: ${JSON.stringify(t.url)})`);
+    }
+    if (t.writeBack !== undefined && !(TFS_WRITE_BACK as readonly unknown[]).includes(t.writeBack)) {
+      throw new Error(`config: "tfs.writeBack" şunlardan biri olmalı: ${TFS_WRITE_BACK.join(", ")} (verilen: ${JSON.stringify(t.writeBack)})`);
+    }
+    if ("token" in t) {
+      // Anahtar config.json'a yazılmaz (git'e gidebilir, panele açık) — Ayarlar'dan girilince .gizli/'ye taşınır
+      throw new Error('config: "tfs.token" config.json\'da tutulmaz — anahtarı Ayarlar → TFS modu kartından gir ya da KURMAY_TFS_TOKEN ortam değişkeniyle ver');
     }
   }
 

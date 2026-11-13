@@ -108,6 +108,9 @@ function eventTexts(e: TimedEvent): Array<{ kind: SearchKind; text: string; agen
       return [
         { kind: "gorev", text: e.task },
         ...(e.attachments ?? []).map((a) => ({ kind: "gorev" as const, text: a.original })),
+        // TFS: iş öğesinin / çekme isteğinin ekibe giden metni (açıklama, kabul kriterleri, yorumlar…)
+        ...(e.workItem?.text ? [{ kind: "gorev" as const, text: e.workItem.text }] : []),
+        ...(e.pr?.text ? [{ kind: "gorev" as const, text: e.pr.text }] : []),
       ];
     case "agent_text":
       return [{ kind: "mesaj", text: e.text, agent: e.agent }];
