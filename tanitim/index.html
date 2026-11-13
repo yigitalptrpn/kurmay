@@ -718,11 +718,11 @@ dialog.buyut p { font:400 14px/1.5 var(--f-daktilo); color:#F1EAD6; text-align:c
       <div class="ek">
         <div class="ek-bas"><span class="etiket">Ek-B</span><h3>Bilinen sınırlar</h3></div>
         <ul class="sinirlar">
-          <li><b>Panelde giriş ekranı yok.</b><span class="ince">Paneli yalnızca güvenilir ağda aç. Klasör seçici diskteki klasör adlarını, Ayarlar sayfası erişim anahtarını gösterir.</span></li>
-          <li><b>Erişim anahtarı düz metin.</b><span class="ince"><code>config.json</code> içinde durur; dosyayı depoya gönderirken dikkat et.</span></li>
+          <li><b>Panelde giriş ekranı yok.</b><span class="ince">Paneli yalnızca güvenilir ağda aç. Klasör seçici diskteki klasör adlarını, Ayarlar sayfası model erişim anahtarını gösterir. TFS modu açıksa panele erişen herkes senin anahtarınla TFS'e yazabilir.</span></li>
+          <li><b>Erişim anahtarları düz metin.</b><span class="ince">Model anahtarı <code>config.json</code> içinde durur; dosyayı depoya gönderirken dikkat et. TFS anahtarı ayrı bir dosyada (<code>.gizli/</code>) durur, depoya girmez.</span></li>
           <li><b>Paralellik sunucuya bağlı.</b><span class="ince">Model sunucusu istekleri sırayla işliyorsa mıntıkaları aynı anda çalıştırmak hız kazandırmaz.</span></li>
           <li><b>Görseller görsel destekli modelde işe yarar.</b><span class="ince">PDF ve Word belgelerinin metni yüklenirken çıkarıldığı için her modelde okunur.</span></li>
-          <li><b>Özetleme koşular arasında yapılır.</b><span class="ince">Tek bir görev pencereyi kendi başına doldurursa yalnızca hata kurtarması devreye girer.</span></li>
+          <li><b>Özetin kalitesi modele bağlı.</b><span class="ince">Konuşma sınıra yaklaşınca iş ortasında da özetlenir. Özetleme işe yaramazsa ajan yeni konuşmayla sürer; önceki konuşmada yazdığı dosyalar ona bildirilir.</span></li>
           <li><b>Bu sayfadaki ekran görüntüleri örnektir.</b><span class="ince">Panel ve akış gerçek; görüntüler örnek bir projede, senaryolu bir deneme sunucusuyla alındı.</span></li>
         </ul>
       </div>

@@ -1240,7 +1240,7 @@ function missText(miss) {
   let t = `Yapılandırılmış çıktı gelmedi. ${MISS_TEXTS[miss.reason] || ""}`;
   if (miss.retries > 0) {
     t += ` Bu koşuda bağlantı <b>${miss.retries} kez</b> koptu ve oturum sürdürülerek yeniden denendi — ` +
-      "kopma sonrası prompt tekrar gönderildiği için model şaşırmış olabilir.";
+      "kopma sonrası görev yeniden gönderildiği için model şaşırmış olabilir.";
   }
   if (miss.outputLimit) {
     t += ` Model bu koşuda <b>${miss.outputLimit.hits} kez</b> yanıt sınırına ` +
@@ -1541,7 +1541,7 @@ function renderPipeline() {
     const inner = groups[g].filter((b) => agents.includes(b)).map(nodeCell).join("");
     const fm = fanoutMeta[g] || { agent: g, max: 0 };
     const etiket = `${esc(roleOf(fm.agent).ad)}${fm.max ? ` · ${fm.max}'li` : ""}`;
-    cells.push(`<div class="node group"><div class="glabel" data-group="${esc(g)}" title="Tıkla: tüm repo kopyalarının kayıtları">${etiket}</div>${inner}</div>`);
+    cells.push(`<div class="node group"><div class="glabel" data-group="${esc(g)}" title="Tıkla: bu ekibin bütün mıntıkalarının kayıtları">${etiket}</div>${inner}</div>`);
   }
   $("pipeline").innerHTML = cells.join('<div class="arrow">›</div>');
   renderRepos();
@@ -1832,7 +1832,7 @@ function ctxTitle(c) {
   if (!c.limit) return "Modelin bağlam sınırı bilinmiyor — model listesi vermiyorsa Ayarlar'dan elle gir";
   const pay = c.window && c.window > c.limit ? ` (pencere ${fmtK(c.window)}, ${fmtK(c.window - c.limit)} yanıta ayrılıyor)` : "";
   const esik = ctxCfg.compactPercent > 0 ? ` %${ctxCfg.compactPercent}'te konuşma otomatik özetlenir.` : " Otomatik özetleme kapalı.";
-  return `Konuşma ${c.tokens.toLocaleString("tr-TR")} token · kullanılabilir sınır ${c.limit.toLocaleString("tr-TR")}${pay}.${esik}`;
+  return `Konuşma ${c.tokens.toLocaleString("tr-TR")} jeton · kullanılabilir sınır ${c.limit.toLocaleString("tr-TR")}${pay}.${esik}`;
 }
 function renderCtx() {
   const keys = Object.keys(ctxUsage);
@@ -2127,7 +2127,7 @@ function handleEvent(e) {
       d.title = e.error || "";
       if (e.ok) {
         d.className = "note";
-        d.textContent = `📦 Konuşma özetlendi${e.pre ? `: ${fmtK(e.pre)} → ${fmtK(e.post || 0)} token` : ""} — aynı oturumdan devam ediyor`;
+        d.textContent = `📦 Konuşma özetlendi${e.pre ? `: ${fmtK(e.pre)} → ${fmtK(e.post || 0)} jeton` : ""} — aynı oturumdan devam ediyor`;
       } else {
         d.className = "note " + (e.fallback === "yeni" ? "err" : "warn");
         d.textContent = `⚠ Konuşma özetlenemedi (${sebep}) — ` + (e.fallback === "yeni"
@@ -3611,7 +3611,7 @@ async function loadFlow() {
       ? (n.disabled ? "tek ajan" : "mıntıka başına")
       : (n.disabled ? "atlanır" : n.type === "command" ? "komut" : "açık");
     const ipucu = fan
-      ? (n.disabled ? "Dağıtım kapalı — tıkla: repo başına dağıt" : "Tıkla: dağıtımı kapat, tek kopya koşsun")
+      ? (n.disabled ? "Dağıtım kapalı — tıkla: mıntıka başına dağıt" : "Tıkla: dağıtımı kapat, tek kopya koşsun")
       : (n.disabled ? "Kapalı — tıkla: aç" : "Tıkla: bu adımı atla");
     return `<button class="fchip${n.disabled ? " off" : ""}${n.disabled && !fan ? " skip" : ""}" data-node="${esc(n.key)}" ` +
       `data-off="${n.disabled ? 1 : 0}" title="${esc(n.key)} — ${ipucu}"><span class="nm">${esc(flowName(n))}</span><small>${durum}</small></button>`;

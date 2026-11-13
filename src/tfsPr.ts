@@ -326,11 +326,11 @@ export interface TfsPrListItem {
 export async function myPullRequests(c: TfsConnection, signal?: AbortSignal): Promise<TfsPrListItem[]> {
   const v = await ver(c, signal);
   const id = await myId(c, signal);
-  if (!id) throw new TfsError("kimliğin okunamadı — PR listesi için bağlantı bilgisi gerekli");
+  if (!id) throw new TfsError("kimliğin okunamadı — çekme isteği listesi için gerekli");
   const list = async (key: string, role: TfsPrListItem["role"]) => {
     const r = await tfsCall<{ value?: RawPr[] }>(c, "GET", `/${enc(c.project)}/_apis/git/pullrequests`, {
       query: { "api-version": v, [crit(v, "status")]: "active", [crit(v, key)]: id, $top: 50 },
-      what: "PR listesi",
+      what: "çekme isteği listesi",
       signal,
     });
     return (r?.value ?? []).map((x) => {
@@ -496,7 +496,7 @@ export async function createPullRequest(
         ...(o.workItems.length ? { workItemRefs: o.workItems.map((id) => ({ id: String(id) })) } : {}),
         ...(o.draft && Number(v) >= 5 ? { isDraft: true } : {}),
       },
-      what: "PR açma",
+      what: "çekme isteği açma",
       signal,
     });
     if (typeof r?.pullRequestId !== "number") throw new TfsError("çekme isteği açıldı ama numarası okunamadı");

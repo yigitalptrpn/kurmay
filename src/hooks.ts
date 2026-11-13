@@ -25,7 +25,7 @@ function commandHook(command: string, timeoutSec: number, cwd: string): HookCall
       child.on("close", (code) => {
         clearTimeout(timer);
         if (code === 2) {
-          resolve({ decision: "block", reason: err.trim() || out.trim() || "hook tarafından engellendi" });
+          resolve({ decision: "block", reason: err.trim() || out.trim() || "denetim komutu (hook) engelledi" });
           return;
         }
         if (code === 0) {
@@ -41,7 +41,7 @@ function commandHook(command: string, timeoutSec: number, cwd: string): HookCall
           resolve({ continue: true });
           return;
         }
-        console.warn(`⚠ hook komutu "${command}" çıkış kodu ${code}: ${err.trim()}`);
+        console.warn(`⚠ denetim komutu (hook) "${command}" çıkış kodu ${code}: ${err.trim()}`);
         resolve({ continue: true });
       });
       child.stdin.write(JSON.stringify(input));

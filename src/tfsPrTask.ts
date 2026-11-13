@@ -213,7 +213,7 @@ function threadText(t: TfsThread, repo: LocalRepo | undefined): string {
     const kod = fileLines(repo, t.file, t.line, t.lineEnd ?? t.line);
     if (kod)
       L.push(
-        "Kodun yerel kopyadaki hali (▶ yorumun satırları; PR sonrası değiştiyse kaymış olabilir):",
+        "Kodun yerel kopyadaki hali (▶ yorumun satırları; istek açıldıktan sonra değiştiyse kaymış olabilir):",
         "```",
         kod,
         "```",

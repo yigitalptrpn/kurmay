@@ -248,7 +248,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><rect x="18" y="5" width="3" height="14" rx="1"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">Planı uzak ajana gönder <span id="pwState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Adres girilirse onay kartında <b>Uzak ajana gönder</b> düğmesi çıkar; basınca plan bu adrese JSON olarak gönderilir (görev, özet, varsayımlar, dosya planı ve okunur metni). Akış etkilenmez, onayın yine beklenir. Anahtar girilirse <code>Authorization: Bearer</code> başlığıyla gider; <code>config.json</code>'da düz metin durur. Adresi silip kaydedersen kapanır.</div>
+      <div class="fhint" style="font-size:12.5px">Adres girilirse onay kartında <b>Uzak ajana gönder</b> düğmesi çıkar; basınca plan bu adrese veri olarak (JSON) gönderilir (görev, özet, varsayımlar, dosya planı ve okunur metni). Akış etkilenmez, onayın yine beklenir. Anahtar girilirse <code>Authorization: Bearer</code> başlığıyla gider; <code>config.json</code>'da düz metin durur. Adresi silip kaydedersen kapanır.</div>
     </div>
   </div>
   <div class="gbar" style="margin-top:12px">
@@ -325,7 +325,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
       <select id="cEffort" title="Yeni oturumların varsayılanı — panelde oturum başına değişir"></select>
     </div>
   </div>
-  <div class="fhint" style="margin-top:8px">Kaydettikten sonra servisi yeniden başlat. Anahtar ayar dosyasına düz metin olarak yazılır — dosyayı git'e gönderirken dikkat et.</div>
+  <div class="fhint" style="margin-top:8px">Kaydettikten sonra servisi yeniden başlat. Anahtar ayar dosyasına düz metin olarak yazılır — dosyayı depoya kaydedersen anahtar da gider, dikkat et.</div>
 </div>
 
 <div class="card" id="resCard" style="margin-bottom:14px">
@@ -369,12 +369,12 @@ input.sw:disabled { opacity:.5; cursor:default; }
     eşikte Analist'in konuşması sıradaki görevden önce otomatik özetlenir (aynı oturumdan devam eder).</div>
   <div id="xModels" class="fhint"></div>
   <div class="rgrid">
-    <div><label class="minl" for="xWindow">Varsayılan pencere (token)</label><input type="number" id="xWindow" min="0" step="1" placeholder="bilinmiyor">
+    <div><label class="minl" for="xWindow">Varsayılan pencere (jeton)</label><input type="number" id="xWindow" min="0" step="1" placeholder="bilinmiyor">
       <div class="fhint">Model listesi sınır vermeyen modeller için. Boş = sınır bilinmiyor (gösterge ve otomatik özetleme çalışmaz).</div></div>
     <div><label class="minl" for="xPercent">Otomatik özetleme eşiği (%)</label><input type="number" id="xPercent" min="0" max="100" step="1" placeholder="75">
       <div class="fhint">Kullanılabilir sınırın bu yüzdesi geçilince konuşma özetlenir. 0 = kapalı (yalnızca uyarı).</div></div>
-    <div><label class="minl" for="xReserve">Yanıta ayrılan pay (token)</label><input type="number" id="xReserve" min="0" step="1" placeholder="32000">
-      <div class="fhint">Her istekte yanıt için istenen en fazla token. Küçük pencereli modellerde düşür — sunucu "girdi + bu pay" toplamını sınırla kıyaslar.</div></div>
+    <div><label class="minl" for="xReserve">Yanıta ayrılan pay (jeton)</label><input type="number" id="xReserve" min="0" step="1" placeholder="32000">
+      <div class="fhint">Her istekte yanıt için istenen en fazla jeton. Küçük pencereli modellerde düşür — sunucu "girdi + bu pay" toplamını sınırla kıyaslar.</div></div>
   </div>
   <div class="rfoot">
     <button class="primary" id="xApply" type="button">Uygula</button>

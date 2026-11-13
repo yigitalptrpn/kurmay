@@ -432,7 +432,7 @@ async function compactWithRetry(
     if (giveUp) {
       console.log(
         r.ok
-          ? `  📦 ${agent.name}: konuşma özetlendi (${r.pre ?? "?"} → ${r.post ?? "?"} token)`
+          ? `  📦 ${agent.name}: konuşma özetlendi (${r.pre ?? "?"} → ${r.post ?? "?"} jeton)`
           : `  ⚠ ${agent.name}: konuşma özetlenemedi (${r.error})`,
       );
       return r;
@@ -1350,7 +1350,7 @@ async function runAgentInner(
     const sn = (ms: number) => (ms / 1000).toFixed(1);
     console.log(
       `  📊 ${sn(m.durationMs)}sn (API ${sn(m.apiDurationMs)}sn) · ${m.turns} tur · ` +
-        `${m.inputTokens} girdi / ${m.outputTokens} çıktı token`,
+        `${m.inputTokens} girdi / ${m.outputTokens} çıktı jeton`,
     );
     // Birden fazla model = arka planda ikinci bir model çalışmış (ör. SMALL_FAST)
     if (m.perModel.length > 1) {

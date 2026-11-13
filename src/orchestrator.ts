@@ -275,8 +275,8 @@ async function runFanout(
     partial,
   });
   console.log(
-    `\n🔀 ${nodeKey}: ${agent.name} ${repos.length} repoya dağıtılıyor (${repos.join(", ")})` +
-      `${maxConcurrency ? ` — aynı anda en fazla ${maxConcurrency}` : ""}${partial ? " [yalnızca geri bildirimdeki repolar]" : ""}`,
+    `\n🔀 ${nodeKey}: ${agent.name} ${repos.length} mıntıkaya dağıtılıyor (${repos.join(", ")})` +
+      `${maxConcurrency ? ` — aynı anda en fazla ${maxConcurrency}` : ""}${partial ? " [yalnızca geri bildirimdeki mıntıkalar]" : ""}`,
   );
 
   const others = (repo: string) => [...groups.keys()].filter((r) => r !== repo);
@@ -326,7 +326,7 @@ async function runFanout(
   bus.emit({ type: "fanout_finished", node: nodeKey, repos, failed });
   if (failed.length) {
     throw new Error(
-      `${nodeKey}: ${failed.length} repo tamamlanamadı — ${failed.map((f) => `${f.repo}: ${f.error}`).join("; ")}`,
+      `${nodeKey}: ${failed.length} mıntıka tamamlanamadı — ${failed.map((f) => `${f.repo}: ${f.error}`).join("; ")}`,
     );
   }
 
@@ -424,16 +424,16 @@ export async function runWorkflow(
         }
         rejectCycles++;
         if (rejectCycles >= workflow.maxCycles) {
-          const error = `Build ${workflow.maxCycles} turda düzeltilemedi (son hata: ${result.failedModule})`;
+          const error = `Derleme ${workflow.maxCycles} turda düzeltilemedi (son hata: ${result.failedModule})`;
           console.log(`\n⚠️ ${error}`);
           bus.emit({ type: "workflow_failed", error });
           return;
         }
         ctx.feedback =
-          `Build başarısız — "${result.failedModule}" modülü derlenmedi. ` +
-          `Aşağıdaki build çıktısındaki hataları düzelt:\n\n${result.log ?? ""}`;
+          `Derleme başarısız — "${result.failedModule}" modülü derlenmedi. ` +
+          `Aşağıdaki derleme çıktısındaki hataları düzelt:\n\n${result.log ?? ""}`;
         console.log(
-          `\n🔁 Tur ${rejectCycles}/${workflow.maxCycles}: build hatası "${node.onFailure}" ajanına gönderiliyor`,
+          `\n🔁 Tur ${rejectCycles}/${workflow.maxCycles}: derleme hatası "${node.onFailure}" ajanına gönderiliyor`,
         );
         bus.emit({ type: "cycle", n: rejectCycles, max: workflow.maxCycles, to: node.onFailure });
         current = node.onFailure;

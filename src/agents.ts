@@ -144,7 +144,7 @@ function validateEdges(
   // editöründe çizilmeyen bir kenar kafa karıştırır.
   if (fanoutOwner && branchCount > 0) {
     throw new Error(
-      `"${key}" "${fanoutOwner}" fanout düğümünün işçisi — kendi next/verdict/routes kenarı olamaz; ` +
+      `"${key}" "${fanoutOwner}" dağıtım (fanout) düğümünün işçisi — kendi next/verdict/routes kenarı olamaz; ` +
         `kopyalar bitince geçişi "${fanoutOwner}.next" yapar`,
     );
   }
@@ -176,19 +176,21 @@ export function loadAgents(
     if (!isFanoutNode(config)) continue;
     const worker = workflow.agents[config.agent];
     if (!config.agent || !worker) {
-      throw new Error(`"${key}" fanout düğümü var olmayan bir ajana işaret ediyor: "${config.agent}"`);
+      throw new Error(`"${key}" dağıtım (fanout) düğümü var olmayan bir ajana işaret ediyor: "${config.agent}"`);
     }
     if (isGateNode(worker)) {
-      throw new Error(`"${key}" fanout düğümünün işçisi ajan olmalı; "${config.agent}" bir ${worker.type} düğümü`);
+      throw new Error(
+        `"${key}" dağıtım (fanout) düğümünün işçisi ajan olmalı; "${config.agent}" bir ${worker.type} düğümü`,
+      );
     }
     if (workerOf.has(config.agent)) {
       throw new Error(
-        `"${config.agent}" iki fanout düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`,
+        `"${config.agent}" iki dağıtım (fanout) düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`,
       );
     }
     workerOf.set(config.agent, key);
     if (config.next != null && !workflow.agents[config.next]) {
-      throw new Error(`"${key}" fanout düğümü var olmayan bir düğüme işaret ediyor: "${config.next}"`);
+      throw new Error(`"${key}" dağıtım (fanout) düğümü var olmayan bir düğüme işaret ediyor: "${config.next}"`);
     }
   }
 
@@ -213,7 +215,7 @@ export function loadAgents(
       const yeni = ESKI_PERSONA[path.basename(mdPath)];
       const aday = yeni && path.join(path.dirname(mdPath), yeni);
       if (aday && fs.existsSync(aday)) {
-        console.warn(`⚠ "${key}": ${config.file} artık ${yeni} — config'teki yolu güncelle`);
+        console.warn(`⚠ "${key}": ${config.file} artık ${yeni} — ayar dosyasındaki yolu güncelle`);
         mdPath = aday;
       }
     }
@@ -245,7 +247,7 @@ export function loadAgents(
     if (config.verdict) {
       if (data.output) {
         console.warn(
-          `⚠ "${key}" verdict düğümü — md'deki "output" şeması yok sayılıyor, yerleşik karar şeması kullanılacak`,
+          `⚠ "${key}" karar (verdict) düğümü — rol dosyasındaki "output" şeması yok sayılıyor, yerleşik karar şeması kullanılacak`,
         );
       }
       outputSchema = reviewVerdictJsonSchema();
