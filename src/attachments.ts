@@ -19,7 +19,13 @@ export const MAX_FILES = 10;
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 /** Panelde küçük resim olarak gösterilen (ve tarayıcıda satır içi açılan) görseller */
-const IMAGE_EXT: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+const IMAGE_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
 
 export interface FileInput {
   name: string;
@@ -35,11 +41,25 @@ export interface Attachment {
   textPath?: string;
 }
 
-const TR: Record<string, string> = { ç: "c", Ç: "C", ğ: "g", Ğ: "G", ı: "i", İ: "I", ö: "o", Ö: "O", ş: "s", Ş: "S", ü: "u", Ü: "U" };
+const TR: Record<string, string> = {
+  ç: "c",
+  Ç: "C",
+  ğ: "g",
+  Ğ: "G",
+  ı: "i",
+  İ: "I",
+  ö: "o",
+  Ö: "O",
+  ş: "s",
+  Ş: "S",
+  ü: "u",
+  Ü: "U",
+};
 
 /** Dosya adını güvenli hale getirir (yol ayırıcı, boşluk, özel karakter yok; uzantı korunur) */
 function safeName(name: string): string {
-  const base = path.basename(name.replace(/\\/g, "/"))
+  const base = path
+    .basename(name.replace(/\\/g, "/"))
     .replace(/[çÇğĞıİöÖşŞüÜ]/g, (c) => TR[c])
     .normalize("NFKD")
     .replace(/[^\w.-]+/g, "_")
@@ -62,7 +82,8 @@ export function parseFiles(value: unknown): { files: FileInput[]; error?: string
     if (m) data = data.slice(m[0].length);
     const buf = Buffer.from(data, "base64");
     if (buf.length === 0) return { files: [], error: `dosya boş: ${name}` };
-    if (buf.length > MAX_FILE_BYTES) return { files: [], error: `dosya çok büyük: ${name} (en fazla ${MAX_FILE_BYTES / 1024 / 1024} MB)` };
+    if (buf.length > MAX_FILE_BYTES)
+      return { files: [], error: `dosya çok büyük: ${name} (en fazla ${MAX_FILE_BYTES / 1024 / 1024} MB)` };
     files.push({ name, data: buf });
   }
   return { files };
@@ -94,9 +115,10 @@ export function attachmentSection(atts: Attachment[], intro?: string): string {
     `\n\n# Ekler\n${intro ?? `Kullanıcı görevle birlikte ${atts.length} dosya verdi.`} Read aracıyla aç ve incele — ` +
     "görev bunlara atıf yapıyor olabilir:\n" +
     atts
-      .map((a) =>
-        `- ${a.path} (kullanıcının verdiği ad: ${a.original})` +
-        (a.textPath ? `\n  Metni çıkarıldı — belgeyi değil bunu oku: ${a.textPath}` : ""),
+      .map(
+        (a) =>
+          `- ${a.path} (kullanıcının verdiği ad: ${a.original})` +
+          (a.textPath ? `\n  Metni çıkarıldı — belgeyi değil bunu oku: ${a.textPath}` : ""),
       )
       .join("\n")
   );
@@ -118,4 +140,3 @@ export function resolveAttachment(
   const type = IMAGE_EXT[path.extname(name).slice(1).toLowerCase()];
   return type ? { file, type, inline: true } : { file, type: "application/octet-stream", inline: false };
 }
-

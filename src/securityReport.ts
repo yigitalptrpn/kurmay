@@ -47,7 +47,10 @@ export interface SecurityReport {
 }
 
 /** Listede gösterilen özet (tam raporu sayfa ayrıca ister) */
-export type SecurityReportSummary = Pick<SecurityReport, "id" | "createdAt" | "task" | "risk" | "sessionName" | "standalone"> & {
+export type SecurityReportSummary = Pick<
+  SecurityReport,
+  "id" | "createdAt" | "task" | "risk" | "sessionName" | "standalone"
+> & {
   counts: Record<Severity, number>;
 };
 
@@ -84,13 +87,18 @@ export function toReport(
     : [];
   const now = new Date();
   return {
-    id: `${now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `${now
+      .toISOString()
+      .replace(/[-:.TZ]/g, "")
+      .slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`,
     createdAt: now.toISOString(),
     ...base,
     ...(st && str(st.risk) ? { risk: str(st.risk) } : {}),
     ...(st && str(st.summary) ? { summary: str(st.summary) } : {}),
     findings,
-    positives: Array.isArray(st?.positives) ? (st!.positives as unknown[]).map(str).filter((s): s is string => !!s) : [],
+    positives: Array.isArray(st?.positives)
+      ? (st!.positives as unknown[]).map(str).filter((s): s is string => !!s)
+      : [],
     ...(st ? {} : { rawText: text }),
   };
 }
@@ -105,7 +113,7 @@ export class SecurityReportStore {
 
   /** En yeni önce; bozuk dosyalar atlanır */
   list(limit = 200): SecurityReportSummary[] {
-    let names: string[] = [];
+    let names: string[];
     try {
       names = fs.readdirSync(this.dir).filter((n) => n.endsWith(".json"));
     } catch {
@@ -150,7 +158,10 @@ export function watchSecurityReports(
   store: SecurityReportStore,
   o: {
     isReportAgent: (agent: string) => boolean;
-    base: Omit<SecurityReport, "id" | "createdAt" | "findings" | "positives" | "risk" | "summary" | "rawText" | "files">;
+    base: Omit<
+      SecurityReport,
+      "id" | "createdAt" | "findings" | "positives" | "risk" | "summary" | "rawText" | "files"
+    >;
     label?: string;
   },
 ): () => void {
@@ -166,7 +177,9 @@ export function watchSecurityReports(
     try {
       const report = toReport({ ...o.base, files: lastChanged }, e.structured, e.output);
       store.save(report);
-      console.log(`🛡  ${o.label ? `[${o.label}] ` : ""}Güvenlik raporu: ${report.findings.length} bulgu, risk ${report.risk ?? "?"}`);
+      console.log(
+        `🛡  ${o.label ? `[${o.label}] ` : ""}Güvenlik raporu: ${report.findings.length} bulgu, risk ${report.risk ?? "?"}`,
+      );
       // Hemen yayınla: bu dinleyici koşu başında en son abone olduğu için önceki dinleyiciler
       // (panel, kayıt) agent_finished'i çoktan almıştır; sıra "denetçi bitti → rapor → akış bitti" olur
       bus.emit({

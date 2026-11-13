@@ -49,7 +49,12 @@ export function git(cwd: string, args: string[], o: GitOptions = {}): Promise<st
       (err, stdout, stderr) => {
         if (err) {
           if (o.signal?.aborted) return reject(new GitError("iptal edildi"));
-          const msg = (String(stderr || "").trim() || err.message).split("\n").filter(Boolean).slice(-3).join(" ").trim();
+          const msg = (String(stderr || "").trim() || err.message)
+            .split("\n")
+            .filter(Boolean)
+            .slice(-3)
+            .join(" ")
+            .trim();
           return reject(new GitError(`git ${args[0]}: ${msg}`));
         }
         resolve(o.raw ? String(stdout) : String(stdout).trim());
@@ -62,7 +67,7 @@ let gitVersion: Promise<number[] | undefined> | undefined;
 /** Kurulu git sürümü ([2, 43, 0]); git yoksa undefined */
 function version(): Promise<number[] | undefined> {
   gitVersion ??= git(process.cwd(), ["--version"]).then(
-    (v) => (/(\d+)\.(\d+)\.(\d+)/.exec(v)?.slice(1).map(Number)),
+    (v) => /(\d+)\.(\d+)\.(\d+)/.exec(v)?.slice(1).map(Number),
     () => undefined,
   );
   return gitVersion;
@@ -105,8 +110,12 @@ export async function authEnv(c: TfsConnection | undefined, remoteUrl: string): 
 
 /** Uzak depo adresindeki depo adı (…/_git/{depo}, ssh …/{depo}) — eşleştirme için, küçük harf */
 export function repoNameFromRemote(remoteUrl: string): string | undefined {
-  const u = remoteUrl.trim().replace(/\/+$/, "").replace(/\.git$/i, "");
-  const m = /\/_git\/([^/?#]+)$/i.exec(u) ?? /^(?:ssh:\/\/)?[^@]+@[^:/]+(?::\d+)?[:/](?:v3\/)?(?:[^/]+\/)*([^/]+)$/i.exec(u);
+  const u = remoteUrl
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "");
+  const m =
+    /\/_git\/([^/?#]+)$/i.exec(u) ?? /^(?:ssh:\/\/)?[^@]+@[^:/]+(?::\d+)?[:/](?:v3\/)?(?:[^/]+\/)*([^/]+)$/i.exec(u);
   if (!m) return undefined;
   try {
     return decodeURIComponent(m[1]).toLowerCase();
@@ -146,7 +155,8 @@ export async function findRepo(targetDir: string, repoName: string): Promise<Loc
   const candidates = [targetDir];
   try {
     for (const e of fs.readdirSync(targetDir, { withFileTypes: true })) {
-      if (e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules") candidates.push(path.join(targetDir, e.name));
+      if (e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
+        candidates.push(path.join(targetDir, e.name));
     }
   } catch {
     return undefined;
@@ -175,13 +185,22 @@ export async function currentBranch(dir: string): Promise<string> {
 /** Commit'lenmemiş değişiklik (izlenmeyen dosyalar dahil) var mı */
 export async function dirtyFiles(dir: string): Promise<string[]> {
   const out = await git(dir, ["status", "--porcelain", "-z", "--untracked-files=all"], { raw: true });
-  return out.split("\0").filter((l) => l.length > 3).map((l) => l.slice(3));
+  return out
+    .split("\0")
+    .filter((l) => l.length > 3)
+    .map((l) => l.slice(3));
 }
 
 /** Yerel dalın uzaktaki dala göre durumu (getirmeden: son fetch'e göre) */
-export async function aheadBehind(dir: string, remote: string, branch: string): Promise<{ ahead: number; behind: number } | undefined> {
+export async function aheadBehind(
+  dir: string,
+  remote: string,
+  branch: string,
+): Promise<{ ahead: number; behind: number } | undefined> {
   try {
-    const [a, b] = (await git(dir, ["rev-list", "--left-right", "--count", `HEAD...${remote}/${branch}`])).split(/\s+/).map(Number);
+    const [a, b] = (await git(dir, ["rev-list", "--left-right", "--count", `HEAD...${remote}/${branch}`]))
+      .split(/\s+/)
+      .map(Number);
     return { ahead: a, behind: b };
   } catch {
     return undefined;
@@ -193,7 +212,12 @@ export async function aheadBehind(dir: string, remote: string, branch: string): 
  * sarar (yalnızca hızlı ileri — birleştirme commit'i yapılmaz). Çalışma ağacı temiz değilse
  * hiçbir şeye dokunmaz.
  */
-export async function checkoutPrBranch(repo: LocalRepo, branch: string, env: Record<string, string>, signal?: AbortSignal): Promise<string> {
+export async function checkoutPrBranch(
+  repo: LocalRepo,
+  branch: string,
+  env: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<string> {
   const dirty = await dirtyFiles(repo.dir);
   if (dirty.length) {
     throw new GitError(
@@ -202,12 +226,21 @@ export async function checkoutPrBranch(repo: LocalRepo, branch: string, env: Rec
     );
   }
   if (!repo.remote) throw new GitError("depoda sunucu bağlantısı (uzak depo) tanımlı değil");
-  await git(repo.dir, ["fetch", repo.remote, `+refs/heads/${branch}:refs/remotes/${repo.remote}/${branch}`], { env, timeoutMs: 180_000, signal });
-  const exists = await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).then(() => true, () => false);
+  await git(repo.dir, ["fetch", repo.remote, `+refs/heads/${branch}:refs/remotes/${repo.remote}/${branch}`], {
+    env,
+    timeoutMs: 180_000,
+    signal,
+  });
+  const exists = await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).then(
+    () => true,
+    () => false,
+  );
   if (exists) {
     await git(repo.dir, ["checkout", branch], { signal });
     await git(repo.dir, ["merge", "--ff-only", `${repo.remote}/${branch}`], { signal }).catch((e: Error) => {
-      throw new GitError(`yerel "${branch}" dalı sunucudakinden ayrılmış — iki dalı elle birleştirmen gerekiyor (${e.message})`);
+      throw new GitError(
+        `yerel "${branch}" dalı sunucudakinden ayrılmış — iki dalı elle birleştirmen gerekiyor (${e.message})`,
+      );
     });
   } else {
     await git(repo.dir, ["checkout", "-b", branch, "--track", `${repo.remote}/${branch}`], { signal });
@@ -239,7 +272,8 @@ export async function commitAndPush(
   if (!repo.remote) throw new GitError("depoda sunucu bağlantısı (uzak depo) tanımlı değil");
   if (o.newBranch) await git(repo.dir, ["checkout", "-b", o.newBranch], { signal: o.signal });
   const branch = o.newBranch ?? (await currentBranch(repo.dir));
-  if (branch === "HEAD") throw new GitError("yerel kopya bir dalda değil (belirli bir kayda geçilmiş) — önce bir dala geç");
+  if (branch === "HEAD")
+    throw new GitError("yerel kopya bir dalda değil (belirli bir kayda geçilmiş) — önce bir dala geç");
   await git(repo.dir, ["add", "-A", "--", ...paths], { signal: o.signal });
   const [subject, ...body] = message.trim().split(/\r?\n/);
   const args = ["commit", "-m", subject || "Kurmay değişikliği"];
@@ -257,7 +291,12 @@ const AUTH_FAIL = /authentication|401|403|denied|could not read|unauthorized|yet
  * Dalı gönderir. Önce TFS anahtarıyla (env doluysa); kimlik hatası alırsa (ör. anahtarın "Kod —
  * okuma ve yazma" kapsamı yok) kullanıcının kendi git kimliğiyle bir kez daha dener.
  */
-export async function pushBranch(repo: LocalRepo, branch: string, env: Record<string, string>, o: { upstream?: boolean; signal?: AbortSignal } = {}): Promise<void> {
+export async function pushBranch(
+  repo: LocalRepo,
+  branch: string,
+  env: Record<string, string>,
+  o: { upstream?: boolean; signal?: AbortSignal } = {},
+): Promise<void> {
   const args = ["push", ...(o.upstream ? ["-u"] : []), repo.remote, `HEAD:refs/heads/${branch}`];
   try {
     await git(repo.dir, args, { env, timeoutMs: 300_000, signal: o.signal });
@@ -297,12 +336,21 @@ export async function prDiff(
 ): Promise<{ diff: string; truncated: boolean; files: string[] }> {
   await git(
     repo.dir,
-    ["fetch", repo.remote, `+refs/heads/${source}:refs/remotes/${repo.remote}/${source}`, `+refs/heads/${target}:refs/remotes/${repo.remote}/${target}`],
+    [
+      "fetch",
+      repo.remote,
+      `+refs/heads/${source}:refs/remotes/${repo.remote}/${source}`,
+      `+refs/heads/${target}:refs/remotes/${repo.remote}/${target}`,
+    ],
     { env, timeoutMs: 180_000, signal },
   );
   const range = `${repo.remote}/${target}...${repo.remote}/${source}`;
   const files = (await git(repo.dir, ["diff", "--name-only", range], { signal })).split("\n").filter(Boolean);
-  let diff = await git(repo.dir, ["diff", "--no-color", "--unified=3", range], { signal, raw: true, maxBuffer: 100 * 1024 * 1024 });
+  let diff = await git(repo.dir, ["diff", "--no-color", "--unified=3", range], {
+    signal,
+    raw: true,
+    maxBuffer: 100 * 1024 * 1024,
+  });
   let truncated = false;
   if (diff.length > maxChars) {
     // Dosya başına eşit pay: hiçbir dosya tamamen kaybolmasın
@@ -330,7 +378,8 @@ export function fileLines(repo: LocalRepo, file: string, from: number, to: numbe
   if (a > lines.length) return undefined;
   const w = String(b).length;
   const out: string[] = [];
-  for (let i = a; i <= b; i++) out.push(`${String(i).padStart(w)}${i >= from && i <= Math.max(from, to) ? " ▶" : "  "} ${lines[i - 1]}`);
+  for (let i = a; i <= b; i++)
+    out.push(`${String(i).padStart(w)}${i >= from && i <= Math.max(from, to) ? " ▶" : "  "} ${lines[i - 1]}`);
   return out.join("\n");
 }
 
@@ -338,7 +387,12 @@ export function fileLines(repo: LocalRepo, file: string, from: number, to: numbe
 export async function openRepo(dir: string, targetDir: string): Promise<LocalRepo | undefined> {
   const r = await repoAt(dir);
   if (!r) return undefined;
-  return { dir: r.root, rel: path.relative(targetDir, r.root).split(path.sep).join("/") || ".", remote: r.remote, remoteUrl: r.remoteUrl };
+  return {
+    dir: r.root,
+    rel: path.relative(targetDir, r.root).split(path.sep).join("/") || ".",
+    remote: r.remote,
+    remoteUrl: r.remoteUrl,
+  };
 }
 
 /** Uzak adresteki proje adı (…/{proje}/_git/{depo}); proje yazılmamışsa (…/{koleksiyon}/_git/{depo}) undefined */
@@ -356,7 +410,10 @@ export function projectFromRemote(remoteUrl: string): string | undefined {
  * Değişen dosyaları git depolarına göre gruplar (depo kökü → depo içi yollar). Dosya
  * silinmişse var olan en yakın üst klasörden bakılır. Depoda olmayanlar ayrı döner.
  */
-export async function groupByRepo(files: string[], cwd: string): Promise<{ repos: Map<string, string[]>; outside: string[] }> {
+export async function groupByRepo(
+  files: string[],
+  cwd: string,
+): Promise<{ repos: Map<string, string[]>; outside: string[] }> {
   const repos = new Map<string, string[]>();
   const outside: string[] = [];
   const cache = new Map<string, string | null>();
@@ -366,7 +423,10 @@ export async function groupByRepo(files: string[], cwd: string): Promise<{ repos
     while (!fs.existsSync(dir) && path.dirname(dir) !== dir) dir = path.dirname(dir);
     let root = cache.get(dir);
     if (root === undefined) {
-      root = await git(dir, ["rev-parse", "--show-toplevel"]).then((r) => path.resolve(r), () => null);
+      root = await git(dir, ["rev-parse", "--show-toplevel"]).then(
+        (r) => path.resolve(r),
+        () => null,
+      );
       cache.set(dir, root);
     }
     if (!root) {
@@ -380,7 +440,20 @@ export async function groupByRepo(files: string[], cwd: string): Promise<{ repos
   return { repos, outside };
 }
 
-const TR: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", Ç: "c", Ğ: "g", İ: "i", Ö: "o", Ş: "s", Ü: "u" };
+const TR: Record<string, string> = {
+  ç: "c",
+  ğ: "g",
+  ı: "i",
+  ö: "o",
+  ş: "s",
+  ü: "u",
+  Ç: "c",
+  Ğ: "g",
+  İ: "i",
+  Ö: "o",
+  Ş: "s",
+  Ü: "u",
+};
 /** Dal adı için kısa ASCII parça */
 export function slug(text: string): string {
   return (
@@ -398,8 +471,16 @@ export function slug(text: string): string {
 export async function uniqueBranch(repo: LocalRepo, base: string): Promise<string> {
   let name = base;
   for (let i = 2; i < 50; i++) {
-    const local = await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/heads/${name}`]).then(() => true, () => false);
-    const remote = repo.remote ? await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/remotes/${repo.remote}/${name}`]).then(() => true, () => false) : false;
+    const local = await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/heads/${name}`]).then(
+      () => true,
+      () => false,
+    );
+    const remote = repo.remote
+      ? await git(repo.dir, ["rev-parse", "--verify", "--quiet", `refs/remotes/${repo.remote}/${name}`]).then(
+          () => true,
+          () => false,
+        )
+      : false;
     if (!local && !remote) return name;
     name = `${base}-${i}`;
   }

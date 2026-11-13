@@ -8,8 +8,8 @@
 let raw = "";
 process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", () => {
-  let tool = "";
-  let input = {};
+  let tool;
+  let input;
   try {
     const veri = JSON.parse(raw);
     tool = (veri.tool_name || "").toString();
@@ -32,7 +32,8 @@ process.stdin.on("end", () => {
   // belirtisi taşıyan komutlar engellenir, okuma/arama komutları serbest kalır
   if (tool === "Bash") {
     const cmd = (input.command || "").toString();
-    const yazma = /(^|[;&|]\s*)(rm|mv|cp|touch|mkdir|dd|chmod|chown)\b|>>?\s*[^&|\s]|\btee\b|\bsed\b[^|]*\s-i\b|\bgit\s+(add|commit|checkout|restore|apply|reset)\b|\bnpm\s+(i|install|uninstall)\b/i;
+    const yazma =
+      /(^|[;&|]\s*)(rm|mv|cp|touch|mkdir|dd|chmod|chown)\b|>>?\s*[^&|\s]|\btee\b|\bsed\b[^|]*\s-i\b|\bgit\s+(add|commit|checkout|restore|apply|reset)\b|\bnpm\s+(i|install|uninstall)\b/i;
     if (yazma.test(cmd)) {
       process.stderr.write(
         `Bash engellendi (yazma belirtisi): ${cmd.slice(0, 200)}\n` +

@@ -52,7 +52,11 @@ export interface TfsThread {
 const THREAD_STATUS = ["unknown", "active", "fixed", "wontFix", "closed", "byDesign", "pending"];
 /** Eski sunucular durumu sayı döndürebilir */
 const threadStatus = (v: unknown): string =>
-  typeof v === "number" ? THREAD_STATUS[v] ?? "unknown" : typeof v === "string" ? v.charAt(0).toLowerCase() + v.slice(1) : "unknown";
+  typeof v === "number"
+    ? (THREAD_STATUS[v] ?? "unknown")
+    : typeof v === "string"
+      ? v.charAt(0).toLowerCase() + v.slice(1)
+      : "unknown";
 const shortRef = (r: unknown) => (typeof r === "string" ? r.replace(/^refs\/heads\//, "") : "");
 const enc = encodeURIComponent;
 
@@ -68,7 +72,13 @@ interface RawPr {
   targetRefName?: string;
   mergeStatus?: unknown;
   lastMergeSourceCommit?: { commitId?: string };
-  repository?: { id?: string; name?: string; remoteUrl?: string; webUrl?: string; project?: { id?: string; name?: string } };
+  repository?: {
+    id?: string;
+    name?: string;
+    remoteUrl?: string;
+    webUrl?: string;
+    project?: { id?: string; name?: string };
+  };
   reviewers?: Array<{ displayName?: string; vote?: number; isRequired?: boolean }>;
   _links?: { web?: { href?: string } };
 }
@@ -81,12 +91,14 @@ function normalizePr(c: TfsConnection, r: RawPr): TfsPullRequest {
   const id = r.pullRequestId ?? 0;
   const web =
     r._links?.web?.href ??
-    (repo.webUrl ? `${repo.webUrl}/pullrequest/${id}` : `${c.url}/${enc(project)}/_git/${enc(repo.name ?? "")}/pullrequest/${id}`);
+    (repo.webUrl
+      ? `${repo.webUrl}/pullrequest/${id}`
+      : `${c.url}/${enc(project)}/_git/${enc(repo.name ?? "")}/pullrequest/${id}`);
   return {
     id,
     title: r.title ?? "",
     description: r.description ?? "",
-    status: typeof r.status === "number" ? PR_STATUS[r.status] ?? "notSet" : String(r.status ?? ""),
+    status: typeof r.status === "number" ? (PR_STATUS[r.status] ?? "notSet") : String(r.status ?? ""),
     isDraft: !!r.isDraft,
     ...(identityName(r.createdBy) ? { createdBy: identityName(r.createdBy) } : {}),
     ...(r.creationDate ? { creationDate: r.creationDate } : {}),
@@ -100,7 +112,11 @@ function normalizePr(c: TfsConnection, r: RawPr): TfsPullRequest {
       ...(repo.remoteUrl ? { remoteUrl: repo.remoteUrl } : {}),
       ...(repo.webUrl ? { webUrl: repo.webUrl } : {}),
     },
-    reviewers: (r.reviewers ?? []).map((x) => ({ name: x.displayName ?? "?", vote: x.vote ?? 0, ...(x.isRequired ? { required: true } : {}) })),
+    reviewers: (r.reviewers ?? []).map((x) => ({
+      name: x.displayName ?? "?",
+      vote: x.vote ?? 0,
+      ...(x.isRequired ? { required: true } : {}),
+    })),
     ...(r.mergeStatus !== undefined ? { mergeStatus: String(r.mergeStatus) } : {}),
     ...(r.lastMergeSourceCommit?.commitId ? { lastSourceCommit: r.lastMergeSourceCommit.commitId } : {}),
     webUrl: web,
@@ -123,17 +139,22 @@ export async function getPullRequest(c: TfsConnection, id: number, signal?: Abor
   let last: unknown;
   for (const p of tries) {
     try {
-      return normalizePr(c, await tfsCall<RawPr>(c, "GET", p, { query: { "api-version": v }, what: `!${id} çekme isteği`, signal }));
+      return normalizePr(
+        c,
+        await tfsCall<RawPr>(c, "GET", p, { query: { "api-version": v }, what: `!${id} çekme isteği`, signal }),
+      );
     } catch (e) {
       last = e;
       if (!(e instanceof TfsError) || (e.status !== 404 && e.status !== 400)) throw e;
     }
   }
-  if (last instanceof TfsError && last.status === 404) throw new TfsError(`!${id} çekme isteği bulunamadı ya da okuma yetkin yok`, 404, last.code);
+  if (last instanceof TfsError && last.status === 404)
+    throw new TfsError(`!${id} çekme isteği bulunamadı ya da okuma yetkin yok`, 404, last.code);
   throw last;
 }
 
-const prBase = (pr: TfsPullRequest) => `/${enc(pr.repository.project)}/_apis/git/repositories/${enc(pr.repository.id)}/pullRequests/${pr.id}`;
+const prBase = (pr: TfsPullRequest) =>
+  `/${enc(pr.repository.project)}/_apis/git/repositories/${enc(pr.repository.id)}/pullRequests/${pr.id}`;
 
 /** Yorum dizileri (silinenler hariç; sistem dizileri işaretli) */
 export async function getThreads(c: TfsConnection, pr: TfsPullRequest, signal?: AbortSignal): Promise<TfsThread[]> {
@@ -143,9 +164,22 @@ export async function getThreads(c: TfsConnection, pr: TfsPullRequest, signal?: 
       id?: number;
       status?: unknown;
       isDeleted?: boolean;
-      threadContext?: { filePath?: string; rightFileStart?: { line?: number }; rightFileEnd?: { line?: number }; leftFileStart?: { line?: number } } | null;
+      threadContext?: {
+        filePath?: string;
+        rightFileStart?: { line?: number };
+        rightFileEnd?: { line?: number };
+        leftFileStart?: { line?: number };
+      } | null;
       properties?: Record<string, unknown>;
-      comments?: Array<{ id?: number; parentCommentId?: number; author?: unknown; content?: string; commentType?: unknown; publishedDate?: string; isDeleted?: boolean }>;
+      comments?: Array<{
+        id?: number;
+        parentCommentId?: number;
+        author?: unknown;
+        content?: string;
+        commentType?: unknown;
+        publishedDate?: string;
+        isDeleted?: boolean;
+      }>;
     }>;
   }>(c, "GET", `${prBase(pr)}/threads`, { query: { "api-version": v }, what: `!${pr.id} yorumları`, signal });
   const out: TfsThread[] = [];
@@ -181,7 +215,11 @@ export async function getThreads(c: TfsConnection, pr: TfsPullRequest, signal?: 
 }
 
 /** Son yinelemede değişen dosyalar (yol + değişiklik türü) */
-export async function getChanges(c: TfsConnection, pr: TfsPullRequest, signal?: AbortSignal): Promise<Array<{ path: string; change: string }>> {
+export async function getChanges(
+  c: TfsConnection,
+  pr: TfsPullRequest,
+  signal?: AbortSignal,
+): Promise<Array<{ path: string; change: string }>> {
   const v = await ver(c, signal);
   const its = await tfsCall<{ value?: Array<{ id?: number }> }>(c, "GET", `${prBase(pr)}/iterations`, {
     query: { "api-version": v },
@@ -191,9 +229,13 @@ export async function getChanges(c: TfsConnection, pr: TfsPullRequest, signal?: 
   const last = Math.max(0, ...(its?.value ?? []).map((i) => i.id ?? 0));
   if (!last) return [];
   const out: Array<{ path: string; change: string }> = [];
-  for (let skip = 0; skip < 5000; ) {
+  for (let skip = 0; skip < 5000;) {
     const r = await tfsCall<{
-      changeEntries?: Array<{ item?: { path?: string; isFolder?: boolean }; changeType?: unknown; originalPath?: string }>;
+      changeEntries?: Array<{
+        item?: { path?: string; isFolder?: boolean };
+        changeType?: unknown;
+        originalPath?: string;
+      }>;
       nextSkip?: number;
     }>(c, "GET", `${prBase(pr)}/iterations/${last}/changes`, {
       query: { "api-version": v, $top: 1000, $skip: skip },
@@ -229,7 +271,10 @@ let meCache: { url: string; id: string } | undefined;
 /** Anahtarın sahibinin kimliği (PR listelerinde "benim" süzgeci için) */
 export async function myId(c: TfsConnection, signal?: AbortSignal): Promise<string | undefined> {
   if (meCache?.url === c.url) return meCache.id;
-  const r = await tfsCall<{ authenticatedUser?: { id?: string } }>(c, "GET", "/_apis/connectionData", { what: "kimlik", signal }).catch(() => undefined);
+  const r = await tfsCall<{ authenticatedUser?: { id?: string } }>(c, "GET", "/_apis/connectionData", {
+    what: "kimlik",
+    signal,
+  }).catch(() => undefined);
   const id = r?.authenticatedUser?.id;
   if (id) meCache = { url: c.url, id };
   return id;
@@ -280,7 +325,13 @@ export async function myPullRequests(c: TfsConnection, signal?: AbortSignal): Pr
 }
 
 /** Diziye cevap yazar (dizinin ilk yorumuna) */
-export async function replyToThread(c: TfsConnection, pr: TfsPullRequest, thread: { id: number; firstCommentId: number }, content: string, signal?: AbortSignal): Promise<void> {
+export async function replyToThread(
+  c: TfsConnection,
+  pr: TfsPullRequest,
+  thread: { id: number; firstCommentId: number },
+  content: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const v = await ver(c, signal);
   await tfsCall(c, "POST", `${prBase(pr)}/threads/${thread.id}/comments`, {
     query: { "api-version": v },
@@ -291,7 +342,13 @@ export async function replyToThread(c: TfsConnection, pr: TfsPullRequest, thread
 }
 
 /** Dizinin durumunu değiştirir (fixed = düzeltildi, closed = kapatıldı, wontFix…) */
-export async function setThreadStatus(c: TfsConnection, pr: TfsPullRequest, threadId: number, status: string, signal?: AbortSignal): Promise<void> {
+export async function setThreadStatus(
+  c: TfsConnection,
+  pr: TfsPullRequest,
+  threadId: number,
+  status: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const v = await ver(c, signal);
   const n = THREAD_STATUS.indexOf(status);
   await tfsCall(c, "PATCH", `${prBase(pr)}/threads/${threadId}`, {
@@ -326,7 +383,12 @@ export async function createThread(
         ? {
             threadContext: {
               filePath: file,
-              ...(line ? { rightFileStart: { line, offset: 1 }, rightFileEnd: { line: Math.max(line, at?.lineEnd ?? line), offset: 1 } } : {}),
+              ...(line
+                ? {
+                    rightFileStart: { line, offset: 1 },
+                    rightFileEnd: { line: Math.max(line, at?.lineEnd ?? line), offset: 1 },
+                  }
+                : {}),
             },
           }
         : {}),
@@ -338,7 +400,12 @@ export async function createThread(
 }
 
 /** Depo bilgisi (PR açmak için): ad → kimlik, varsayılan dal */
-export async function getRepository(c: TfsConnection, project: string, name: string, signal?: AbortSignal): Promise<{ id: string; name: string; defaultBranch?: string; webUrl?: string }> {
+export async function getRepository(
+  c: TfsConnection,
+  project: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<{ id: string; name: string; defaultBranch?: string; webUrl?: string }> {
   const v = await ver(c, signal);
   const r = await tfsCall<{ id?: string; name?: string; defaultBranch?: string; webUrl?: string }>(
     c,
@@ -347,13 +414,28 @@ export async function getRepository(c: TfsConnection, project: string, name: str
     { query: { "api-version": v }, what: `"${name}" deposu`, signal },
   );
   if (!r?.id) throw new TfsError(`"${name}" deposu bulunamadı`, 404);
-  return { id: r.id, name: r.name ?? name, ...(r.defaultBranch ? { defaultBranch: shortRef(r.defaultBranch) } : {}), ...(r.webUrl ? { webUrl: r.webUrl } : {}) };
+  return {
+    id: r.id,
+    name: r.name ?? name,
+    ...(r.defaultBranch ? { defaultBranch: shortRef(r.defaultBranch) } : {}),
+    ...(r.webUrl ? { webUrl: r.webUrl } : {}),
+  };
 }
 
 /** PR açar; iş öğeleri bağlanır. Aynı dallar için açık PR varsa onu döndürür. */
 export async function createPullRequest(
   c: TfsConnection,
-  o: { project: string; repositoryId: string; repositoryName: string; source: string; target: string; title: string; description: string; workItems: number[]; draft?: boolean },
+  o: {
+    project: string;
+    repositoryId: string;
+    repositoryName: string;
+    source: string;
+    target: string;
+    title: string;
+    description: string;
+    workItems: number[];
+    draft?: boolean;
+  },
   signal?: AbortSignal,
 ): Promise<{ id: number; webUrl: string; existed?: boolean }> {
   const v = await ver(c, signal);
@@ -380,7 +462,12 @@ export async function createPullRequest(
     // Aynı kaynak/hedef için açık PR var (409): onu bul
     if (e instanceof TfsError && (e.status === 409 || /exists|zaten/i.test(e.message))) {
       const r = await tfsCall<{ value?: RawPr[] }>(c, "GET", base, {
-        query: { "api-version": v, "searchCriteria.status": "active", "searchCriteria.sourceRefName": `refs/heads/${o.source}`, "searchCriteria.targetRefName": `refs/heads/${o.target}` },
+        query: {
+          "api-version": v,
+          "searchCriteria.status": "active",
+          "searchCriteria.sourceRefName": `refs/heads/${o.source}`,
+          "searchCriteria.targetRefName": `refs/heads/${o.target}`,
+        },
         what: "açık PR",
         signal,
       }).catch(() => undefined);

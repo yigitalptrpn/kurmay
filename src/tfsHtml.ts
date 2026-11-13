@@ -14,16 +14,85 @@
  */
 
 const NAMED: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ensp: " ", emsp: " ", thinsp: " ",
-  ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", sbquo: "‚", ldquo: "“", rdquo: "”", bdquo: "„",
-  hellip: "…", bull: "•", middot: "·", copy: "©", reg: "®", trade: "™", euro: "€", pound: "£",
-  laquo: "«", raquo: "»", times: "×", divide: "÷", plusmn: "±", deg: "°", para: "¶", sect: "§",
-  larr: "←", rarr: "→", uarr: "↑", darr: "↓", harr: "↔", rArr: "⇒", lArr: "⇐", le: "≤", ge: "≥", ne: "≠",
-  ccedil: "ç", Ccedil: "Ç", ouml: "ö", Ouml: "Ö", uuml: "ü", Uuml: "Ü", scedil: "ş", Scedil: "Ş",
-  gbreve: "ğ", Gbreve: "Ğ", Idot: "İ", inodot: "ı", imath: "ı", iuml: "ï", Iuml: "Ï",
-  acirc: "â", Acirc: "Â", icirc: "î", Icirc: "Î", ucirc: "û", Ucirc: "Û", auml: "ä", Auml: "Ä",
-  eacute: "é", Eacute: "É", egrave: "è", aacute: "á", agrave: "à", oacute: "ó", uacute: "ú", szlig: "ß",
-  shy: "", zwj: "", zwnj: "", lrm: "", rlm: "",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  ensp: " ",
+  emsp: " ",
+  thinsp: " ",
+  ndash: "–",
+  mdash: "—",
+  lsquo: "‘",
+  rsquo: "’",
+  sbquo: "‚",
+  ldquo: "“",
+  rdquo: "”",
+  bdquo: "„",
+  hellip: "…",
+  bull: "•",
+  middot: "·",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  euro: "€",
+  pound: "£",
+  laquo: "«",
+  raquo: "»",
+  times: "×",
+  divide: "÷",
+  plusmn: "±",
+  deg: "°",
+  para: "¶",
+  sect: "§",
+  larr: "←",
+  rarr: "→",
+  uarr: "↑",
+  darr: "↓",
+  harr: "↔",
+  rArr: "⇒",
+  lArr: "⇐",
+  le: "≤",
+  ge: "≥",
+  ne: "≠",
+  ccedil: "ç",
+  Ccedil: "Ç",
+  ouml: "ö",
+  Ouml: "Ö",
+  uuml: "ü",
+  Uuml: "Ü",
+  scedil: "ş",
+  Scedil: "Ş",
+  gbreve: "ğ",
+  Gbreve: "Ğ",
+  Idot: "İ",
+  inodot: "ı",
+  imath: "ı",
+  iuml: "ï",
+  Iuml: "Ï",
+  acirc: "â",
+  Acirc: "Â",
+  icirc: "î",
+  Icirc: "Î",
+  ucirc: "û",
+  Ucirc: "Û",
+  auml: "ä",
+  Auml: "Ä",
+  eacute: "é",
+  Eacute: "É",
+  egrave: "è",
+  aacute: "á",
+  agrave: "à",
+  oacute: "ó",
+  uacute: "ú",
+  szlig: "ß",
+  shy: "",
+  zwj: "",
+  zwnj: "",
+  lrm: "",
+  rlm: "",
 };
 
 /** HTML varlıklarını çözer (adlandırılmış + &#123; + &#x7B;) */
@@ -74,8 +143,26 @@ interface Frame {
 }
 
 const BLOCK = new Set([
-  "div", "p", "section", "article", "header", "footer", "main", "aside", "nav", "figure", "figcaption",
-  "address", "center", "form", "fieldset", "dl", "dt", "dd", "details", "summary",
+  "div",
+  "p",
+  "section",
+  "article",
+  "header",
+  "footer",
+  "main",
+  "aside",
+  "nav",
+  "figure",
+  "figcaption",
+  "address",
+  "center",
+  "form",
+  "fieldset",
+  "dl",
+  "dt",
+  "dd",
+  "details",
+  "summary",
 ]);
 const SKIP_CONTENT = new Set(["script", "style", "head", "title", "xml", "template", "noscript", "svg", "math"]);
 
@@ -336,7 +423,12 @@ export function htmlToMarkdown(html: string, opts: HtmlToMarkdownOptions = {}): 
           const body = q.buf.replace(/\n{3,}/g, "\n\n").trim();
           if (body) {
             blankLine();
-            write(body.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n"));
+            write(
+              body
+                .split("\n")
+                .map((l) => (l ? `> ${l}` : ">"))
+                .join("\n"),
+            );
             blankLine();
           }
         } else {

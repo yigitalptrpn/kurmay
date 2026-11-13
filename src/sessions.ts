@@ -86,9 +86,21 @@ export class SessionStore {
   }
 
   /** İlk görevle yeni bir oturum açar (henüz SDK oturumu yok) */
-  create(task: string, model?: string, effort?: EffortSetting, targetDir?: string, autoForward?: boolean): SessionEntry {
+  create(
+    task: string,
+    model?: string,
+    effort?: EffortSetting,
+    targetDir?: string,
+    autoForward?: boolean,
+  ): SessionEntry {
     const now = new Date().toISOString();
-    const entry: SessionEntry = { id: randomUUID(), name: nameFromTask(task), createdAt: now, updatedAt: now, runLogs: [] };
+    const entry: SessionEntry = {
+      id: randomUUID(),
+      name: nameFromTask(task),
+      createdAt: now,
+      updatedAt: now,
+      runLogs: [],
+    };
     if (model) entry.model = model;
     if (effort) entry.effort = effort;
     if (targetDir) entry.targetDir = targetDir;
@@ -242,11 +254,17 @@ export function sessionRecap(events: readonly TimedEvent[], entryKey: string): s
     else if (!cur) continue;
     else if (e.type === "agent_finished" && e.agent === entryKey) {
       const st = (e.structured ?? {}) as { summary?: unknown; answer?: unknown; file_plan?: unknown };
-      const text = typeof st.answer === "string" && st.answer.trim() ? st.answer
-        : typeof st.summary === "string" && st.summary.trim() ? st.summary : e.output;
+      const text =
+        typeof st.answer === "string" && st.answer.trim()
+          ? st.answer
+          : typeof st.summary === "string" && st.summary.trim()
+            ? st.summary
+            : e.output;
       if (text) cur.analist = kisalt(text, RECAP_TEXT_MAX);
       if (Array.isArray(st.file_plan)) {
-        cur.files = st.file_plan.map((f) => (f as { path?: unknown })?.path).filter((p): p is string => typeof p === "string");
+        cur.files = st.file_plan
+          .map((f) => (f as { path?: unknown })?.path)
+          .filter((p): p is string => typeof p === "string");
       }
     } else if (e.type === "workflow_finished") cur.end = "tamamlandı";
     else if (e.type === "workflow_failed") cur.end = "hata ile bitti";
@@ -257,7 +275,8 @@ export function sessionRecap(events: readonly TimedEvent[], entryKey: string): s
   const satirlar = son.map((t, i) => {
     const parca = [`${i + 1}. Görev: ${kisalt(t.task, RECAP_TEXT_MAX)}`];
     if (t.analist) parca.push(`   Senin o zamanki sonucun: ${t.analist}`);
-    if (t.files?.length) parca.push(`   Plandaki dosyalar: ${t.files.slice(0, 12).join(", ")}${t.files.length > 12 ? " …" : ""}`);
+    if (t.files?.length)
+      parca.push(`   Plandaki dosyalar: ${t.files.slice(0, 12).join(", ")}${t.files.length > 12 ? " …" : ""}`);
     parca.push(`   Durum: ${t.end ?? "yarıda kaldı (servis durdurulmuş olabilir)"}`);
     return parca.join("\n");
   });

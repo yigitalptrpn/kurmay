@@ -97,7 +97,7 @@ const refNum = (s: string | undefined): number | undefined => {
 function dictValue(objs: Map<number, PdfObj>, dict: string, key: string): string | undefined {
   const i = dict.search(new RegExp(`/${key}(?![\\w])`));
   if (i < 0) return undefined;
-  let rest = dict.slice(i + key.length + 1).trimStart();
+  const rest = dict.slice(i + key.length + 1).trimStart();
   const ref = refNum(rest);
   if (ref !== undefined) return objs.get(ref)?.dict;
   const open = rest.startsWith("<<") ? "<<" : rest.startsWith("[") ? "[" : "";
@@ -105,8 +105,10 @@ function dictValue(objs: Map<number, PdfObj>, dict: string, key: string): string
   const close = open === "<<" ? ">>" : "]";
   let depth = 0;
   for (let j = 0; j < rest.length; j++) {
-    if (rest.startsWith(open, j)) depth++, (j += open.length - 1);
-    else if (rest.startsWith(close, j) && --depth === 0) return rest.slice(0, j + close.length);
+    if (rest.startsWith(open, j)) {
+      depth++;
+      j += open.length - 1;
+    } else if (rest.startsWith(close, j) && --depth === 0) return rest.slice(0, j + close.length);
   }
   return rest;
 }
@@ -137,7 +139,8 @@ function parseCMap(text: string): FontMap {
       if (m[4]) {
         const base = hexStr(m[4]);
         const last = base.charCodeAt(base.length - 1);
-        for (let c = lo; c <= hi && c - lo < 65536; c++) map.set(c, base.slice(0, -1) + String.fromCharCode(last + c - lo));
+        for (let c = lo; c <= hi && c - lo < 65536; c++)
+          map.set(c, base.slice(0, -1) + String.fromCharCode(last + c - lo));
       } else {
         const items = [...(m[5] ?? "").matchAll(/<([0-9a-fA-F]+)>/g)];
         items.forEach((it, k) => map.set(lo + k, hexStr(it[1])));
@@ -149,7 +152,18 @@ function parseCMap(text: string): FontMap {
 
 /** WinAnsi'de latin1'den farklı olan 0x80–0x9F aralığı (tırnak, tire…) */
 const WIN_ANSI: Record<number, string> = {
-  0x80: "€", 0x82: "‚", 0x84: "„", 0x85: "…", 0x91: "‘", 0x92: "’", 0x93: "“", 0x94: "”", 0x95: "•", 0x96: "–", 0x97: "—", 0x99: "™",
+  0x80: "€",
+  0x82: "‚",
+  0x84: "„",
+  0x85: "…",
+  0x91: "‘",
+  0x92: "’",
+  0x93: "“",
+  0x94: "”",
+  0x95: "•",
+  0x96: "–",
+  0x97: "—",
+  0x99: "™",
 };
 
 function decodeBytes(bytes: number[], font: FontMap | undefined): string {
@@ -217,8 +231,10 @@ function contentText(src: string, fonts: Map<string, FontMap>): string {
         } else if (n === "\r" || n === "\n") {
           if (n === "\r" && src[i + 1] === "\n") i++;
         } else bytes.push(n.charCodeAt(0));
-      } else if (c === "(") depth++, bytes.push(40);
-      else if (c === ")") {
+      } else if (c === "(") {
+        depth++;
+        bytes.push(40);
+      } else if (c === ")") {
         if (--depth > 0) bytes.push(41);
       } else bytes.push(c.charCodeAt(0));
       i++;
@@ -251,8 +267,10 @@ function contentText(src: string, fonts: Map<string, FontMap>): string {
         else if (src[i] === "<") arr.push(readHex());
         else if (/[-\d.]/.test(src[i])) {
           const m = /^-?\d*\.?\d+/.exec(src.slice(i, i + 32));
-          if (m) arr.push(Number(m[0])), (i += m[0].length);
-          else i++;
+          if (m) {
+            arr.push(Number(m[0]));
+            i += m[0].length;
+          } else i++;
         } else i++;
       }
       i++;
@@ -263,8 +281,10 @@ function contentText(src: string, fonts: Map<string, FontMap>): string {
       i += m ? m[0].length : 1;
     } else if (/[-\d.]/.test(c)) {
       const m = /^-?\d*\.?\d+/.exec(src.slice(i, i + 32));
-      if (m) stack.push(Number(m[0])), (i += m[0].length);
-      else i++;
+      if (m) {
+        stack.push(Number(m[0]));
+        i += m[0].length;
+      } else i++;
     } else if (src.startsWith("<<", i) || src.startsWith(">>", i)) i += 2;
     else {
       const m = /^[A-Za-z'"*]+/.exec(src.slice(i, i + 8));
@@ -340,7 +360,8 @@ function pdfText(buf: Buffer): string | undefined {
     if (!o || depth > 50) return;
     const res = dictValue(objs, o.dict, "Resources") ?? inherited;
     if (/\/Type\s*\/Pages\b/.test(o.dict)) {
-      for (const k of (dictValue(objs, o.dict, "Kids") ?? "").matchAll(/(\d+)\s+\d+\s+R/g)) walk(Number(k[1]), res, depth + 1);
+      for (const k of (dictValue(objs, o.dict, "Kids") ?? "").matchAll(/(\d+)\s+\d+\s+R/g))
+        walk(Number(k[1]), res, depth + 1);
     } else if (/\/Type\s*\/Page\b/.test(o.dict)) {
       pages.push({ dict: o.dict + (res && !/\/Resources/.test(o.dict) ? `\n/Resources ${res}` : "") });
     }
@@ -354,7 +375,11 @@ function pdfText(buf: Buffer): string | undefined {
     const src = [...contents.matchAll(/(\d+)\s+\d+\s+R/g)]
       .map((r) => objs.get(Number(r[1]))?.stream?.toString("latin1") ?? "")
       .join("\n");
-    const text = contentText(src, fonts).replace(/ {2,}/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    const text = contentText(src, fonts)
+      .replace(/ {2,}/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     if (text) parts.push(pages.length > 1 ? `--- sayfa ${n + 1} ---\n${text}` : text);
   });
   return parts.join("\n\n") || undefined;
@@ -391,7 +416,10 @@ function unzipEntry(buf: Buffer, wanted: string): Buffer | undefined {
 const XML_ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const unxml = (s: string) =>
   s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e: string) =>
-    e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : XML_ENT[e] ?? m);
+    e[0] === "#"
+      ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1)))
+      : (XML_ENT[e] ?? m),
+  );
 
 function docxText(buf: Buffer): string | undefined {
   const xml = unzipEntry(buf, "word/document.xml")?.toString("utf8");
@@ -404,5 +432,11 @@ function docxText(buf: Buffer): string | undefined {
     .replace(/<\/w:tr>/g, "\n")
     .replace(/<w:delText[^>]*>[\s\S]*?<\/w:delText>/g, "") // silinmiş (izlenen değişiklik) metin
     .replace(/<[^>]+>/g, "");
-  return unxml(body).replace(/\n\t/g, "\t").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || undefined;
+  return (
+    unxml(body)
+      .replace(/\n\t/g, "\t")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim() || undefined
+  );
 }

@@ -46,7 +46,8 @@ export function tokensOfUsage(usage: unknown): number | undefined {
   if (!usage || typeof usage !== "object") return undefined;
   const u = usage as Record<string, unknown>;
   const n = (k: string) => (typeof u[k] === "number" ? (u[k] as number) : 0);
-  const total = n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
+  const total =
+    n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
   return total > 0 ? total : undefined;
 }
 
@@ -59,5 +60,7 @@ export function tokensOfUsage(usage: unknown): number | undefined {
  * hata metinlerinde de geçtiği için YOK — yanlış eşleşme konuşmayı boşuna özetletiyordu.
  */
 export function isContextFullError(message: string): boolean {
-  return /maximum context length|maximum model length|context length|context[ _-]?(?:window|limit)[ _-]?exceeded|exceeds? (?:the )?(?:available )?context (?:window|limit|size)|prompt is too long|input is too long|context_length_exceeded/i.test(message);
+  return /maximum context length|maximum model length|context length|context[ _-]?(?:window|limit)[ _-]?exceeded|exceeds? (?:the )?(?:available )?context (?:window|limit|size)|prompt is too long|input is too long|context_length_exceeded/i.test(
+    message,
+  );
 }

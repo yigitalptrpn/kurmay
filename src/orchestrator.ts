@@ -53,7 +53,7 @@ export function resolveRoute(
 ): { target: string | null; value: string | null } {
   const raw = (structured as Record<string, unknown> | undefined)?.[routes.field];
   const value = typeof raw === "string" ? raw : null;
-  const target = value != null && value in routes.cases ? routes.cases[value] : routes.default ?? null;
+  const target = value != null && value in routes.cases ? routes.cases[value] : (routes.default ?? null);
   return { target, value };
 }
 
@@ -75,9 +75,7 @@ function producesPlan(agent: AgentDefinition): boolean {
 
 /** Onay/aktarım için görünüm: yapılandırılmış çıktı varsa okunur JSON, yoksa metin */
 function outputView(result: AgentRunResult): string {
-  return result.structured !== undefined
-    ? JSON.stringify(result.structured, null, 2)
-    : result.text;
+  return result.structured !== undefined ? JSON.stringify(result.structured, null, 2) : result.text;
 }
 
 function buildPrompt(agent: AgentDefinition, ctx: RunContext): string {
@@ -90,7 +88,9 @@ function buildPrompt(agent: AgentDefinition, ctx: RunContext): string {
     if (entry.result.structured !== undefined) {
       parts.push(
         `# "${entry.name}" ajanının çıktısı (yapılandırılmış JSON)\n` +
-          "```json\n" + JSON.stringify(entry.result.structured, null, 2) + "\n```",
+          "```json\n" +
+          JSON.stringify(entry.result.structured, null, 2) +
+          "\n```",
       );
     } else {
       parts.push(`# "${entry.name}" ajanının çıktısı\n${entry.result.text}`);
@@ -181,8 +181,12 @@ function mergeWorkerResults(parts: Array<[string, AgentRunResult]>): AgentRunRes
   for (const [repo, res] of parts) {
     const st = res.structured as Record<string, unknown> | undefined;
     if (!st || typeof st !== "object") {
-      const arr = (merged.changes as unknown[] | undefined) ?? (merged.changes = []) as unknown[];
-      arr.push({ file: repo === "." ? "." : `${repo}/`, action: "modified", summary: "(yapılandırılmış çıktı yok — ayrıntı metinde)" });
+      const arr = (merged.changes as unknown[] | undefined) ?? ((merged.changes = []) as unknown[]);
+      arr.push({
+        file: repo === "." ? "." : `${repo}/`,
+        action: "modified",
+        summary: "(yapılandırılmış çıktı yok — ayrıntı metinde)",
+      });
       continue;
     }
     for (const [k, v] of Object.entries(st)) {
@@ -285,14 +289,15 @@ async function runFanout(
       name: src.name,
       result: { ...src.result, structured: { ...(src.result.structured as object), file_plan: groups.get(repo) } },
     });
-    const scopeNote = repo === "."
-      ? `# Mıntıkan\nBu görev mıntıka (repo) başına bölündü; sana düşen kısım hedef dizinin KÖKÜNDEKİ dosyalar ` +
-        `(merkez mıntıka; yukarıdaki plan yalnızca onları içeriyor). Mıntıka klasörlerine (${others(repo).join(", ")}) dokunma — ` +
-        `onlar başka saha ajanlarına atandı.`
-      : `# Mıntıkan\nBu görev mıntıka (repo) başına bölündü; sana düşen mıntıka: "${repo}" (yukarıdaki plan yalnızca bu ` +
-        `mıntıkaya ait kısım). Yalnızca bu klasördeki dosyaları değiştir — yazma araçların bu klasörün dışına ` +
-        `engellenmiştir. Diğer mıntıkalar (${others(repo).join(", ")}) aynı anda başka saha ajanlarına atandı; ` +
-        `onlara dokunma, okuman serbest. Çıktındaki dosya yollarını hedef dizine göre ver (ör. "${repo}/src/...").`;
+    const scopeNote =
+      repo === "."
+        ? `# Mıntıkan\nBu görev mıntıka (repo) başına bölündü; sana düşen kısım hedef dizinin KÖKÜNDEKİ dosyalar ` +
+          `(merkez mıntıka; yukarıdaki plan yalnızca onları içeriyor). Mıntıka klasörlerine (${others(repo).join(", ")}) dokunma — ` +
+          `onlar başka saha ajanlarına atandı.`
+        : `# Mıntıkan\nBu görev mıntıka (repo) başına bölündü; sana düşen mıntıka: "${repo}" (yukarıdaki plan yalnızca bu ` +
+          `mıntıkaya ait kısım). Yalnızca bu klasördeki dosyaları değiştir — yazma araçların bu klasörün dışına ` +
+          `engellenmiştir. Diğer mıntıkalar (${others(repo).join(", ")}) aynı anda başka saha ajanlarına atandı; ` +
+          `onlara dokunma, okuman serbest. Çıktındaki dosya yollarını hedef dizine göre ver (ör. "${repo}/src/...").`;
     const prompt = buildPrompt(agent, { ...ctx, outputs }) + "\n\n" + scopeNote;
     return runAgent(clone, prompt, cwd, cfg, bus, abortController, undefined, {
       writeScope: repo === "." ? undefined : path.join(cwd, repo),
@@ -320,7 +325,9 @@ async function runFanout(
   }
   bus.emit({ type: "fanout_finished", node: nodeKey, repos, failed });
   if (failed.length) {
-    throw new Error(`${nodeKey}: ${failed.length} repo tamamlanamadı — ${failed.map((f) => `${f.repo}: ${f.error}`).join("; ")}`);
+    throw new Error(
+      `${nodeKey}: ${failed.length} repo tamamlanamadı — ${failed.map((f) => `${f.repo}: ${f.error}`).join("; ")}`,
+    );
   }
 
   // Plandan çıkmış repoların eski sonuçları birleşime girmez
@@ -367,173 +374,209 @@ export async function runWorkflow(
   let consecutiveSkips = 0;
 
   try {
-  // Zamanlanmış başlangıç: onaydan sonraki zamanlamayla aynı mekanizma (geri sayım
-  // kartı, terminal/panelden erken çalıştırma ya da iptal)
-  if (startAt && startAt > Date.now()) {
-    bus.emit({ type: "run_scheduled", agent: workflow.entry, runAt: startAt });
-    console.log(`\n⏰ Görev ${fmtDate(startAt)} için zamanlandı — bekleniyor…`);
-    const { outcome, source } = await waitForScheduledTime(startAt, web, abortController.signal);
-    if (outcome === "cancelled") {
-      bus.emit({ type: "run_schedule_cancelled", agent: workflow.entry, source });
-      console.log(`\n🛑 Zamanlama iptal edildi (${source}) — görev çalıştırılmadı.`);
-      bus.emit({ type: "workflow_finished" });
-      return;
-    }
-    bus.emit({ type: "run_resumed", agent: workflow.entry, source });
-    console.log(`\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — görev başlıyor.`);
-  }
-
-  while (current !== null) {
-    // Kullanıcı adımlar arasında iptal ettiyse burada temiz dur
-    if (abortController.signal.aborted) throw new RunCancelledError();
-    const node: WorkflowNode = workflow.agents[current];
-
-    // Devre dışı düğüm: koşturulmaz, "geçer" kenarından (başarı yönü) devam edilir.
-    // İstisna fanout: kapalıyken DAĞITIM kapanır, ajan tek kopya koşar (aşağıda) —
-    // böylece aynı anahtarla paralel/tek kopya karşılaştırılabilir.
-    if (node.disabled && !isFanoutNode(node)) {
-      const to = passThroughTarget(node);
-      if (++consecutiveSkips > Object.keys(workflow.agents).length) {
-        throw new Error(`Devre dışı düğümlerin geçer kenarları döngü oluşturuyor ("${current}" civarı) — en az birini aç`);
-      }
-      console.log(`\n⏭ "${current}" devre dışı — atlandı → ${to ?? "akış biter"}`);
-      bus.emit({ type: "node_skipped", node: current, to });
-      if (!ctx.skipped.includes(current)) ctx.skipped.push(current);
-      current = to;
-      continue;
-    }
-    consecutiveSkips = 0;
-
-    // Komut düğümü (LLM değil): değişen modülleri deterministik sırada build eder.
-    // Başarılıysa onSuccess'e, ilk hata onFailure'a (build log'u geri bildirim olur).
-    if (isCommandNode(node)) {
-      const result = await runBuild(node, ctx.changedFiles, cwd, bus);
-      if (result.ok) {
-        ctx.feedback = undefined;
-        current = node.onSuccess;
-        continue;
-      }
-      rejectCycles++;
-      if (rejectCycles >= workflow.maxCycles) {
-        const error = `Build ${workflow.maxCycles} turda düzeltilemedi (son hata: ${result.failedModule})`;
-        console.log(`\n⚠️ ${error}`);
-        bus.emit({ type: "workflow_failed", error });
+    // Zamanlanmış başlangıç: onaydan sonraki zamanlamayla aynı mekanizma (geri sayım
+    // kartı, terminal/panelden erken çalıştırma ya da iptal)
+    if (startAt && startAt > Date.now()) {
+      bus.emit({ type: "run_scheduled", agent: workflow.entry, runAt: startAt });
+      console.log(`\n⏰ Görev ${fmtDate(startAt)} için zamanlandı — bekleniyor…`);
+      const { outcome, source } = await waitForScheduledTime(startAt, web, abortController.signal);
+      if (outcome === "cancelled") {
+        bus.emit({ type: "run_schedule_cancelled", agent: workflow.entry, source });
+        console.log(`\n🛑 Zamanlama iptal edildi (${source}) — görev çalıştırılmadı.`);
+        bus.emit({ type: "workflow_finished" });
         return;
       }
-      ctx.feedback =
-        `Build başarısız — "${result.failedModule}" modülü derlenmedi. ` +
-        `Aşağıdaki build çıktısındaki hataları düzelt:\n\n${result.log ?? ""}`;
-      console.log(`\n🔁 Tur ${rejectCycles}/${workflow.maxCycles}: build hatası "${node.onFailure}" ajanına gönderiliyor`);
-      bus.emit({ type: "cycle", n: rejectCycles, max: workflow.maxCycles, to: node.onFailure });
-      current = node.onFailure;
-      continue;
+      bus.emit({ type: "run_resumed", agent: workflow.entry, source });
+      console.log(`\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — görev başlıyor.`);
     }
 
-    // Fanout düğümü (LLM değil, bir kapı): ajanın repo başına kopyaları koşar,
-    // sonuçlar birleşip ajanın kendi çıktısıymış gibi kaydedilir (inceleme/build onu görür)
-    if (isFanoutNode(node)) {
-      if (workflow.agents[node.agent]?.disabled) {
-        console.log(`\n⏭ "${node.agent}" devre dışı — "${current}" dağıtımı atlandı → ${node.next ?? "akış biter"}`);
-        bus.emit({ type: "node_skipped", node: current, to: node.next });
-        if (!ctx.skipped.includes(node.agent)) ctx.skipped.push(node.agent);
+    while (current !== null) {
+      // Kullanıcı adımlar arasında iptal ettiyse burada temiz dur
+      if (abortController.signal.aborted) throw new RunCancelledError();
+      const node: WorkflowNode = workflow.agents[current];
+
+      // Devre dışı düğüm: koşturulmaz, "geçer" kenarından (başarı yönü) devam edilir.
+      // İstisna fanout: kapalıyken DAĞITIM kapanır, ajan tek kopya koşar (aşağıda) —
+      // böylece aynı anahtarla paralel/tek kopya karşılaştırılabilir.
+      if (node.disabled && !isFanoutNode(node)) {
+        const to = passThroughTarget(node);
+        if (++consecutiveSkips > Object.keys(workflow.agents).length) {
+          throw new Error(
+            `Devre dışı düğümlerin geçer kenarları döngü oluşturuyor ("${current}" civarı) — en az birini aç`,
+          );
+        }
+        console.log(`\n⏭ "${current}" devre dışı — atlandı → ${to ?? "akış biter"}`);
+        bus.emit({ type: "node_skipped", node: current, to });
+        if (!ctx.skipped.includes(current)) ctx.skipped.push(current);
+        current = to;
+        continue;
+      }
+      consecutiveSkips = 0;
+
+      // Komut düğümü (LLM değil): değişen modülleri deterministik sırada build eder.
+      // Başarılıysa onSuccess'e, ilk hata onFailure'a (build log'u geri bildirim olur).
+      if (isCommandNode(node)) {
+        const result = await runBuild(node, ctx.changedFiles, cwd, bus);
+        if (result.ok) {
+          ctx.feedback = undefined;
+          current = node.onSuccess;
+          continue;
+        }
+        rejectCycles++;
+        if (rejectCycles >= workflow.maxCycles) {
+          const error = `Build ${workflow.maxCycles} turda düzeltilemedi (son hata: ${result.failedModule})`;
+          console.log(`\n⚠️ ${error}`);
+          bus.emit({ type: "workflow_failed", error });
+          return;
+        }
+        ctx.feedback =
+          `Build başarısız — "${result.failedModule}" modülü derlenmedi. ` +
+          `Aşağıdaki build çıktısındaki hataları düzelt:\n\n${result.log ?? ""}`;
+        console.log(
+          `\n🔁 Tur ${rejectCycles}/${workflow.maxCycles}: build hatası "${node.onFailure}" ajanına gönderiliyor`,
+        );
+        bus.emit({ type: "cycle", n: rejectCycles, max: workflow.maxCycles, to: node.onFailure });
+        current = node.onFailure;
+        continue;
+      }
+
+      // Fanout düğümü (LLM değil, bir kapı): ajanın repo başına kopyaları koşar,
+      // sonuçlar birleşip ajanın kendi çıktısıymış gibi kaydedilir (inceleme/build onu görür)
+      if (isFanoutNode(node)) {
+        if (workflow.agents[node.agent]?.disabled) {
+          console.log(`\n⏭ "${node.agent}" devre dışı — "${current}" dağıtımı atlandı → ${node.next ?? "akış biter"}`);
+          bus.emit({ type: "node_skipped", node: current, to: node.next });
+          if (!ctx.skipped.includes(node.agent)) ctx.skipped.push(node.agent);
+          current = node.next;
+          continue;
+        }
+        const worker = agents.get(node.agent)!;
+        let result: AgentRunResult;
+        if (node.disabled) {
+          console.log(`\n🔀 "${current}" devre dışı — dağıtım yok, ${worker.name} tek kopya koşuyor`);
+          bus.emit({ type: "node_skipped", node: current, to: node.agent });
+          result = await runAgent(worker, buildPrompt(worker, ctx), cwd, cfg, bus, abortController);
+        } else {
+          result = await runFanout(current, node, agents, ctx, cwd, cfg, bus, abortController);
+        }
+        ctx.outputs.set(worker.key, { name: worker.name, result });
+        ctx.feedback = undefined;
+        const changed = changedFilesOf(result);
+        if (changed) ctx.changedFiles = changed;
         current = node.next;
         continue;
       }
-      const worker = agents.get(node.agent)!;
-      let result: AgentRunResult;
-      if (node.disabled) {
-        console.log(`\n🔀 "${current}" devre dışı — dağıtım yok, ${worker.name} tek kopya koşuyor`);
-        bus.emit({ type: "node_skipped", node: current, to: node.agent });
-        result = await runAgent(worker, buildPrompt(worker, ctx), cwd, cfg, bus, abortController);
-      } else {
-        result = await runFanout(current, node, agents, ctx, cwd, cfg, bus, abortController);
+
+      const agent: AgentDefinition = agents.get(current)!;
+      // Yalnızca entry ajan (analist) oturum sürdürür; diğerleri her koşuda taze
+      const isEntry = agent.key === workflow.entry;
+      const result = await runAgent(
+        agent,
+        buildPrompt(agent, ctx),
+        cwd,
+        cfg,
+        bus,
+        abortController,
+        isEntry ? sessionStore.entrySessionId : undefined,
+        isEntry
+          ? {
+              ...(sessionStore.entrySessionId ? { contextTokens: sessionStore.entryContext } : {}),
+              recap: sessionStore.recap,
+              onSession: sessionStore.onSession,
+            }
+          : {},
+      );
+      if (isEntry && result.sessionId) {
+        sessionStore.entrySessionId = result.sessionId;
+        sessionStore.entryContext = result.contextTokens;
       }
-      ctx.outputs.set(worker.key, { name: worker.name, result });
+      ctx.outputs.set(agent.key, { name: agent.name, result });
       ctx.feedback = undefined;
+      // Structured çıktı değişen dosyalar taşıyorsa build düğümü için sakla
       const changed = changedFilesOf(result);
       if (changed) ctx.changedFiles = changed;
-      current = node.next;
-      continue;
-    }
 
-    const agent: AgentDefinition = agents.get(current)!;
-    // Yalnızca entry ajan (analist) oturum sürdürür; diğerleri her koşuda taze
-    const isEntry = agent.key === workflow.entry;
-    const result = await runAgent(
-      agent, buildPrompt(agent, ctx), cwd, cfg, bus, abortController,
-      isEntry ? sessionStore.entrySessionId : undefined,
-      isEntry
-        ? {
-            ...(sessionStore.entrySessionId ? { contextTokens: sessionStore.entryContext } : {}),
-            recap: sessionStore.recap,
-            onSession: sessionStore.onSession,
-          }
-        : {},
-    );
-    if (isEntry && result.sessionId) {
-      sessionStore.entrySessionId = result.sessionId;
-      sessionStore.entryContext = result.contextTokens;
-    }
-    ctx.outputs.set(agent.key, { name: agent.name, result });
-    ctx.feedback = undefined;
-    // Structured çıktı değişen dosyalar taşıyorsa build düğümü için sakla
-    const changed = changedFilesOf(result);
-    if (changed) ctx.changedFiles = changed;
-
-    // Rota (varsa) onaydan ÖNCE çözülür: akışı bitirecekse (hedef null) onay
-    // sormanın anlamı yok — onaylanacak/uygulanacak bir sonraki adım yok.
-    // routeTarget: undefined = düğümde routes yok; string = sonraki düğüm; null = akış biter
-    let routeTarget: string | null | undefined;
-    if (agent.config.routes) {
-      const { target, value } = resolveRoute(agent.config.routes, result.structured);
-      routeTarget = target;
-      const note = `${agent.name} rotası: ${value ?? "(belirsiz)"} → ${target ?? "akış biter (saha timi çağrılmaz)"}`;
-      console.log(`\n🧭 ${note}`);
-      bus.emit({ type: "agent_text", agent: agent.key, text: `🧭 ${note}` });
-    }
-
-    // 1) Kullanıcı onayı gereken düğüm: terminal veya web'den — hangisi önce cevap verirse.
-    //    Reddedilirse yorumla birlikte aynı düğüm tekrarlanır.
-    //    Rota akışı bitirecekse (routeTarget === null) onay ATLANMAZ: aksi halde
-    //    ajan "gerek yok" deyip akışı sessizce bitirir, kullanıcıya söz düşmezdi.
-    //    Onay = bitir; red = gerekçeyle aynı ajanı yeniden koştur (ör. "bu bir
-    //    değişiklik talebi, planla") — böylece saha timine boş planla gidilmez.
-    const endsFlow = routeTarget === null;
-    // Planı otomatik iletme (Ayarlar): plan üreten düğümün DOLU planı onay beklemeden
-    // sonraki adıma geçer. Plan okunamadıysa ya da boşsa onay yine sorulur (kart nedenini
-    // yazar) — saha timi plansız koşmasın. Akışı bitiren rotada (bilgi cevabı) onay sorulur.
-    let autoBlocked: "empty" | "unreadable" | undefined;
-    let forwarded = false;
-    if (agent.config.requiresUserApproval && workflow.autoForwardPlan && !endsFlow && producesPlan(agent)) {
-      const plan = (result.structured as { file_plan?: unknown } | undefined)?.file_plan;
-      if (Array.isArray(plan) && plan.length > 0) {
-        const to = routeTarget !== undefined ? routeTarget : agent.config.next ?? null;
-        bus.emit({ type: "plan_forwarded", agent: agent.key, to, files: plan.length });
-        console.log(`\n⏩ ${agent.name} planı (${plan.length} dosya) onay beklemeden iletildi → ${to ?? "akış biter"}`);
-        forwarded = true;
-      } else {
-        autoBlocked = Array.isArray(plan) ? "empty" : "unreadable";
+      // Rota (varsa) onaydan ÖNCE çözülür: akışı bitirecekse (hedef null) onay
+      // sormanın anlamı yok — onaylanacak/uygulanacak bir sonraki adım yok.
+      // routeTarget: undefined = düğümde routes yok; string = sonraki düğüm; null = akış biter
+      let routeTarget: string | null | undefined;
+      if (agent.config.routes) {
+        const { target, value } = resolveRoute(agent.config.routes, result.structured);
+        routeTarget = target;
+        const note = `${agent.name} rotası: ${value ?? "(belirsiz)"} → ${target ?? "akış biter (saha timi çağrılmaz)"}`;
+        console.log(`\n🧭 ${note}`);
+        bus.emit({ type: "agent_text", agent: agent.key, text: `🧭 ${note}` });
       }
-    }
-    if (agent.config.requiresUserApproval && !forwarded) {
-      const approval = await askUserApproval(
-        agent.name,
-        outputView(result),
-        bus,
-        web,
-        result.structured,
-        abortController.signal,
-        endsFlow,
-        result.miss,
-        autoBlocked,
-      );
-      if (!approval.approved) {
-        ctx.feedback = approval.comment || "Kullanıcı çıktıyı reddetti, gözden geçir.";
-        // Ret de ileri bir zamana verilebilir ("bunu yarın sabah yeniden planla"):
-        // onaydaki zamanlamayla aynı bekleme — erken çalıştırma ya da iptal edilebilir
-        if (approval.runAt && approval.runAt > Date.now()) {
+
+      // 1) Kullanıcı onayı gereken düğüm: terminal veya web'den — hangisi önce cevap verirse.
+      //    Reddedilirse yorumla birlikte aynı düğüm tekrarlanır.
+      //    Rota akışı bitirecekse (routeTarget === null) onay ATLANMAZ: aksi halde
+      //    ajan "gerek yok" deyip akışı sessizce bitirir, kullanıcıya söz düşmezdi.
+      //    Onay = bitir; red = gerekçeyle aynı ajanı yeniden koştur (ör. "bu bir
+      //    değişiklik talebi, planla") — böylece saha timine boş planla gidilmez.
+      const endsFlow = routeTarget === null;
+      // Planı otomatik iletme (Ayarlar): plan üreten düğümün DOLU planı onay beklemeden
+      // sonraki adıma geçer. Plan okunamadıysa ya da boşsa onay yine sorulur (kart nedenini
+      // yazar) — saha timi plansız koşmasın. Akışı bitiren rotada (bilgi cevabı) onay sorulur.
+      let autoBlocked: "empty" | "unreadable" | undefined;
+      let forwarded = false;
+      if (agent.config.requiresUserApproval && workflow.autoForwardPlan && !endsFlow && producesPlan(agent)) {
+        const plan = (result.structured as { file_plan?: unknown } | undefined)?.file_plan;
+        if (Array.isArray(plan) && plan.length > 0) {
+          const to = routeTarget !== undefined ? routeTarget : (agent.config.next ?? null);
+          bus.emit({ type: "plan_forwarded", agent: agent.key, to, files: plan.length });
+          console.log(
+            `\n⏩ ${agent.name} planı (${plan.length} dosya) onay beklemeden iletildi → ${to ?? "akış biter"}`,
+          );
+          forwarded = true;
+        } else {
+          autoBlocked = Array.isArray(plan) ? "empty" : "unreadable";
+        }
+      }
+      if (agent.config.requiresUserApproval && !forwarded) {
+        const approval = await askUserApproval(
+          agent.name,
+          outputView(result),
+          bus,
+          web,
+          result.structured,
+          abortController.signal,
+          endsFlow,
+          result.miss,
+          autoBlocked,
+        );
+        if (!approval.approved) {
+          ctx.feedback = approval.comment || "Kullanıcı çıktıyı reddetti, gözden geçir.";
+          // Ret de ileri bir zamana verilebilir ("bunu yarın sabah yeniden planla"):
+          // onaydaki zamanlamayla aynı bekleme — erken çalıştırma ya da iptal edilebilir
+          if (approval.runAt && approval.runAt > Date.now()) {
+            bus.emit({ type: "run_scheduled", agent: agent.key, runAt: approval.runAt });
+            console.log(
+              `\n⏰ ${agent.name} yeniden planlaması ${fmtDate(approval.runAt)} için zamanlandı — bekleniyor…`,
+            );
+            const { outcome, source } = await waitForScheduledTime(approval.runAt, web, abortController.signal);
+            if (outcome === "cancelled") {
+              bus.emit({ type: "run_schedule_cancelled", agent: agent.key, source });
+              console.log(`\n🛑 Zamanlama iptal edildi (${source}) — koşu sonlandırılıyor.`);
+              bus.emit({ type: "workflow_finished" });
+              return;
+            }
+            bus.emit({ type: "run_resumed", agent: agent.key, source });
+            console.log(
+              `\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — yeniden planlanıyor.`,
+            );
+          }
+          console.log(`\n↩ ${agent.name} kullanıcı geri bildirimiyle yeniden çalıştırılıyor`);
+          continue;
+        }
+
+        // Onaylandı ama ileri bir zaman verildiyse, o zamana kadar kodda gerçek
+        // bir duraklama. Bekleme sırasında panelden/terminalden erken çalıştırma
+        // ya da iptal edilebilir (üç kanal yarışır). Akış zaten bitiyorsa
+        // (endsFlow) bekleyecek bir sonraki adım yok — zamanlama yok sayılır.
+        if (!endsFlow && approval.runAt && approval.runAt > Date.now()) {
           bus.emit({ type: "run_scheduled", agent: agent.key, runAt: approval.runAt });
-          console.log(`\n⏰ ${agent.name} yeniden planlaması ${fmtDate(approval.runAt)} için zamanlandı — bekleniyor…`);
+          console.log(`\n⏰ ${agent.name} planı ${fmtDate(approval.runAt)} için zamanlandı — bekleniyor…`);
           const { outcome, source } = await waitForScheduledTime(approval.runAt, web, abortController.signal);
           if (outcome === "cancelled") {
             bus.emit({ type: "run_schedule_cancelled", agent: agent.key, source });
@@ -542,88 +585,71 @@ export async function runWorkflow(
             return;
           }
           bus.emit({ type: "run_resumed", agent: agent.key, source });
-          console.log(`\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — yeniden planlanıyor.`);
+          console.log(
+            `\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — devam ediliyor.`,
+          );
         }
-        console.log(`\n↩ ${agent.name} kullanıcı geri bildirimiyle yeniden çalıştırılıyor`);
+      }
+
+      // 2) Verdict düğümü: karar doğrudan ajanın yapılandırılmış çıktısından alınır
+      //    (outputFormat şemayı SDK'de zorlar); gelmediyse metinden çıkarma yedeği
+      if (agent.config.verdict) {
+        let verdict: ReviewVerdict;
+        const parsed = ReviewVerdictSchema.safeParse(result.structured);
+        if (parsed.success) {
+          verdict = parsed.data;
+        } else {
+          console.log("⚠ Yapılandırılmış karar alınamadı, rapor metninden çıkarılıyor…");
+          verdict = await extractVerdict(result.text, cfg, abortController);
+        }
+
+        bus.emit({
+          type: "verdict",
+          agent: agent.key,
+          approved: verdict.approved,
+          issues: verdict.issues,
+          summary: verdict.summary,
+        });
+        console.log(
+          `\n📋 ${agent.name} kararı: ${verdict.approved ? "ONAYLANDI ✅" : "REDDEDİLDİ ❌"} — ${verdict.summary}`,
+        );
+
+        if (verdict.approved) {
+          current = agent.config.verdict.onApprove;
+        } else {
+          rejectCycles++;
+          if (rejectCycles >= workflow.maxCycles) {
+            console.log(`\n⚠️ Maksimum döngü sayısına (${workflow.maxCycles}) ulaşıldı — insan müdahalesi gerekiyor.`);
+            console.log("Son inceleme sorunları:");
+            for (const issue of verdict.issues) {
+              console.log(`  - [${issue.severity}] ${issue.file}: ${issue.description}`);
+            }
+            bus.emit({
+              type: "workflow_failed",
+              error: `Maksimum döngü sayısına (${workflow.maxCycles}) ulaşıldı; teftiş onayı alınamadı`,
+            });
+            return;
+          }
+          ctx.feedback = verdict.issues.map((i) => `- [${i.severity}] ${i.file}: ${i.description}`).join("\n");
+          console.log(
+            `🔁 Tur ${rejectCycles}/${workflow.maxCycles}: sorunlar "${agent.config.verdict.onReject}" ajanına geri gönderiliyor`,
+          );
+          bus.emit({ type: "cycle", n: rejectCycles, max: workflow.maxCycles, to: agent.config.verdict.onReject });
+          current = agent.config.verdict.onReject;
+        }
         continue;
       }
 
-      // Onaylandı ama ileri bir zaman verildiyse, o zamana kadar kodda gerçek
-      // bir duraklama. Bekleme sırasında panelden/terminalden erken çalıştırma
-      // ya da iptal edilebilir (üç kanal yarışır). Akış zaten bitiyorsa
-      // (endsFlow) bekleyecek bir sonraki adım yok — zamanlama yok sayılır.
-      if (!endsFlow && approval.runAt && approval.runAt > Date.now()) {
-        bus.emit({ type: "run_scheduled", agent: agent.key, runAt: approval.runAt });
-        console.log(`\n⏰ ${agent.name} planı ${fmtDate(approval.runAt)} için zamanlandı — bekleniyor…`);
-        const { outcome, source } = await waitForScheduledTime(approval.runAt, web, abortController.signal);
-        if (outcome === "cancelled") {
-          bus.emit({ type: "run_schedule_cancelled", agent: agent.key, source });
-          console.log(`\n🛑 Zamanlama iptal edildi (${source}) — koşu sonlandırılıyor.`);
-          bus.emit({ type: "workflow_finished" });
-          return;
-        }
-        bus.emit({ type: "run_resumed", agent: agent.key, source });
-        console.log(`\n▶ ${outcome === "run_now" ? "Erken çalıştırma" : "Zamanı geldi"} (${source}) — devam ediliyor.`);
-      }
-    }
-
-    // 2) Verdict düğümü: karar doğrudan ajanın yapılandırılmış çıktısından alınır
-    //    (outputFormat şemayı SDK'de zorlar); gelmediyse metinden çıkarma yedeği
-    if (agent.config.verdict) {
-      let verdict: ReviewVerdict;
-      const parsed = ReviewVerdictSchema.safeParse(result.structured);
-      if (parsed.success) {
-        verdict = parsed.data;
-      } else {
-        console.log("⚠ Yapılandırılmış karar alınamadı, rapor metninden çıkarılıyor…");
-        verdict = await extractVerdict(result.text, cfg, abortController);
+      // 3) Koşullu rota: hedef ajan çalıştıktan hemen sonra çözüldü (yukarıda),
+      //    onay ondan sonra yapıldı. Burada sadece o hedefe geçilir.
+      if (agent.config.routes) {
+        current = routeTarget ?? null;
+        continue;
       }
 
-      bus.emit({
-        type: "verdict",
-        agent: agent.key,
-        approved: verdict.approved,
-        issues: verdict.issues,
-        summary: verdict.summary,
-      });
-      console.log(`\n📋 ${agent.name} kararı: ${verdict.approved ? "ONAYLANDI ✅" : "REDDEDİLDİ ❌"} — ${verdict.summary}`);
-
-      if (verdict.approved) {
-        current = agent.config.verdict.onApprove;
-      } else {
-        rejectCycles++;
-        if (rejectCycles >= workflow.maxCycles) {
-          console.log(`\n⚠️ Maksimum döngü sayısına (${workflow.maxCycles}) ulaşıldı — insan müdahalesi gerekiyor.`);
-          console.log("Son inceleme sorunları:");
-          for (const issue of verdict.issues) {
-            console.log(`  - [${issue.severity}] ${issue.file}: ${issue.description}`);
-          }
-          bus.emit({
-            type: "workflow_failed",
-            error: `Maksimum döngü sayısına (${workflow.maxCycles}) ulaşıldı; teftiş onayı alınamadı`,
-          });
-          return;
-        }
-        ctx.feedback = verdict.issues
-          .map((i) => `- [${i.severity}] ${i.file}: ${i.description}`)
-          .join("\n");
-        console.log(`🔁 Tur ${rejectCycles}/${workflow.maxCycles}: sorunlar "${agent.config.verdict.onReject}" ajanına geri gönderiliyor`);
-        bus.emit({ type: "cycle", n: rejectCycles, max: workflow.maxCycles, to: agent.config.verdict.onReject });
-        current = agent.config.verdict.onReject;
-      }
-      continue;
+      // 4) Koşulsuz geçiş
+      current = agent.config.next ?? null;
     }
-
-    // 3) Koşullu rota: hedef ajan çalıştıktan hemen sonra çözüldü (yukarıda),
-    //    onay ondan sonra yapıldı. Burada sadece o hedefe geçilir.
-    if (agent.config.routes) {
-      current = routeTarget ?? null;
-      continue;
-    }
-
-    // 4) Koşulsuz geçiş
-    current = agent.config.next ?? null;
-  }
   } catch (err) {
     // Kullanıcı iptali: akışı temiz durdur, panel başlangıç durumuna döner
     if (err instanceof RunCancelledError) {

@@ -35,11 +35,20 @@ const FILES_MAX = 20;
 const FILE_BYTES = 20 * 1024 * 1024;
 const TOTAL_BYTES = 80 * 1024 * 1024;
 
-const kirp = (s: string, n: number): string => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") + " …(kırpıldı)" : s);
+const kirp = (s: string, n: number): string =>
+  s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") + " …(kırpıldı)" : s;
 const tarih = (iso?: string): string => {
   if (!iso) return "";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString("tr-TR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 };
 
 /** Bölüm adından dosya adı öneki: "Yeniden üretme adımları" → "adimlar" */
@@ -68,7 +77,13 @@ interface ImageRef {
 }
 
 /** Bir HTML metnindeki görselleri ad ve kaynaklarıyla çıkarır; aynı ek iki kez sayılmaz */
-function collectImages(html: string, prefix: string, seen: Map<string, ImageRef>, counter: { n: number }, origin = ""): Map<string, ImageRef> {
+function collectImages(
+  html: string,
+  prefix: string,
+  seen: Map<string, ImageRef>,
+  counter: { n: number },
+  origin = "",
+): Map<string, ImageRef> {
   const bySrc = new Map<string, ImageRef>();
   for (const src of imageSources(html)) {
     const guid = attachmentGuid(src);
@@ -88,7 +103,10 @@ function collectImages(html: string, prefix: string, seen: Map<string, ImageRef>
     const data = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,([A-Za-z0-9+/=\s]+)$/i.exec(src);
     if (data) {
       const ext = data[1].toLowerCase().replace("jpeg", "jpg");
-      bySrc.set(src, { data: Buffer.from(data[2].replace(/\s+/g, ""), "base64"), name: `${prefix}-gorsel-${++counter.n}.${ext}` });
+      bySrc.set(src, {
+        data: Buffer.from(data[2].replace(/\s+/g, ""), "base64"),
+        name: `${prefix}-gorsel-${++counter.n}.${ext}`,
+      });
       continue;
     }
     let host = "";
@@ -158,7 +176,11 @@ export interface WorkItemPreview {
 /** Bağlı öğelerin başlık/tür/durumu (okunamayanlar boş kalır) */
 async function fillLinks(c: TfsConnection, item: TfsWorkItem, signal?: AbortSignal): Promise<void> {
   if (!item.links.length) return;
-  const sum = await getSummaries(c, item.links.map((l) => l.id), signal).catch(() => new Map());
+  const sum = await getSummaries(
+    c,
+    item.links.map((l) => l.id),
+    signal,
+  ).catch(() => new Map());
   for (const l of item.links) {
     const s = sum.get(l.id);
     if (s) Object.assign(l, { title: s.title, type: s.type, state: s.state });
@@ -180,7 +202,11 @@ export async function previewWorkItem(c: TfsConnection, id: number, signal?: Abo
   });
   const shown = comments.slice(-20).map((cm) => {
     const imgs = collectImages(cm.html, "yorum", seen, counter, new URL(c.url).origin);
-    return { author: cm.author, date: cm.date, markdown: htmlToMarkdown(cm.html, { image: (src) => imageText(imgs.get(src)) }) };
+    return {
+      author: cm.author,
+      date: cm.date,
+      markdown: htmlToMarkdown(cm.html, { image: (src) => imageText(imgs.get(src)) }),
+    };
   });
   return {
     id: item.id,
@@ -200,10 +226,19 @@ export async function previewWorkItem(c: TfsConnection, id: number, signal?: Abo
     sections,
     comments: shown,
     commentCount: comments.length,
-    attachments: item.attachments.map((a) => ({ name: a.name, guid: a.guid, ...(a.size !== undefined ? { size: a.size } : {}), image: IMG_EXT.test(a.name) })),
+    attachments: item.attachments.map((a) => ({
+      name: a.name,
+      guid: a.guid,
+      ...(a.size !== undefined ? { size: a.size } : {}),
+      image: IMG_EXT.test(a.name),
+    })),
     images: [...seen.values()].filter((r) => r.guid).map((r) => ({ name: r.name, guid: r.guid! })),
     inlineImages: [...seen.values()].filter((r) => r.guid || r.data || r.url).length,
-    links: item.links.map((l) => ({ label: l.label, id: l.id, ...(l.title !== undefined ? { title: l.title, type: l.type, state: l.state } : {}) })),
+    links: item.links.map((l) => ({
+      label: l.label,
+      id: l.id,
+      ...(l.title !== undefined ? { title: l.title, type: l.type, state: l.state } : {}),
+    })),
     code: item.code,
     hyperlinks: item.hyperlinks,
     webUrl: item.webUrl,
@@ -261,7 +296,8 @@ export async function prepareWorkItemTask(
         .filter((s) => s.field === "System.Description" || s.field === "Microsoft.VSTS.Common.AcceptanceCriteria")
         .map((s) => `**${s.label}:**\n${htmlToMarkdown(s.html, { image: () => "[görsel]" })}`)
         .join("\n\n");
-      if (body.trim()) parentText = `### Üst öğe #${p.id} — ${p.title} (${p.type}, ${p.state})\n${kirp(body, PARENT_MAX)}`;
+      if (body.trim())
+        parentText = `### Üst öğe #${p.id} — ${p.title} (${p.type}, ${p.state})\n${kirp(body, PARENT_MAX)}`;
     } catch {
       /* okunamadı — başlığı bağlı öğeler listesinde zaten var */
     }
@@ -277,12 +313,24 @@ export async function prepareWorkItemTask(
   const files: FileInput[] = [];
   const skipped: string[] = [];
   let total = 0;
-  const take = async (name: string, guid: string | undefined, data: Buffer | undefined, size?: number, url?: string) => {
+  const take = async (
+    name: string,
+    guid: string | undefined,
+    data: Buffer | undefined,
+    size?: number,
+    url?: string,
+  ) => {
     if (files.length >= FILES_MAX) return skipped.push(`${name} — en fazla ${FILES_MAX} dosya indirilir`);
-    if (size !== undefined && size > FILE_BYTES) return skipped.push(`${name} — ${Math.round(size / 1024 / 1024)} MB, sınır ${FILE_BYTES / 1024 / 1024} MB`);
+    if (size !== undefined && size > FILE_BYTES)
+      return skipped.push(`${name} — ${Math.round(size / 1024 / 1024)} MB, sınır ${FILE_BYTES / 1024 / 1024} MB`);
     try {
-      const buf = data ?? (url ? await downloadSameOrigin(c, url, FILE_BYTES, signal) : await downloadAttachment(c, guid!, name, FILE_BYTES, signal));
-      if (total + buf.length > TOTAL_BYTES) return skipped.push(`${name} — toplam ${TOTAL_BYTES / 1024 / 1024} MB sınırı`);
+      const buf =
+        data ??
+        (url
+          ? await downloadSameOrigin(c, url, FILE_BYTES, signal)
+          : await downloadAttachment(c, guid!, name, FILE_BYTES, signal));
+      if (total + buf.length > TOTAL_BYTES)
+        return skipped.push(`${name} — toplam ${TOTAL_BYTES / 1024 / 1024} MB sınırı`);
       total += buf.length;
       files.push({ name, data: buf });
     } catch (e) {
@@ -291,7 +339,13 @@ export async function prepareWorkItemTask(
     }
   };
   // Önce metindeki görseller (görevin parçası), sonra ekler
-  const inlineRefs = [...new Set([...seen.values(), ...commentImgs.flatMap((m) => [...m.values()]), ...sectionImgs.flatMap((m) => [...m.values()])])];
+  const inlineRefs = [
+    ...new Set([
+      ...seen.values(),
+      ...commentImgs.flatMap((m) => [...m.values()]),
+      ...sectionImgs.flatMap((m) => [...m.values()]),
+    ]),
+  ];
   for (const ref of inlineRefs) {
     if (ref.skip || !ref.name) continue;
     await take(ref.name, ref.guid, ref.data, undefined, ref.url);
@@ -317,7 +371,10 @@ export async function prepareWorkItemTask(
   L.push(`## #${item.id} — ${item.title}`);
   const line = (parts: Array<string | undefined | false>) => parts.filter(Boolean).join(" · ");
   L.push(`- ${line([`Tür: ${item.type}`, `Durum: ${item.state}${item.reason ? ` (neden: ${item.reason})` : ""}`])}`);
-  const kim = line([item.assignedTo && `Atanan: ${item.assignedTo}`, item.createdBy && `Oluşturan: ${item.createdBy}${item.createdDate ? ` (${tarih(item.createdDate)})` : ""}`]);
+  const kim = line([
+    item.assignedTo && `Atanan: ${item.assignedTo}`,
+    item.createdBy && `Oluşturan: ${item.createdBy}${item.createdDate ? ` (${tarih(item.createdDate)})` : ""}`,
+  ]);
   if (kim) L.push(`- ${kim}`);
   if (item.facts.length) L.push(`- ${item.facts.map((f) => `${f.label}: ${f.value}`).join(" · ")}`);
   const yer = line([item.area && `Alan: ${item.area}`, item.iteration && `Yineleme: ${item.iteration}`]);
@@ -360,7 +417,8 @@ export async function prepareWorkItemTask(
   }
 
   let display = L.join("\n");
-  if (display.length > TASK_MAX) display = display.slice(0, TASK_MAX).replace(/\s+\S*$/, "") + "\n…(iş öğesi metni çok uzun, kırpıldı)";
+  if (display.length > TASK_MAX)
+    display = display.slice(0, TASK_MAX).replace(/\s+\S*$/, "") + "\n…(iş öğesi metni çok uzun, kırpıldı)";
   const text = `${guide}\n\n${display}`;
   return {
     meta: {
@@ -392,7 +450,8 @@ export function runSucceeded(events: readonly TimedEvent[]): boolean {
   let ok = false;
   for (const e of events) {
     if (e.type === "workflow_finished") ok = true;
-    else if (e.type === "workflow_failed" || e.type === "workflow_cancelled" || e.type === "run_schedule_cancelled") return false;
+    else if (e.type === "workflow_failed" || e.type === "workflow_cancelled" || e.type === "run_schedule_cancelled")
+      return false;
   }
   return ok;
 }
@@ -417,7 +476,12 @@ export const SADE_DIL =
  *  daha askerî dilde". Tek yerde: değiştirmek için yalnızca burası. */
 export const POSTA_BASLIK = "**--- KURMAY POSTA KOMUTANI ---**";
 
-export function writeBackDraft(events: readonly TimedEvent[], entryKey: string, targetDir?: string, id?: number): string {
+export function writeBackDraft(
+  events: readonly TimedEvent[],
+  entryKey: string,
+  targetDir?: string,
+  id?: number,
+): string {
   let summary = "";
   let answer = "";
   let changes: Array<{ file: string; summary?: string }> = [];
@@ -440,7 +504,10 @@ export function writeBackDraft(events: readonly TimedEvent[], entryKey: string, 
         changes = st.changes
           .map((c) => c as { file?: unknown; summary?: unknown })
           .filter((c) => typeof c.file === "string" && c.file)
-          .map((c) => ({ file: rel(String(c.file)), ...(typeof c.summary === "string" && c.summary.trim() ? { summary: c.summary.trim() } : {}) }));
+          .map((c) => ({
+            file: rel(String(c.file)),
+            ...(typeof c.summary === "string" && c.summary.trim() ? { summary: c.summary.trim() } : {}),
+          }));
       }
     } else if (e.type === "tool_used" && e.file && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(e.tool)) {
       touched.add(rel(e.file));
@@ -451,11 +518,20 @@ export function writeBackDraft(events: readonly TimedEvent[], entryKey: string, 
     } else if (e.type === "security_report") {
       const c = e.counts;
       const names: Record<string, string> = { critical: "kritik", high: "yüksek", medium: "orta", low: "düşük" };
-      const top = (["critical", "high", "medium", "low"] as const).filter((k) => c[k]).map((k) => `${c[k]} ${names[k]}`).join(", ");
+      const top = (["critical", "high", "medium", "low"] as const)
+        .filter((k) => c[k])
+        .map((k) => `${c[k]} ${names[k]}`)
+        .join(", ");
       security = { risk: e.risk, total: Object.values(c).reduce((a, b) => a + b, 0), top };
     }
   }
-  const riskNames: Record<string, string> = { none: "yok", low: "düşük", medium: "orta", high: "yüksek", critical: "kritik" };
+  const riskNames: Record<string, string> = {
+    none: "yok",
+    low: "düşük",
+    medium: "orta",
+    high: "yüksek",
+    critical: "kritik",
+  };
   const L: string[] = [];
   const codeless = !changes.length && !touched.size && !!answer;
   const no = id ? ` — #${id}` : "";
@@ -467,19 +543,27 @@ export function writeBackDraft(events: readonly TimedEvent[], entryKey: string, 
   );
   if (codeless) L.push("", `**Cevap:** ${kirp(answer.replace(/\s+/g, " "), 1500)}`);
   else if (summary) L.push("", `**Özet:** ${kirp(summary.replace(/\s+/g, " "), 1500)}`);
-  const list: Array<{ file: string; summary?: string }> = changes.length ? changes : [...touched].map((file) => ({ file }));
+  const list: Array<{ file: string; summary?: string }> = changes.length
+    ? changes
+    : [...touched].map((file) => ({ file }));
   if (list.length) {
     L.push("", `**Değişen dosyalar (${list.length}):**`);
     for (const c of list.slice(0, 40)) L.push(`- \`${c.file}\`${c.summary ? ` — ${kirp(c.summary, 200)}` : ""}`);
     if (list.length > 40) L.push(`- … ve ${list.length - 40} dosya daha`);
   }
   if (verdict) {
-    L.push("", `**Kod kontrolü:** ${verdict.approved ? "Onaylandı" : `Onaylanmadı (${verdict.issues} sorun)`}${verdict.summary ? ` — ${kirp(verdict.summary.replace(/\s+/g, " "), 600)}` : ""}`);
+    L.push(
+      "",
+      `**Kod kontrolü:** ${verdict.approved ? "Onaylandı" : `Onaylanmadı (${verdict.issues} sorun)`}${verdict.summary ? ` — ${kirp(verdict.summary.replace(/\s+/g, " "), 600)}` : ""}`,
+    );
   }
   if (security) {
-    L.push(`**Güvenlik kontrolü:** ${security.total ? `risk ${riskNames[security.risk ?? ""] ?? security.risk ?? "?"}, ${security.total} bulgu${security.top ? ` (${security.top})` : ""}` : "bulgu yok"}`);
+    L.push(
+      `**Güvenlik kontrolü:** ${security.total ? `risk ${riskNames[security.risk ?? ""] ?? security.risk ?? "?"}, ${security.total} bulgu${security.top ? ` (${security.top})` : ""}` : "bulgu yok"}`,
+    );
   }
-  if (!codeless && list.length) L.push("", "*Değişiklikler şimdilik geliştiricinin bilgisayarında; kontrol edilip gönderilmesi gerekiyor.*");
+  if (!codeless && list.length)
+    L.push("", "*Değişiklikler şimdilik geliştiricinin bilgisayarında; kontrol edilip gönderilmesi gerekiyor.*");
   L.push("", "*Arz ederim. — Kurmay*");
   return L.join("\n");
 }
@@ -498,8 +582,10 @@ export function runChangedFiles(events: readonly TimedEvent[], entryKey: string,
   for (const e of events) {
     if (e.type === "agent_finished" && e.agent !== entryKey) {
       const ch = (e.structured as { changes?: Array<{ file?: unknown }> } | undefined)?.changes;
-      if (Array.isArray(ch)) for (const x of ch) if (typeof x.file === "string" && x.file && !x.file.endsWith("/")) files.add(norm(x.file));
-    } else if (e.type === "tool_used" && e.file && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(e.tool)) files.add(norm(e.file));
+      if (Array.isArray(ch))
+        for (const x of ch) if (typeof x.file === "string" && x.file && !x.file.endsWith("/")) files.add(norm(x.file));
+    } else if (e.type === "tool_used" && e.file && /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(e.tool))
+      files.add(norm(e.file));
     else if (e.type === "write_blocked") files.delete(norm(e.file));
   }
   return [...files];

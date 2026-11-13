@@ -296,7 +296,15 @@ export type OrchestratorEvent =
       mode: "yorum" | "incele";
       source: string;
       repository: string;
-      replies: Array<{ threadId: number; firstCommentId: number; file?: string; line?: number; quote: string; text: string; resolve: boolean }>;
+      replies: Array<{
+        threadId: number;
+        firstCommentId: number;
+        file?: string;
+        line?: number;
+        quote: string;
+        text: string;
+        resolve: boolean;
+      }>;
       comments: Array<{ file?: string; line?: number; text: string }>;
       general: string;
       commit?: { files: string[]; message: string };

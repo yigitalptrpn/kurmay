@@ -63,38 +63,29 @@ export function skillInfo(name: string, projectRoot: string): { name: string; de
  *   3. Beceriler — ad + açıklama + dosya yolu; ajan ilgili görürse Read ile okur
  *      (progressive disclosure). inline: true olan becerinin tamamı gömülür.
  */
-function composeSystemPrompt(
-  persona: string,
-  rules: LoadedRule[],
-  skills: LoadedSkill[],
-  mcpTools: string[],
-): string {
+function composeSystemPrompt(persona: string, rules: LoadedRule[], skills: LoadedSkill[], mcpTools: string[]): string {
   const parts = [persona];
 
   if (mcpTools.length > 0) {
     parts.push(
       "## MCP araçların\n\n" +
-        "Şu MCP araçlarına erişimin var: " + mcpTools.join(", ") + "\n" +
+        "Şu MCP araçlarına erişimin var: " +
+        mcpTools.join(", ") +
+        "\n" +
         "Bu araçlar oturum başında araç listende görünmeyebilir — görünmüyorsa " +
         "ToolSearch ile adını aratıp yükle, ilgili işler için Bash yerine bunları tercih et.",
     );
   }
 
   if (rules.length > 0) {
-    parts.push(
-      "## Kurallar (her zaman geçerli)\n\n" +
-        rules.map((r) => `### ${r.name}\n${r.content}`).join("\n\n"),
-    );
+    parts.push("## Kurallar (her zaman geçerli)\n\n" + rules.map((r) => `### ${r.name}\n${r.content}`).join("\n\n"));
   }
 
   const inlineSkills = skills.filter((s) => s.inline);
   const lazySkills = skills.filter((s) => !s.inline);
 
   if (inlineSkills.length > 0) {
-    parts.push(
-      "## Beceriler\n\n" +
-        inlineSkills.map((s) => `### ${s.name}\n${s.content}`).join("\n\n"),
-    );
+    parts.push("## Beceriler\n\n" + inlineSkills.map((s) => `### ${s.name}\n${s.content}`).join("\n\n"));
   }
 
   if (lazySkills.length > 0) {
@@ -136,9 +127,7 @@ function validateEdges(
   /** Bu ajanı yöneten fanout düğümü (ajan onun işçisi) — işçinin kendi kenarı olamaz */
   fanoutOwner: string | null,
 ): void {
-  const routeTargets = config.routes
-    ? [...Object.values(config.routes.cases), config.routes.default]
-    : [];
+  const routeTargets = config.routes ? [...Object.values(config.routes.cases), config.routes.default] : [];
   const targets = [config.next, config.verdict?.onApprove, config.verdict?.onReject, ...routeTargets];
   for (const target of targets) {
     if (target != null && !workflow.agents[target]) {
@@ -193,7 +182,9 @@ export function loadAgents(
       throw new Error(`"${key}" fanout düğümünün işçisi ajan olmalı; "${config.agent}" bir ${worker.type} düğümü`);
     }
     if (workerOf.has(config.agent)) {
-      throw new Error(`"${config.agent}" iki fanout düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`);
+      throw new Error(
+        `"${config.agent}" iki fanout düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`,
+      );
     }
     workerOf.set(config.agent, key);
     if (config.next != null && !workflow.agents[config.next]) {

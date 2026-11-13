@@ -24,10 +24,18 @@
   }
 
   var t;
-  try { t = localStorage.getItem("kurmay-theme") || localStorage.getItem("yaver-theme"); } catch (e) {}
+  try {
+    t = localStorage.getItem("kurmay-theme") || localStorage.getItem("yaver-theme");
+  } catch {
+    /* depolama kapalı */
+  }
   if (t && ESKI[t]) t = ESKI[t];
   if (!gecerli(t)) {
-    try { t = matchMedia("(prefers-color-scheme: dark)").matches ? "radar" : "evrak"; } catch (e) { t = "evrak"; }
+    try {
+      t = matchMedia("(prefers-color-scheme: dark)").matches ? "radar" : "evrak";
+    } catch {
+      t = "evrak";
+    }
   }
   root.dataset.theme = t;
 
@@ -41,7 +49,11 @@
   }
   function sec(id) {
     root.dataset.theme = id;
-    try { localStorage.setItem("kurmay-theme", id); } catch (e) {}
+    try {
+      localStorage.setItem("kurmay-theme", id);
+    } catch {
+      /* depolama kapalı */
+    }
     isaretle();
   }
   function kur() {
@@ -55,7 +67,9 @@
         b.dataset.t = th.id;
         b.setAttribute("role", "radio");
         b.setAttribute("aria-label", th.ad);
-        b.addEventListener("click", function () { sec(th.id); });
+        b.addEventListener("click", function () {
+          sec(th.id);
+        });
         kutular[k].appendChild(b);
       });
     }

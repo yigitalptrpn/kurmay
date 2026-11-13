@@ -217,7 +217,13 @@ function rawRequest(c: TfsConnection, method: string, url: string, o: RequestOpt
         const next = new URL(res.headers.location, u);
         // Oturum açma sayfasına yönlendirme: anahtar kabul edilmedi (izlenirse 203 + HTML sayfası gelir)
         if (/\/_signin|\/_signedin|login\.microsoftonline|vssps\./i.test(next.toString())) {
-          return reject(new TfsError("sunucu oturum açma sayfasına yönlendirdi — erişim anahtarı kabul edilmedi (yanlış, süresi dolmuş ya da iptal edilmiş)", 401, "SIGNIN"));
+          return reject(
+            new TfsError(
+              "sunucu oturum açma sayfasına yönlendirdi — erişim anahtarı kabul edilmedi (yanlış, süresi dolmuş ya da iptal edilmiş)",
+              401,
+              "SIGNIN",
+            ),
+          );
         }
         const sameHost = next.hostname.toLowerCase() === u.hostname.toLowerCase();
         if (!sameHost || hops >= 3) {
@@ -238,7 +244,9 @@ function rawRequest(c: TfsConnection, method: string, url: string, o: RequestOpt
       res.on("data", (d: Buffer) => {
         size += d.length;
         if (size > max) {
-          req.destroy(new TfsError(`yanıt çok büyük (${Math.round(max / 1024 / 1024)} MB sınırı aşıldı)`, status, "TOO_LARGE"));
+          req.destroy(
+            new TfsError(`yanıt çok büyük (${Math.round(max / 1024 / 1024)} MB sınırı aşıldı)`, status, "TOO_LARGE"),
+          );
           return;
         }
         chunks.push(d);
@@ -250,7 +258,10 @@ function rawRequest(c: TfsConnection, method: string, url: string, o: RequestOpt
     req.on("error", (e) => reject(networkError(e, u.host)));
     if (o.signal) {
       if (o.signal.aborted) req.destroy(new TfsError("iptal edildi", undefined, "ABORTED"));
-      else o.signal.addEventListener("abort", () => req.destroy(new TfsError("iptal edildi", undefined, "ABORTED")), { once: true });
+      else
+        o.signal.addEventListener("abort", () => req.destroy(new TfsError("iptal edildi", undefined, "ABORTED")), {
+          once: true,
+        });
     }
     if (o.body !== undefined) req.write(o.body);
     req.end();
@@ -262,12 +273,21 @@ function serverMessage(r: RawResponse): { message: string; typeKey?: string } {
   const text = r.body.toString("utf8");
   try {
     const j = JSON.parse(text) as { message?: unknown; typeKey?: unknown; value?: { Message?: unknown } };
-    const message = typeof j.message === "string" ? j.message : typeof j.value?.Message === "string" ? j.value.Message : "";
+    const message =
+      typeof j.message === "string" ? j.message : typeof j.value?.Message === "string" ? j.value.Message : "";
     return { message, typeKey: typeof j.typeKey === "string" ? j.typeKey : undefined };
   } catch {
     // HTML hata sayfası: başlığını al
     const t = /<title>([^<]*)<\/title>/i.exec(text)?.[1]?.trim();
-    return { message: t ?? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) };
+    return {
+      message:
+        t ??
+        text
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 200),
+    };
   }
 }
 
@@ -292,13 +312,18 @@ function httpError(r: RawResponse, what: string): TfsError {
     case 401: {
       // Uygulamanın değil IIS'in reddi: JSON yok, TFS başlıkları yok, yalnızca Windows kimlik doğrulaması öneriliyor
       const auth = String(r.headers["www-authenticate"] ?? "");
-      const iis = !svc && !/json/i.test(String(r.headers["content-type"] ?? "")) && /negotiate|ntlm/i.test(auth) && !/basic|bearer/i.test(auth);
+      const iis =
+        !svc &&
+        !/json/i.test(String(r.headers["content-type"] ?? "")) &&
+        /negotiate|ntlm/i.test(auth) &&
+        !/basic|bearer/i.test(auth);
       return new TfsError(
         iis
           ? "sunucu yalnızca Windows oturumuyla giriş kabul ediyor (IIS'te anonim kimlik doğrulaması kapalı görünüyor) — " +
               "kişisel erişim anahtarının çalışması için sunucu yöneticisi IIS'te anonim kimlik doğrulamasını açık, Temel kimlik doğrulamasını kapalı tutmalı"
           : "erişim anahtarı reddedildi — anahtar yanlış, süresi dolmuş ya da iptal edilmiş olabilir. Anahtar doğruysa: sunucudaki " +
-              "IIS'te Temel kimlik doğrulaması açıkken kişisel erişim anahtarı çalışmaz (sunucu yöneticisine sor)" + tail,
+              "IIS'te Temel kimlik doğrulaması açıkken kişisel erişim anahtarı çalışmaz (sunucu yöneticisine sor)" +
+              tail,
         401,
         typeKey,
       );
@@ -306,7 +331,11 @@ function httpError(r: RawResponse, what: string): TfsError {
     case 203:
       return new TfsError("sunucu oturum açma sayfası döndürdü — erişim anahtarı geçersiz", 203, typeKey);
     case 403:
-      return new TfsError(`yetki yok: ${what} (anahtarın kapsamında "İş öğeleri — okuma ve yazma" var mı?)${tail}`, 403, typeKey);
+      return new TfsError(
+        `yetki yok: ${what} (anahtarın kapsamında "İş öğeleri — okuma ve yazma" var mı?)${tail}`,
+        403,
+        typeKey,
+      );
     case 404:
       return new TfsError(`bulunamadı: ${what}${tail}`, 404, typeKey);
     default:
@@ -387,7 +416,8 @@ export function versionFromOutOfRange(message: string, requested: number): numbe
   return nums.filter((n) => n !== requested && n >= 1 && n < 50).pop();
 }
 
-const outOfRange = (e: TfsError) => e.status === 400 && (/VersionOutOfRange/i.test(e.code ?? "") || /out of (the valid )?range|aralık/i.test(e.message));
+const outOfRange = (e: TfsError) =>
+  e.status === 400 && (/VersionOutOfRange/i.test(e.code ?? "") || /out of (the valid )?range|aralık/i.test(e.message));
 
 /**
  * Sunucunun desteklediği en yüksek REST sürümü (koleksiyon başına bir kez sorulur).
@@ -400,7 +430,12 @@ export function serverVersion(c: TfsConnection, signal?: AbortSignal): Promise<n
   let p = versions.get(key);
   if (!p) {
     p = (async () => {
-      const dene = (v: number) => call(c, "GET", "/_apis/projects", { query: { "api-version": v.toFixed(1), $top: 1 }, what: "sürüm denetimi", signal });
+      const dene = (v: number) =>
+        call(c, "GET", "/_apis/projects", {
+          query: { "api-version": v.toFixed(1), $top: 1 },
+          what: "sürüm denetimi",
+          signal,
+        });
       try {
         await dene(MAX_VERSION);
         return MAX_VERSION;
@@ -479,18 +514,19 @@ export interface TfsProbe {
 export async function probe(c: TfsConnection, signal?: AbortSignal): Promise<TfsProbe> {
   forgetServer(c.url);
   const version = await serverVersion(c, signal);
-  const conn = await call<{ authenticatedUser?: { providerDisplayName?: string; customDisplayName?: string }; deploymentType?: string }>(
-    c,
-    "GET",
-    "/_apis/connectionData",
-    { what: "kimlik denetimi", signal },
-  ).catch(() => undefined);
+  const conn = await call<{
+    authenticatedUser?: { providerDisplayName?: string; customDisplayName?: string };
+    deploymentType?: string;
+  }>(c, "GET", "/_apis/connectionData", { what: "kimlik denetimi", signal }).catch(() => undefined);
   const list = await call<{ value?: Array<{ name?: string }> }>(c, "GET", "/_apis/projects", {
     query: { "api-version": ver(version), $top: 1000 },
     what: "proje listesi",
     signal,
   });
-  const projects = (list?.value ?? []).map((p) => p.name ?? "").filter(Boolean).sort((a, b) => a.localeCompare(b, "tr"));
+  const projects = (list?.value ?? [])
+    .map((p) => p.name ?? "")
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "tr"));
   const user = conn?.authenticatedUser?.customDisplayName || conn?.authenticatedUser?.providerDisplayName;
   return {
     ...(user ? { user } : {}),
@@ -612,12 +648,27 @@ const FACT_FIELDS: Array<[string, string]> = [
 ];
 
 /** Diğer alanlar listesine girmeyecekler (iç/teknik alanlar) */
-const SKIP_PREFIX = ["System.", "WEF_", "Microsoft.VSTS.Common.StateChangeDate", "Microsoft.VSTS.Common.ActivatedDate",
-  "Microsoft.VSTS.Common.ActivatedBy", "Microsoft.VSTS.Common.ClosedDate", "Microsoft.VSTS.Common.ClosedBy",
-  "Microsoft.VSTS.Common.ResolvedDate", "Microsoft.VSTS.Common.ResolvedBy", "Microsoft.VSTS.Common.ResolvedReason",
-  "Microsoft.VSTS.Common.StackRank", "Microsoft.VSTS.Common.BacklogPriority", "Microsoft.VSTS.Common.ValueArea",
-  "Microsoft.VSTS.Common.ReviewedBy", "Microsoft.VSTS.Scheduling.CompletedWork", "Microsoft.VSTS.Scheduling.StartDate",
-  "Microsoft.VSTS.Scheduling.FinishDate", "Microsoft.VSTS.TCM.AutomationStatus", "Microsoft.VSTS.CodeReview."];
+const SKIP_PREFIX = [
+  "System.",
+  "WEF_",
+  "Microsoft.VSTS.Common.StateChangeDate",
+  "Microsoft.VSTS.Common.ActivatedDate",
+  "Microsoft.VSTS.Common.ActivatedBy",
+  "Microsoft.VSTS.Common.ClosedDate",
+  "Microsoft.VSTS.Common.ClosedBy",
+  "Microsoft.VSTS.Common.ResolvedDate",
+  "Microsoft.VSTS.Common.ResolvedBy",
+  "Microsoft.VSTS.Common.ResolvedReason",
+  "Microsoft.VSTS.Common.StackRank",
+  "Microsoft.VSTS.Common.BacklogPriority",
+  "Microsoft.VSTS.Common.ValueArea",
+  "Microsoft.VSTS.Common.ReviewedBy",
+  "Microsoft.VSTS.Scheduling.CompletedWork",
+  "Microsoft.VSTS.Scheduling.StartDate",
+  "Microsoft.VSTS.Scheduling.FinishDate",
+  "Microsoft.VSTS.TCM.AutomationStatus",
+  "Microsoft.VSTS.CodeReview.",
+];
 
 /** Bağ türleri */
 const LINKS: Record<string, { kind: TfsLink["kind"]; label: string }> = {
@@ -671,10 +722,22 @@ function fieldDefs(c: TfsConnection, v: number): Promise<Map<string, { name: str
   const key = c.url.toLowerCase();
   let p = fieldCache.get(key);
   if (!p) {
-    p = call<{ value?: Array<{ referenceName?: string; name?: string; type?: string }> }>(c, "GET", "/_apis/wit/fields", {
-      query: { "api-version": ver(v) },
-      what: "alan tanımları",
-    }).then((r) => new Map((r?.value ?? []).filter((f) => f.referenceName).map((f) => [f.referenceName!, { name: f.name ?? f.referenceName!, type: f.type }])));
+    p = call<{ value?: Array<{ referenceName?: string; name?: string; type?: string }> }>(
+      c,
+      "GET",
+      "/_apis/wit/fields",
+      {
+        query: { "api-version": ver(v) },
+        what: "alan tanımları",
+      },
+    ).then(
+      (r) =>
+        new Map(
+          (r?.value ?? [])
+            .filter((f) => f.referenceName)
+            .map((f) => [f.referenceName!, { name: f.name ?? f.referenceName!, type: f.type }]),
+        ),
+    );
     fieldCache.set(key, p);
     p.catch(() => fieldCache.delete(key));
   }
@@ -705,7 +768,8 @@ const levelText = (s: string) => s.replace(/\b(Critical|High|Medium|Low)\b/g, (w
 /** Ham iş öğesini düzenli biçime çevirir */
 async function normalize(c: TfsConnection, v: number, raw: RawWorkItem): Promise<TfsWorkItem> {
   const f = raw.fields ?? {};
-  const str = (k: string) => (typeof f[k] === "string" ? (f[k] as string) : f[k] !== undefined && f[k] !== null ? String(f[k]) : undefined);
+  const str = (k: string) =>
+    typeof f[k] === "string" ? (f[k] as string) : f[k] !== undefined && f[k] !== null ? String(f[k]) : undefined;
   const defs = await fieldDefs(c, v);
   const project = str("System.TeamProject") ?? c.project;
 
@@ -751,7 +815,7 @@ async function normalize(c: TfsConnection, v: number, raw: RawWorkItem): Promise
       const guid = attachmentGuid(url);
       if (!guid) continue;
       attachments.push({
-        name: typeof a.name === "string" && a.name ? a.name : attachmentFileName(url) ?? "ek",
+        name: typeof a.name === "string" && a.name ? a.name : (attachmentFileName(url) ?? "ek"),
         guid,
         ...(typeof a.resourceSize === "number" ? { size: a.resourceSize } : {}),
         ...(typeof a.comment === "string" && a.comment ? { comment: a.comment } : {}),
@@ -770,7 +834,10 @@ async function normalize(c: TfsConnection, v: number, raw: RawWorkItem): Promise
     }
   }
 
-  const tags = (str("System.Tags") ?? "").split(";").map((t) => t.trim()).filter(Boolean);
+  const tags = (str("System.Tags") ?? "")
+    .split(";")
+    .map((t) => t.trim())
+    .filter(Boolean);
   const web = raw._links?.html?.href ?? `${c.url}/${encodeURIComponent(project)}/_workitems/edit/${raw.id}`;
   return {
     id: raw.id,
@@ -833,7 +900,12 @@ export async function getSummaries(
     for (const w of items ?? []) {
       if (!w || typeof w.id !== "number") continue;
       const f = w.fields ?? {};
-      out.set(w.id, { title: String(f["System.Title"] ?? ""), type: String(f["System.WorkItemType"] ?? ""), state: String(f["System.State"] ?? ""), fields: f });
+      out.set(w.id, {
+        title: String(f["System.Title"] ?? ""),
+        type: String(f["System.WorkItemType"] ?? ""),
+        state: String(f["System.State"] ?? ""),
+        fields: f,
+      });
     }
   };
   for (let i = 0; i < uniq.length; i += 200) {
@@ -851,7 +923,11 @@ export async function getSummaries(
       if (!(e instanceof TfsError) || e.status !== 404) throw e;
       for (const one of part) {
         try {
-          const w = await call<RawWorkItem>(c, "GET", `/_apis/wit/workitems/${one}`, { query: { fields, "api-version": ver(v) }, what: `#${one}`, signal });
+          const w = await call<RawWorkItem>(c, "GET", `/_apis/wit/workitems/${one}`, {
+            query: { fields, "api-version": ver(v) },
+            what: `#${one}`,
+            signal,
+          });
           put([w]);
         } catch {
           /* okunamıyor — atla */
@@ -884,7 +960,12 @@ function commentsVersion(v: number): string | undefined {
  * sonrası): yorum ucu. Öncesinde yorum ucu revizyon tabanlı ve salt okunurdu — her sürümde
  * çalışan güncelleme geçmişi (System.History) okunur. En fazla `max` yorum (en yeniler).
  */
-export async function getComments(c: TfsConnection, item: { id: number; project: string }, max = 50, signal?: AbortSignal): Promise<TfsComment[]> {
+export async function getComments(
+  c: TfsConnection,
+  item: { id: number; project: string },
+  max = 50,
+  signal?: AbortSignal,
+): Promise<TfsComment[]> {
   const v = await serverVersion(c, signal);
   const cv = commentsVersion(v);
   if (cv) {
@@ -892,21 +973,34 @@ export async function getComments(c: TfsConnection, item: { id: number; project:
       const out: TfsComment[] = [];
       let token: string | undefined;
       for (let page = 0; page < 10; page++) {
-        type C = { text?: string; renderedText?: string; format?: string; createdBy?: unknown; createdDate?: string; isDeleted?: boolean };
+        type C = {
+          text?: string;
+          renderedText?: string;
+          format?: string;
+          createdBy?: unknown;
+          createdDate?: string;
+          isDeleted?: boolean;
+        };
         const r = await call<{ comments?: C[]; value?: C[]; continuationToken?: string }>(
           c,
           "GET",
           `/${encodeURIComponent(item.project)}/_apis/wit/workItems/${item.id}/comments`,
           {
             // Markdown biçimli yorumun HTML hâli (7.1+) — yoksa metnin kendisi
-            query: { "api-version": cv, $top: 200, ...(v >= 7.1 ? { $expand: "renderedText" } : {}), ...(token ? { continuationToken: token } : {}) },
+            query: {
+              "api-version": cv,
+              $top: 200,
+              ...(v >= 7.1 ? { $expand: "renderedText" } : {}),
+              ...(token ? { continuationToken: token } : {}),
+            },
             what: `#${item.id} yorumları`,
             signal,
           },
         );
         for (const cm of r?.comments ?? r?.value ?? []) {
           if (cm.isDeleted) continue;
-          const text = cm.format?.toLowerCase() === "markdown" ? (cm.renderedText || cm.text) : cm.text || cm.renderedText;
+          const text =
+            cm.format?.toLowerCase() === "markdown" ? cm.renderedText || cm.text : cm.text || cm.renderedText;
           if (!text) continue;
           out.push({ author: identityName(cm.createdBy) ?? "?", date: cm.createdDate ?? "", html: text });
         }
@@ -933,7 +1027,11 @@ export async function getComments(c: TfsConnection, item: { id: number; project:
       const h = u.fields?.["System.History"]?.newValue;
       if (typeof h !== "string" || !h.trim()) continue;
       const date = u.fields?.["System.ChangedDate"]?.newValue;
-      out.push({ author: identityName(u.revisedBy) ?? "?", date: typeof date === "string" ? date : u.revisedDate ?? "", html: h });
+      out.push({
+        author: identityName(u.revisedBy) ?? "?",
+        date: typeof date === "string" ? date : (u.revisedDate ?? ""),
+        html: h,
+      });
     }
     if (list.length < 200) break;
   }
@@ -961,16 +1059,23 @@ export async function downloadAttachment(
 
 /** Aynı sunucudaki bir adresi anahtarla indirir (metindeki eski biçimli görsel adresleri için).
  *  Adres ayarlardaki koleksiyonun sunucusunda değilse REDDEDİLİR — anahtar başka yere gitmez. */
-export async function downloadSameOrigin(c: TfsConnection, url: string, maxBytes: number, signal?: AbortSignal): Promise<Buffer> {
+export async function downloadSameOrigin(
+  c: TfsConnection,
+  url: string,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<Buffer> {
   let target: URL;
   try {
     target = new URL(url);
   } catch {
     throw new TfsError("geçersiz adres");
   }
-  if (target.origin.toLowerCase() !== new URL(c.url).origin.toLowerCase()) throw new TfsError(`başka sunucudaki adres indirilmez: ${target.host}`);
+  if (target.origin.toLowerCase() !== new URL(c.url).origin.toLowerCase())
+    throw new TfsError(`başka sunucudaki adres indirilmez: ${target.host}`);
   const r = await rawRequest(c, "GET", target.toString(), { accept: "*/*", maxBytes, timeoutMs: 120_000, signal });
-  if (r.status === 203 || (r.status >= 200 && r.status < 300 && isHtml(r))) throw new TfsError("görsel yerine bir web sayfası geldi", r.status, "HTML");
+  if (r.status === 203 || (r.status >= 200 && r.status < 300 && isHtml(r)))
+    throw new TfsError("görsel yerine bir web sayfası geldi", r.status, "HTML");
   if (r.status < 200 || r.status >= 300) throw httpError(r, "görsel");
   return r.body;
 }
@@ -984,7 +1089,14 @@ export async function fetchAttachment(
 ): Promise<{ data: Buffer; type: string }> {
   const data = await downloadAttachment(c, guid, fileName, maxBytes);
   const ext = path.extname(fileName).slice(1).toLowerCase();
-  const IMG: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" };
+  const IMG: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+  };
   return { data, type: IMG[ext] ?? "application/octet-stream" };
 }
 
@@ -1009,13 +1121,21 @@ async function wiql(c: TfsConnection, where: string, top: number, signal?: Abort
   const query =
     `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = ${wiqlString(c.project)} AND (${where}) ` +
     "ORDER BY [System.ChangedDate] DESC";
-  const r = await call<{ workItems?: Array<{ id?: number }> }>(c, "POST", `/${encodeURIComponent(c.project)}/_apis/wit/wiql`, {
-    query: { "api-version": ver(v), $top: top },
-    json: { query },
-    what: "sorgu",
-    signal,
-  });
-  return (r?.workItems ?? []).map((w) => w.id).filter((n): n is number => typeof n === "number").slice(0, top);
+  const r = await call<{ workItems?: Array<{ id?: number }> }>(
+    c,
+    "POST",
+    `/${encodeURIComponent(c.project)}/_apis/wit/wiql`,
+    {
+      query: { "api-version": ver(v), $top: top },
+      json: { query },
+      what: "sorgu",
+      signal,
+    },
+  );
+  return (r?.workItems ?? [])
+    .map((w) => w.id)
+    .filter((n): n is number => typeof n === "number")
+    .slice(0, top);
 }
 
 async function listOf(c: TfsConnection, ids: number[], signal?: AbortSignal): Promise<TfsListItem[]> {
@@ -1029,14 +1149,24 @@ async function listOf(c: TfsConnection, ids: number[], signal?: AbortSignal): Pr
       type: s.type,
       title: s.title,
       state: s.state,
-      ...(identityName(s.fields["System.AssignedTo"]) ? { assignedTo: identityName(s.fields["System.AssignedTo"]) } : {}),
-      ...(typeof s.fields["System.ChangedDate"] === "string" ? { changedDate: s.fields["System.ChangedDate"] as string } : {}),
+      ...(identityName(s.fields["System.AssignedTo"])
+        ? { assignedTo: identityName(s.fields["System.AssignedTo"]) }
+        : {}),
+      ...(typeof s.fields["System.ChangedDate"] === "string"
+        ? { changedDate: s.fields["System.ChangedDate"] as string }
+        : {}),
     });
   }
   // Durum kategorileri (tür başına bir kez sorulur) — tamamlananlar ayrılabilsin
   const types = [...new Set(out.map((o) => o.type))];
   const cats = new Map<string, Map<string, string>>();
-  for (const t of types) cats.set(t, new Map((await getStates(c, t, signal).catch(() => [])).filter((s) => s.category).map((s) => [s.name, s.category!])));
+  for (const t of types)
+    cats.set(
+      t,
+      new Map(
+        (await getStates(c, t, signal).catch(() => [])).filter((s) => s.category).map((s) => [s.name, s.category!]),
+      ),
+    );
   for (const o of out) {
     const cat = cats.get(o.type)?.get(o.state) ?? guessCategory(o.state);
     if (cat) o.category = cat;
@@ -1045,7 +1175,11 @@ async function listOf(c: TfsConnection, ids: number[], signal?: AbortSignal): Pr
 }
 
 /** Bana atanan iş öğeleri (en son değişen önce). done: tamamlanan/kaldırılanlar da dahil */
-export async function myWorkItems(c: TfsConnection, opts: { done?: boolean; top?: number } = {}, signal?: AbortSignal): Promise<TfsListItem[]> {
+export async function myWorkItems(
+  c: TfsConnection,
+  opts: { done?: boolean; top?: number } = {},
+  signal?: AbortSignal,
+): Promise<TfsListItem[]> {
   const ids = await wiql(c, "[System.AssignedTo] = @Me", Math.min(opts.top ?? 100, 200), signal);
   const list = await listOf(c, ids, signal);
   return opts.done ? list : list.filter((i) => i.category !== "Completed" && i.category !== "Removed");
@@ -1073,8 +1207,14 @@ export function guessCategory(state: string): string | undefined {
   if (["done", "closed", "completed", "bitti", "kapatıldı", "kapalı", "tamamlandı"].includes(s)) return "Completed";
   if (["removed", "kaldırıldı", "silindi"].includes(s)) return "Removed";
   if (["resolved", "çözüldü"].includes(s)) return "Resolved";
-  if (["active", "committed", "in progress", "doing", "etkin", "aktif", "üstlenildi", "devam ediyor", "sürüyor"].includes(s)) return "InProgress";
-  if (["new", "approved", "proposed", "to do", "yeni", "onaylandı", "önerildi", "yapılacak"].includes(s)) return "Proposed";
+  if (
+    ["active", "committed", "in progress", "doing", "etkin", "aktif", "üstlenildi", "devam ediyor", "sürüyor"].includes(
+      s,
+    )
+  )
+    return "InProgress";
+  if (["new", "approved", "proposed", "to do", "yeni", "onaylandı", "önerildi", "yapılacak"].includes(s))
+    return "Proposed";
   return undefined;
 }
 
@@ -1097,20 +1237,30 @@ export function getStates(c: TfsConnection, type: string, signal?: AbortSignal):
             what: `"${type}" durumları`,
             signal,
           });
-          const list = (r?.value ?? []).filter((s) => s.name).map((s) => ({ name: s.name!, ...(s.category ? { category: s.category } : {}) }));
+          const list = (r?.value ?? [])
+            .filter((s) => s.name)
+            .map((s) => ({ name: s.name!, ...(s.category ? { category: s.category } : {}) }));
           if (list.length) return list;
         } catch (e) {
           if (!(e instanceof TfsError) || (e.status !== 400 && e.status !== 404)) throw e;
         }
       }
       // Eski sunucu: tür tanımındaki geçişler ({ "": [{to:"New"}], "New": [{to:"Approved"}] … })
-      const t = await call<{ transitions?: Record<string, Array<{ to?: string }>>; states?: Array<{ name?: string; category?: string }> }>(
-        c,
-        "GET",
-        base,
-        { query: { "api-version": ver(v) }, what: `"${type}" türü`, signal },
-      );
-      if (t?.states?.length) return t.states.filter((s) => s.name).map((s) => ({ name: s.name!, ...(s.category ? { category: s.category } : guessCategory(s.name!) ? { category: guessCategory(s.name!) } : {}) }));
+      const t = await call<{
+        transitions?: Record<string, Array<{ to?: string }>>;
+        states?: Array<{ name?: string; category?: string }>;
+      }>(c, "GET", base, { query: { "api-version": ver(v) }, what: `"${type}" türü`, signal });
+      if (t?.states?.length)
+        return t.states
+          .filter((s) => s.name)
+          .map((s) => ({
+            name: s.name!,
+            ...(s.category
+              ? { category: s.category }
+              : guessCategory(s.name!)
+                ? { category: guessCategory(s.name!) }
+                : {}),
+          }));
       const names: string[] = [];
       for (const [from, tos] of Object.entries(t?.transitions ?? {})) {
         if (from && !names.includes(from)) names.push(from);
@@ -1159,7 +1309,11 @@ export async function writeWorkItem(
     return { ...(typeof r?.rev === "number" ? { rev: r.rev } : {}), ...(typeof st === "string" ? { state: st } : {}) };
   } catch (e) {
     if (e instanceof TfsError && e.status === 400 && input.state) {
-      throw new TfsError(`durum "${input.state}" yapılamadı (geçiş kuralı ya da zorunlu alan) — ${e.message}`, 400, e.code);
+      throw new TfsError(
+        `durum "${input.state}" yapılamadı (geçiş kuralı ya da zorunlu alan) — ${e.message}`,
+        400,
+        e.code,
+      );
     }
     throw e;
   }

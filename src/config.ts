@@ -1,7 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLI_STALL_MIN_MS } from "./resilience.js";
-import { EFFORT_LEVELS, isCommandNode, isFanoutNode, TFS_WRITE_BACK, type AppConfig, type EffortSetting, type McpServerJson, type ProviderConfig } from "./types.js";
+import {
+  EFFORT_LEVELS,
+  isCommandNode,
+  isFanoutNode,
+  TFS_WRITE_BACK,
+  type AppConfig,
+  type EffortSetting,
+  type McpServerJson,
+  type ProviderConfig,
+} from "./types.js";
 
 /**
  * Tek config dosyasını yükler ve doğrular: sağlayıcı bilgileri (adres, token,
@@ -33,7 +42,9 @@ export function loadAppConfig(configPath: string): AppConfig {
   }
   if ((cfg.effort as string | undefined) === "") delete cfg.effort;
   if (cfg.effort !== undefined && !isEffort(cfg.effort)) {
-    throw new Error(`config: "effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(cfg.effort)})`);
+    throw new Error(
+      `config: "effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(cfg.effort)})`,
+    );
   }
 
   if (cfg.provider !== "anthropic" && cfg.provider !== "ollama") {
@@ -56,7 +67,9 @@ export function loadAppConfig(configPath: string): AppConfig {
   // Claude Code 15'in üstünü uyarıyla 15'e indiriyor — sessiz kırpma yerine açık hata
   const icDeneme = cfg.limits?.apiMaxRetries;
   if (icDeneme !== undefined && (!Number.isInteger(icDeneme) || icDeneme > 15)) {
-    throw new Error(`config: "limits.apiMaxRetries" 0 ile 15 arasında bir tam sayı olmalı (verilen: ${JSON.stringify(icDeneme)})`);
+    throw new Error(
+      `config: "limits.apiMaxRetries" 0 ile 15 arasında bir tam sayı olmalı (verilen: ${JSON.stringify(icDeneme)})`,
+    );
   }
   const esik = cfg.limits?.compactPercent;
   if (esik !== undefined && esik > 100) {
@@ -76,7 +89,10 @@ export function loadAppConfig(configPath: string): AppConfig {
     }
   }
 
-  for (const [key, ne] of [["disabledSkills", "beceri"], ["disabledRules", "kural"]] as const) {
+  for (const [key, ne] of [
+    ["disabledSkills", "beceri"],
+    ["disabledRules", "kural"],
+  ] as const) {
     const list = cfg[key];
     if (list !== undefined && (!Array.isArray(list) || list.some((s) => typeof s !== "string"))) {
       throw new Error(`config: "${key}" ${ne} adlarından oluşan bir liste olmalı (verilen: ${JSON.stringify(list)})`);
@@ -84,7 +100,9 @@ export function loadAppConfig(configPath: string): AppConfig {
   }
   for (const [name, server] of Object.entries(cfg.mcpServers ?? {})) {
     if (server.disabled !== undefined && typeof server.disabled !== "boolean") {
-      throw new Error(`config: "mcpServers.${name}.disabled" true/false olmalı (verilen: ${JSON.stringify(server.disabled)})`);
+      throw new Error(
+        `config: "mcpServers.${name}.disabled" true/false olmalı (verilen: ${JSON.stringify(server.disabled)})`,
+      );
     }
   }
 
@@ -94,17 +112,23 @@ export function loadAppConfig(configPath: string): AppConfig {
   }
 
   if (cfg.maxParallelRuns !== undefined && (!Number.isInteger(cfg.maxParallelRuns) || cfg.maxParallelRuns < 1)) {
-    throw new Error(`config: "maxParallelRuns" 1 veya daha büyük bir tam sayı olmalı (verilen: ${JSON.stringify(cfg.maxParallelRuns)})`);
+    throw new Error(
+      `config: "maxParallelRuns" 1 veya daha büyük bir tam sayı olmalı (verilen: ${JSON.stringify(cfg.maxParallelRuns)})`,
+    );
   }
 
   if (cfg.planWebhook !== undefined) {
     const w = cfg.planWebhook as { url?: unknown; apiKey?: unknown } | null;
     if (!w || typeof w !== "object" || typeof w.url !== "string") {
-      throw new Error(`config: "planWebhook" {"url": "http://…", "apiKey"?: "…"} biçiminde olmalı (verilen: ${JSON.stringify(w)})`);
+      throw new Error(
+        `config: "planWebhook" {"url": "http://…", "apiKey"?: "…"} biçiminde olmalı (verilen: ${JSON.stringify(w)})`,
+      );
     }
     if (!w.url.trim()) delete cfg.planWebhook;
     else if (!/^https?:\/\/[^\s]+$/i.test(w.url.trim())) {
-      throw new Error(`config: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`);
+      throw new Error(
+        `config: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`,
+      );
     } else if (w.apiKey !== undefined && typeof w.apiKey !== "string") {
       throw new Error(`config: "planWebhook.apiKey" metin olmalı`);
     }
@@ -113,24 +137,34 @@ export function loadAppConfig(configPath: string): AppConfig {
   if (cfg.tfs !== undefined) {
     const t = cfg.tfs as Record<string, unknown> | null;
     if (!t || typeof t !== "object" || Array.isArray(t)) {
-      throw new Error(`config: "tfs" bir nesne olmalı ({"enabled", "url", "project", …}) (verilen: ${JSON.stringify(t)})`);
+      throw new Error(
+        `config: "tfs" bir nesne olmalı ({"enabled", "url", "project", …}) (verilen: ${JSON.stringify(t)})`,
+      );
     }
     for (const k of ["enabled", "insecureTls"]) {
-      if (t[k] !== undefined && typeof t[k] !== "boolean") throw new Error(`config: "tfs.${k}" true/false olmalı (verilen: ${JSON.stringify(t[k])})`);
+      if (t[k] !== undefined && typeof t[k] !== "boolean")
+        throw new Error(`config: "tfs.${k}" true/false olmalı (verilen: ${JSON.stringify(t[k])})`);
     }
     for (const k of ["url", "project", "caFile"]) {
-      if (t[k] !== undefined && typeof t[k] !== "string") throw new Error(`config: "tfs.${k}" metin olmalı (verilen: ${JSON.stringify(t[k])})`);
+      if (t[k] !== undefined && typeof t[k] !== "string")
+        throw new Error(`config: "tfs.${k}" metin olmalı (verilen: ${JSON.stringify(t[k])})`);
       if (t[k] === "") delete t[k];
     }
     if (typeof t.url === "string" && !/^https?:\/\/[^\s]+$/i.test(t.url.trim())) {
-      throw new Error(`config: "tfs.url" http:// ya da https:// ile başlayan koleksiyon adresi olmalı (verilen: ${JSON.stringify(t.url)})`);
+      throw new Error(
+        `config: "tfs.url" http:// ya da https:// ile başlayan koleksiyon adresi olmalı (verilen: ${JSON.stringify(t.url)})`,
+      );
     }
     if (t.writeBack !== undefined && !(TFS_WRITE_BACK as readonly unknown[]).includes(t.writeBack)) {
-      throw new Error(`config: "tfs.writeBack" şunlardan biri olmalı: ${TFS_WRITE_BACK.join(", ")} (verilen: ${JSON.stringify(t.writeBack)})`);
+      throw new Error(
+        `config: "tfs.writeBack" şunlardan biri olmalı: ${TFS_WRITE_BACK.join(", ")} (verilen: ${JSON.stringify(t.writeBack)})`,
+      );
     }
     if ("token" in t) {
       // Anahtar config.json'a yazılmaz (git'e gidebilir, panele açık) — Ayarlar'dan girilince .gizli/'ye taşınır
-      throw new Error('config: "tfs.token" config.json\'da tutulmaz — anahtarı Ayarlar → TFS modu kartından gir ya da KURMAY_TFS_TOKEN ortam değişkeniyle ver');
+      throw new Error(
+        'config: "tfs.token" config.json\'da tutulmaz — anahtarı Ayarlar → TFS modu kartından gir ya da KURMAY_TFS_TOKEN ortam değişkeniyle ver',
+      );
     }
   }
 
@@ -141,7 +175,9 @@ export function loadAppConfig(configPath: string): AppConfig {
     const effort = (node as { effort?: unknown }).effort;
     if (effort === "") delete (node as { effort?: unknown }).effort;
     else if (effort !== undefined && !isEffort(effort)) {
-      throw new Error(`config: "${key}.effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(effort)})`);
+      throw new Error(
+        `config: "${key}.effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(effort)})`,
+      );
     }
   }
   if (!cfg.workflow.agents[cfg.workflow.entry]) {
@@ -178,7 +214,9 @@ export function loadAppConfig(configPath: string): AppConfig {
     if (isFanoutNode(node)) {
       const mc = node.maxConcurrency;
       if (mc !== undefined && (!Number.isInteger(mc) || mc < 0)) {
-        throw new Error(`config: "${key}.maxConcurrency" negatif olmayan bir tam sayı olmalı (verilen: ${JSON.stringify(mc)})`);
+        throw new Error(
+          `config: "${key}.maxConcurrency" negatif olmayan bir tam sayı olmalı (verilen: ${JSON.stringify(mc)})`,
+        );
       }
       continue; // fanout da bir kapı; çoğalttığı ajanın araçları kendi düğümünde kontrol edilir
     }

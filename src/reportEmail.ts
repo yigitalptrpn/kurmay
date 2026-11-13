@@ -46,25 +46,53 @@ const SEV: Record<Severity, { ad: string; renk: string; zemin: string; kenar: st
 };
 const ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 const RISK: Record<string, { ad: string; renk: string; zemin: string; kenar: string; n: number; aciklama: string }> = {
-  none: { ad: "Risk yok", renk: "#047857", zemin: "#ecfdf5", kenar: "#a7f3d0", n: 0, aciklama: "Denetimde bildirilecek bir güvenlik açığı bulunmadı." },
+  none: {
+    ad: "Risk yok",
+    renk: "#047857",
+    zemin: "#ecfdf5",
+    kenar: "#a7f3d0",
+    n: 0,
+    aciklama: "Denetimde bildirilecek bir güvenlik açığı bulunmadı.",
+  },
   low: { ...SEV.low, n: 1, aciklama: "Düşük etkili zayıflıklar var; planlı olarak giderilmeli." },
-  medium: { ...SEV.medium, n: 2, aciklama: "Belirli koşullarda istismar edilebilecek zayıflıklar var; yakın zamanda ele alınmalı." },
-  high: { ...SEV.high, n: 3, aciklama: "İstismar edilebilir ve önemli etki taşıyan bulgular var; öncelikle giderilmeli." },
-  critical: { ...SEV.critical, n: 4, aciklama: "Doğrudan istismar edilebilir, ciddi etkili bulgular var; hemen müdahale edilmeli." },
+  medium: {
+    ...SEV.medium,
+    n: 2,
+    aciklama: "Belirli koşullarda istismar edilebilecek zayıflıklar var; yakın zamanda ele alınmalı.",
+  },
+  high: {
+    ...SEV.high,
+    n: 3,
+    aciklama: "İstismar edilebilir ve önemli etki taşıyan bulgular var; öncelikle giderilmeli.",
+  },
+  critical: {
+    ...SEV.critical,
+    n: 4,
+    aciklama: "Doğrudan istismar edilebilir, ciddi etkili bulgular var; hemen müdahale edilmeli.",
+  },
 };
 const RISK_ORDER = ["none", "low", "medium", "high", "critical"];
 /** E-postada öne çıkarılan bulgu sayısı — tamamı rapordadır */
 const TOP_FINDINGS = 5;
 
 const esc = (s: unknown) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  );
 const kisalt = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 const tarih = (iso: string) =>
-  new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 const yer = (f: SecurityFinding) => (f.file ? `${f.file}${f.line ? ":" + f.line : ""}` : "");
 const buyuk = (s: string) => s.toLocaleUpperCase("tr-TR");
 // Uzun yol: kelime ortasından değil, / ve \ sonrasından satır kırılsın (<wbr> desteklenmezse sarılır)
-const yolHtml = (p: string) => esc(p).replace(/([\/\\])/g, "$1<wbr>");
+const yolHtml = (p: string) => esc(p).replace(/([/\\])/g, "$1<wbr>");
 
 export interface ReportEmail {
   subject: string;
@@ -91,7 +119,9 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   const sayimMetni = hamMetin
     ? "yapılandırılmış rapor gelmedi"
     : toplam
-      ? ORDER.filter((s) => c[s]).map((s) => `${c[s]} ${SEV[s].ad.toLocaleLowerCase("tr-TR")}`).join(", ")
+      ? ORDER.filter((s) => c[s])
+          .map((s) => `${c[s]} ${SEV[s].ad.toLocaleLowerCase("tr-TR")}`)
+          .join(", ")
       : "bulgu yok";
   const subject = `[Kurmay] Güvenlik denetimi: ${r.standalone ? proje : kisalt(r.task, 60)} — Risk: ${rk ? rk.ad : "belirlenemedi"} (${sayimMetni})`;
   const onIzleme = `${rk ? `Risk düzeyi ${rk.ad.toLocaleLowerCase("tr-TR")}` : "Risk belirlenemedi"} · ${sayimMetni} · ${r.summary ? kisalt(r.summary, 120) : r.task}`;
@@ -129,14 +159,16 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   // — Bulgu matrisi: 5 kutu —
   const matris = hamMetin
     ? ""
-    : `${baslik("Bulgu matrisi")}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${ORDER.map((s, i) => `
+    : `${baslik("Bulgu matrisi")}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${ORDER.map(
+        (s, i) => `
       <td width="20%" valign="top" style="padding:0 ${i === ORDER.length - 1 ? 0 : 4}px 0 ${i === 0 ? 0 : 4}px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td bgcolor="${R.panel}" style="background:${R.panel};border:1px solid ${R.cizgi};border-top:2px solid ${SEV[s].renk};border-radius:6px;padding:9px 10px">
             <div style="font:600 9.5px/1.4 ${MONO};letter-spacing:1px;color:${R.ikincil}">${buyuk(SEV[s].ad)}</div>
             <div style="font:700 24px/1.2 ${MONO};color:${c[s] ? SEV[s].renk : R.soluk}">${String(c[s]).padStart(2, "0")}</div>
           </td></tr></table>
-      </td>`).join("")}</tr></table>`;
+      </td>`,
+      ).join("")}</tr></table>`;
 
   const ozet = r.summary
     ? `${baslik("Durum raporu")}
@@ -148,10 +180,11 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
     : "";
 
   // — Tespit edilen açıklar: kayıt satırı düzeni —
-  let bulgular = "";
+  let bulgular: string;
   if (hamMetin) {
     bulgular = `${baslik("Denetçinin notu")}<div style="font:13.5px/1.6 ${SANS};color:${R.govde}">Denetçi yapılandırılmış rapor üretmedi; yazdığı metin ${
-      o.pdfAttached ? "ekteki PDF raporda" : "raporda"} yer alıyor.</div>`;
+      o.pdfAttached ? "ekteki PDF raporda" : "raporda"
+    } yer alıyor.</div>`;
   } else if (!toplam) {
     bulgular = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px"><tr>
       <td bgcolor="${RISK.none.zemin}" style="background:${RISK.none.zemin};border:1px solid ${RISK.none.kenar};border-radius:8px;padding:14px 16px;font:14px/1.5 ${SANS};color:${R.yazi}">
@@ -159,10 +192,15 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   } else {
     const ust = r.findings.slice(0, TOP_FINDINGS);
     bulgular =
-      baslik(toplam > TOP_FINDINGS ? `Tespit edilen açıklar · ${TOP_FINDINGS}/${toplam}` : `Tespit edilen açıklar · ${toplam}`) +
-      ust.map((f, i) => {
-        const s = SEV[f.severity] ?? SEV.info;
-        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;border-collapse:separate"><tr>
+      baslik(
+        toplam > TOP_FINDINGS
+          ? `Tespit edilen açıklar · ${TOP_FINDINGS}/${toplam}`
+          : `Tespit edilen açıklar · ${toplam}`,
+      ) +
+      ust
+        .map((f, i) => {
+          const s = SEV[f.severity] ?? SEV.info;
+          return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;border-collapse:separate"><tr>
           <td bgcolor="${R.panel}" style="background:${R.panel};border:1px solid ${R.cizgi};border-left:3px solid ${s.renk};border-radius:6px;padding:12px 14px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
               <td valign="middle">
@@ -178,7 +216,8 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
             ${f.category ? `<div style="font:12px/1.5 ${SANS};color:${R.ikincil}">${esc(f.category)}</div>` : ""}
             ${f.recommendation ? `<div style="font:13px/1.55 ${SANS};color:${R.govde};padding-top:6px;overflow-wrap:anywhere;word-break:break-word"><span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.yesil}">» DÜZELTME</span>&nbsp; ${esc(kisalt(f.recommendation, 260))}</div>` : ""}
           </td></tr></table>`;
-      }).join("") +
+        })
+        .join("") +
       (toplam > TOP_FINDINGS
         ? `<div style="font:12.5px/1.5 ${MONO};color:${R.ikincil};padding-top:2px">+ ${toplam - TOP_FINDINGS} bulgu daha — tamamı ${o.pdfAttached ? "ekteki PDF raporda" : "raporda"}</div>`
         : "");
@@ -193,8 +232,14 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
     ["rapor_no", r.id, "mono"],
   ]
     .filter((x): x is string[] => !!x)
-    .map(([k, v, m]) => `<tr><td width="150" valign="top" style="padding:5px 12px 5px 0;border-top:1px solid ${R.cizgi};font:12.5px/1.5 ${MONO};color:${R.ikincil}">${k}</td>
-      <td valign="top" style="padding:5px 0;border-top:1px solid ${R.cizgi};font:13px/1.5 ${m ? MONO : SANS};color:${R.yazi};overflow-wrap:anywhere">${m ? yolHtml(v) : esc(v)}</td></tr>`)
+    .map(
+      ([
+        k,
+        v,
+        m,
+      ]) => `<tr><td width="150" valign="top" style="padding:5px 12px 5px 0;border-top:1px solid ${R.cizgi};font:12.5px/1.5 ${MONO};color:${R.ikincil}">${k}</td>
+      <td valign="top" style="padding:5px 0;border-top:1px solid ${R.cizgi};font:13px/1.5 ${m ? MONO : SANS};color:${R.yazi};overflow-wrap:anywhere">${m ? yolHtml(v) : esc(v)}</td></tr>`,
+    )
     .join("");
 
   const ekNotu = o.pdfAttached
@@ -282,17 +327,23 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
     `${tarih(r.createdAt)} · ${r.targetDir}`,
     ``,
     `RİSK DÜZEYİ: ${buyuk(rk ? rk.ad : "Belirlenemedi")}${rk ? ` — ${rk.aciklama}` : ""}`,
-    hamMetin ? `BULGULAR: yapılandırılmış rapor gelmedi` : `BULGU MATRİSİ: ${ORDER.map((s) => `${SEV[s].ad} ${c[s]}`).join(" · ")}`,
+    hamMetin
+      ? `BULGULAR: yapılandırılmış rapor gelmedi`
+      : `BULGU MATRİSİ: ${ORDER.map((s) => `${SEV[s].ad} ${c[s]}`).join(" · ")}`,
     ...(r.summary ? [``, `DURUM RAPORU`, r.summary] : []),
     ...(toplam
       ? [
           ``,
-          toplam > TOP_FINDINGS ? `TESPİT EDİLEN AÇIKLAR (${TOP_FINDINGS}/${toplam})` : `TESPİT EDİLEN AÇIKLAR (${toplam})`,
-          ...r.findings.slice(0, TOP_FINDINGS).flatMap((f, i) => [
-            `[${buyuk((SEV[f.severity] ?? SEV.info).ad)}] ${kod(i)} ${f.title}${f.cwe ? ` (${f.cwe})` : ""}`,
-            ...(yer(f) ? [`  └─ ${yer(f)}`] : []),
-            ...(f.recommendation ? [`  » Düzeltme: ${kisalt(f.recommendation, 260)}`] : []),
-          ]),
+          toplam > TOP_FINDINGS
+            ? `TESPİT EDİLEN AÇIKLAR (${TOP_FINDINGS}/${toplam})`
+            : `TESPİT EDİLEN AÇIKLAR (${toplam})`,
+          ...r.findings
+            .slice(0, TOP_FINDINGS)
+            .flatMap((f, i) => [
+              `[${buyuk((SEV[f.severity] ?? SEV.info).ad)}] ${kod(i)} ${f.title}${f.cwe ? ` (${f.cwe})` : ""}`,
+              ...(yer(f) ? [`  └─ ${yer(f)}`] : []),
+              ...(f.recommendation ? [`  » Düzeltme: ${kisalt(f.recommendation, 260)}`] : []),
+            ]),
           ...(toplam > TOP_FINDINGS ? [`+ ${toplam - TOP_FINDINGS} bulgu daha`] : []),
         ]
       : []),
@@ -317,7 +368,8 @@ function baslik(ad: string): string {
  */
 export function buildEml(mail: ReportEmail, attachment?: { name: string; data: Buffer }): Buffer {
   const CRLF = "\r\n";
-  const b64 = (buf: Buffer | string) => (Buffer.isBuffer(buf) ? buf : Buffer.from(buf, "utf8")).toString("base64").replace(/.{1,76}/g, "$&" + CRLF);
+  const b64 = (buf: Buffer | string) =>
+    (Buffer.isBuffer(buf) ? buf : Buffer.from(buf, "utf8")).toString("base64").replace(/.{1,76}/g, "$&" + CRLF);
   const word = (s: string) => `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
   const sinir = `kurmay-${Math.random().toString(36).slice(2, 12)}`;
   const alt = `${sinir}-alt`;
@@ -336,14 +388,12 @@ export function buildEml(mail: ReportEmail, attachment?: { name: string; data: B
     b64(mail.html),
     `--${alt}--`,
   ];
-  const basliklar = [
-    `X-Unsent: 1`,
-    `Subject: ${word(mail.subject)}`,
-    `MIME-Version: 1.0`,
-    `X-Mailer: Kurmay`,
-  ];
+  const basliklar = [`X-Unsent: 1`, `Subject: ${word(mail.subject)}`, `MIME-Version: 1.0`, `X-Mailer: Kurmay`];
   if (!attachment) return Buffer.from([...basliklar, ...govde, ``].join(CRLF), "utf8");
-  const ascii = attachment.name.normalize("NFKD").replace(/[^\x20-\x7e]/g, "").replace(/["\\]/g, "_");
+  const ascii = attachment.name
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/["\\]/g, "_");
   const parcalar = [
     ...basliklar,
     `Content-Type: multipart/mixed; boundary="${sinir}"`,
