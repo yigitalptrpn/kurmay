@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
+import { buildEml, renderReportEmail } from "./reportEmail.js";
+import type { SecurityReport } from "./securityReport.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import { SEARCH_KINDS, type SearchKind } from "./search.js";
 import type { ModelInfo } from "./models.js";
@@ -218,6 +220,8 @@ export interface UiServerOptions {
  *   GET  /security-reports       [{ id, createdAt, task, risk, counts }] — en yeni önce
  *   GET  /guvenlik/rapor/<id>    raporun basılı şablonu (ui/guvenlik-rapor.html, veri gömülü; ?yazdir → yazdırma penceresi)
  *   GET  /security-reports/<id>/pdf  raporun PDF'i — bilgisayardaki Edge/Chrome başsız basar; yoksa 501 + yedek adres
+ *   GET  /guvenlik/eposta/<id>       raporun e-posta hâli (tablo düzenli HTML — önizleme / kopyala-yapıştır)
+ *   GET  /guvenlik/eposta/<id>/eml   gönderilmemiş e-posta taslağı (.eml, Outlook düzenlenebilir açar); tarayıcı varsa PDF ekli
  *   GET  /security-reports/<id>  tam rapor (bulgular, olumlu tespitler…)
  *   GET  /toggles       Aç/Kapat sayfası (ui/toggles.html)
  *   GET  /toggles-data  { entry, agents[], skills[], mcpServers[] } — açık/kapalı durumları
@@ -763,6 +767,45 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       const veri = JSON.stringify(rapor ? { rapor, surum: version } : null).replace(/</g, "\\u003c");
       res.writeHead(rapor ? 200 : 404, { "content-type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(securityPrintPath, "utf8").replace("/*RAPOR*/null", () => veri));
+      return;
+    }
+
+    // Raporun e-posta hâli. Alıcı Kurmay'a erişebiliyorsa "Raporu aç" düğmesi konur: panel
+    // localhost'tan açıldıysa adres başkasında çalışmaz, düğme konmaz (PDF eki raporu taşır)
+    const mailLink = (id: string) => {
+      const host = String(req.headers.host ?? "");
+      return !host || /^(localhost|127\.|\[::1\]|0\.0\.0\.0)/i.test(host)
+        ? undefined
+        : `http://${host}/guvenlik#${encodeURIComponent(id)}`;
+    };
+    const mailMatch = url.pathname.match(/^\/guvenlik\/eposta\/([\w-]+)(\/eml)?$/);
+    if (req.method === "GET" && mailMatch) {
+      const [, id, eml] = mailMatch;
+      const rapor = options.getSecurityReport?.(id) as SecurityReport | undefined;
+      if (!rapor) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("rapor bulunamadı");
+      }
+      if (!eml) {
+        const mail = renderReportEmail(rapor, { link: mailLink(id), version });
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "x-kurmay-konu": encodeURIComponent(mail.subject) });
+        return res.end(mail.html);
+      }
+      // Taslak: PDF'i basabilirsek ekle; basamazsak ekisiz taslak (raporun özeti yine gövdede)
+      const send = (pdf?: Buffer) => {
+        const mail = renderReportEmail(rapor, { link: mailLink(id), version, pdfAttached: !!pdf });
+        const out = buildEml(mail, pdf ? { name: pdfFileName(rapor), data: pdf } : undefined);
+        res.writeHead(200, {
+          "content-type": "message/rfc822",
+          "content-length": out.length,
+          "content-disposition": attachmentHeader(pdfFileName(rapor).replace(/\.pdf$/, ".eml")),
+          "x-kurmay-pdf": pdf ? "eklendi" : "yok",
+        });
+        res.end(out);
+      };
+      const browser = findBrowser();
+      if (!browser) return send();
+      printPdf(browser, `http://127.0.0.1:${port}/guvenlik/rapor/${encodeURIComponent(id)}`).then(send, () => send());
       return;
     }
 
