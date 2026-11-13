@@ -4,42 +4,49 @@ import { countBySeverity } from "./securityReport.js";
 
 /**
  * Güvenlik raporunun e-posta hâli — ekibe gönderilecek özet, siber güvenlik operasyon merkezi
- * uyarısı görünümünde: koyu zemin, neon camgöbeği/yeşil vurgu, eş aralıklı başlıklar, terminal
- * komut satırı, kayıt satırı gibi dizilmiş bulgular. E-posta istemcileri (Outlook'un Word
+ * uyarısı görünümünde: eş aralıklı "//" başlıklar, terminal komut satırı, neon şerit, köşeli
+ * etiketler, kayıt satırı gibi dizilmiş bulgular. E-posta istemcileri (Outlook'un Word
  * motoru, Gmail) betik, SVG, CSS değişkeni ve dış yazı tipi çalıştırmaz; bu yüzden düzen
- * tablolarla, biçim satır içi stillerle kurulur, HTML sunucuda üretilir. Zemin renkleri
- * bgcolor ile de verilir (degradeyi göstermeyen istemci düz renge düşer). Önem her yerde
+ * tablolarla, biçim satır içi stillerle kurulur, HTML sunucuda üretilir. Önem her yerde
  * renkle birlikte yazıyla da verilir.
+ *
+ * AÇIK ZEMİN BİLİNÇLİ: ilk sürüm koyu zemin + açık yazıydı; alıcılar BOŞ EKRAN gördü — zemin
+ * rengini atan istemci/posta süzgeci açık yazıyı beyaz sayfada bıraktı. Kural: her yazı
+ * açık zeminde okunur renkte, zeminler yalnızca süs (atılsa da okunur). Neon renkler
+ * (NEON) yalnızca şerit/kenar gibi süslerde, yazıda koyu tonları (R.cyan, R.yesil) kullan.
  */
 
 const SANS = "'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const MONO = "'Cascadia Mono',Consolas,'Courier New',monospace";
 
-/** Koyu tema renkleri */
+/** Renkler — yazılar beyazda okunur (≥ 4,5:1), zeminler açık */
 const R = {
-  dis: "#050a14", // e-postanın dış zemini
-  kart: "#0b1220",
-  panel: "#0e1729",
-  terminal: "#060b16",
-  cizgi: "#1e2a44",
-  yazi: "#e2e8f0",
-  ikincil: "#94a3b8",
-  soluk: "#64748b",
-  cyan: "#22d3ee",
-  yesil: "#34d399",
+  dis: "#e8edf4", // e-postanın dış zemini
+  kart: "#ffffff",
+  panel: "#f8fafc",
+  terminal: "#f1f5f9",
+  cizgi: "#d5dde8",
+  yazi: "#0f172a",
+  govde: "#334155", // uzun metin
+  ikincil: "#475569",
+  soluk: "#5b6b80",
+  cyan: "#0e7490", // yazıda camgöbeği
+  yesil: "#047857", // yazıda yeşil
 };
+/** Neon süs renkleri — yalnızca şerit, kenar, düğme zemini (üstündeki yazı koyu) */
+const NEON = { cyan: "#22d3ee", yesil: "#34d399" };
 
-/** Önem: ad + neon renk / koyu zemin / kenar (koyu zeminde okunur) */
+/** Önem: ad + yazı rengi (açık zeminde okunur) / açık zemin / kenar */
 const SEV: Record<Severity, { ad: string; renk: string; zemin: string; kenar: string }> = {
-  critical: { ad: "Kritik", renk: "#ff4d6a", zemin: "#2a0d16", kenar: "#6b1d30" },
-  high: { ad: "Yüksek", renk: "#ff8a4c", zemin: "#2a160c", kenar: "#6b3a1c" },
-  medium: { ad: "Orta", renk: "#ffc53d", zemin: "#2a2108", kenar: "#6b5414" },
-  low: { ad: "Düşük", renk: "#4cb8ff", zemin: "#0b1d2e", kenar: "#1d4a6e" },
-  info: { ad: "Bilgi", renk: "#94a3b8", zemin: "#141c2b", kenar: "#2f3b55" },
+  critical: { ad: "Kritik", renk: "#be123c", zemin: "#fff1f2", kenar: "#fecdd3" },
+  high: { ad: "Yüksek", renk: "#c2410c", zemin: "#fff7ed", kenar: "#fed7aa" },
+  medium: { ad: "Orta", renk: "#a16207", zemin: "#fefce8", kenar: "#fde68a" },
+  low: { ad: "Düşük", renk: "#1d4ed8", zemin: "#eff6ff", kenar: "#bfdbfe" },
+  info: { ad: "Bilgi", renk: "#475569", zemin: "#f1f5f9", kenar: "#cbd5e1" },
 };
 const ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 const RISK: Record<string, { ad: string; renk: string; zemin: string; kenar: string; n: number; aciklama: string }> = {
-  none: { ad: "Risk yok", renk: "#2ee6a0", zemin: "#0a2219", kenar: "#156b4a", n: 0, aciklama: "Denetimde bildirilecek bir güvenlik açığı bulunmadı." },
+  none: { ad: "Risk yok", renk: "#047857", zemin: "#ecfdf5", kenar: "#a7f3d0", n: 0, aciklama: "Denetimde bildirilecek bir güvenlik açığı bulunmadı." },
   low: { ...SEV.low, n: 1, aciklama: "Düşük etkili zayıflıklar var; planlı olarak giderilmeli." },
   medium: { ...SEV.medium, n: 2, aciklama: "Belirli koşullarda istismar edilebilecek zayıflıklar var; yakın zamanda ele alınmalı." },
   high: { ...SEV.high, n: 3, aciklama: "İstismar edilebilir ve önemli etki taşıyan bulgular var; öncelikle giderilmeli." },
@@ -93,7 +100,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   const komut = `kurmay denetim --hedef ${proje.replace(/\s+/g, "-")} --kapsam ${r.standalone ? "tum-kod" : "degisen-dosyalar"}`;
   const terminal = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px"><tr>
-      <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-radius:8px;padding:10px 14px;font:12.5px/1.7 ${MONO};color:${R.ikincil};overflow-wrap:anywhere">
+      <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-left:3px solid ${NEON.cyan};border-radius:8px;padding:10px 14px;font:12.5px/1.7 ${MONO};color:${R.ikincil};overflow-wrap:anywhere">
         <span style="color:${R.yesil}">kurmay@denetim</span><span style="color:${R.soluk}">:~$</span> <span style="color:${R.yazi}">${esc(komut)}</span><br>
         <span style="color:${R.soluk}">[${esc(tarih(r.createdAt))}]</span> <span style="color:${R.yesil}">■ tarama tamamlandı</span> <span style="color:${R.soluk}">·</span>
         ${r.files.length} dosya ${r.standalone ? "incelendi" : "denetlendi"} <span style="color:${R.soluk}">·</span> ${hamMetin ? "yapılandırılmış rapor yok" : `${toplam} bulgu`}
@@ -103,7 +110,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   const renk = rk ? rk.renk : R.ikincil;
   const olcek = RISK_ORDER.map((k, i) => {
     const dolu = rk && i <= rk.n;
-    return `<td width="20%" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="8" bgcolor="${dolu ? renk : R.cizgi}" style="height:8px;font-size:0;line-height:0;background:${dolu ? renk : R.cizgi}">&nbsp;</td></tr></table>
+    return `<td width="20%" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="1" style="height:1px;font-size:0;line-height:0;border-top:8px solid ${dolu ? renk : R.cizgi}">&nbsp;</td></tr></table>
       <div style="font:${r.risk === k ? "700" : "400"} 9.5px/1.6 ${MONO};letter-spacing:.5px;color:${r.risk === k ? renk : R.soluk};padding-top:4px">${buyuk(RISK[k].ad)}</div></td>`;
   }).join("");
   const riskBandi = `
@@ -114,7 +121,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
           <td align="right" valign="middle">
             <table role="presentation" cellpadding="0" cellspacing="0" align="right"><tr><td style="border:1px solid ${renk};border-radius:4px;padding:4px 10px;font:700 12px/1.3 ${MONO};letter-spacing:2px;color:${renk}">[ ${buyuk(rk ? rk.ad : "Belirlenemedi")} ]</td></tr></table>
           </td></tr></table>
-        <div style="font:700 30px/1.25 ${MONO};letter-spacing:1px;color:${renk};padding:8px 0 12px;text-shadow:0 0 12px ${renk}">${buyuk(rk ? rk.ad : "Belirlenemedi")}</div>
+        <div style="font:700 30px/1.25 ${MONO};letter-spacing:1px;color:${renk};padding:8px 0 12px">${buyuk(rk ? rk.ad : "Belirlenemedi")}</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${olcek}</tr></table>
         <div style="font:13.5px/1.55 ${SANS};color:${R.yazi};padding-top:12px"><span style="font-family:${MONO};color:${renk}">&gt;</span> ${esc(rk ? rk.aciklama : "Denetçi yapılandırılmış rapor üretmediği için risk düzeyi belirlenemedi.")}</div>
       </td></tr></table>`;
@@ -127,23 +134,23 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td bgcolor="${R.panel}" style="background:${R.panel};border:1px solid ${R.cizgi};border-top:2px solid ${SEV[s].renk};border-radius:6px;padding:9px 10px">
             <div style="font:600 9.5px/1.4 ${MONO};letter-spacing:1px;color:${R.ikincil}">${buyuk(SEV[s].ad)}</div>
-            <div style="font:700 24px/1.2 ${MONO};color:${c[s] ? SEV[s].renk : "#334155"}">${String(c[s]).padStart(2, "0")}</div>
+            <div style="font:700 24px/1.2 ${MONO};color:${c[s] ? SEV[s].renk : R.soluk}">${String(c[s]).padStart(2, "0")}</div>
           </td></tr></table>
       </td>`).join("")}</tr></table>`;
 
   const ozet = r.summary
     ? `${baslik("Durum raporu")}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-radius:8px;padding:12px 14px">
+        <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-left:3px solid ${NEON.cyan};border-radius:8px;padding:12px 14px">
           <div style="font:12px/1.6 ${MONO};color:${R.yesil};padding-bottom:4px">$ cat ozet.txt</div>
-          <div style="font:14px/1.65 ${SANS};color:#cbd5e1;overflow-wrap:anywhere">${esc(r.summary)}</div>
+          <div style="font:14px/1.65 ${SANS};color:${R.govde};overflow-wrap:anywhere">${esc(r.summary)}</div>
         </td></tr></table>`
     : "";
 
   // — Tespit edilen açıklar: kayıt satırı düzeni —
   let bulgular = "";
   if (hamMetin) {
-    bulgular = `${baslik("Denetçinin notu")}<div style="font:13.5px/1.6 ${SANS};color:#cbd5e1">Denetçi yapılandırılmış rapor üretmedi; yazdığı metin ${
+    bulgular = `${baslik("Denetçinin notu")}<div style="font:13.5px/1.6 ${SANS};color:${R.govde}">Denetçi yapılandırılmış rapor üretmedi; yazdığı metin ${
       o.pdfAttached ? "ekteki PDF raporda" : "raporda"} yer alıyor.</div>`;
   } else if (!toplam) {
     bulgular = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px"><tr>
@@ -161,7 +168,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
               <td valign="middle">
                 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
                   <td bgcolor="${s.zemin}" style="background:${s.zemin};border:1px solid ${s.kenar};border-radius:4px;padding:2px 7px;font:700 10px/1.5 ${MONO};letter-spacing:1px;color:${s.renk};white-space:nowrap">${buyuk(s.ad)}</td>
-                  <td style="padding-left:8px;font:600 11.5px/1.5 ${MONO};color:${R.soluk}">${kod(i)}</td>
+                  <td style="padding-left:2px;font:600 11.5px/1.5 ${MONO};color:${R.soluk}">&nbsp;${kod(i)}</td>
                 </tr></table>
               </td>
               <td align="right" valign="middle" style="font:11.5px/1.5 ${MONO};color:${R.ikincil}">${esc(f.cwe ?? "")}</td>
@@ -169,7 +176,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
             <div style="font:600 14.5px/1.4 ${SANS};color:${R.yazi};padding-top:7px;overflow-wrap:anywhere">${esc(f.title)}</div>
             ${yer(f) ? `<div style="font:12px/1.6 ${MONO};color:${R.cyan};overflow-wrap:anywhere"><span style="color:${R.soluk}">└─</span> ${yolHtml(yer(f))}</div>` : ""}
             ${f.category ? `<div style="font:12px/1.5 ${SANS};color:${R.ikincil}">${esc(f.category)}</div>` : ""}
-            ${f.recommendation ? `<div style="font:13px/1.55 ${SANS};color:#cbd5e1;padding-top:6px;overflow-wrap:anywhere;word-break:break-word"><span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.yesil}">» DÜZELTME</span>&nbsp; ${esc(kisalt(f.recommendation, 260))}</div>` : ""}
+            ${f.recommendation ? `<div style="font:13px/1.55 ${SANS};color:${R.govde};padding-top:6px;overflow-wrap:anywhere;word-break:break-word"><span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.yesil}">» DÜZELTME</span>&nbsp; ${esc(kisalt(f.recommendation, 260))}</div>` : ""}
           </td></tr></table>`;
       }).join("") +
       (toplam > TOP_FINDINGS
@@ -192,13 +199,13 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 
   const ekNotu = o.pdfAttached
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>
-        <td bgcolor="#071a22" style="background:#071a22;border:1px solid #155e75;border-radius:8px;padding:12px 14px;font:13.5px/1.5 ${SANS};color:#a5f3fc">
+        <td bgcolor="#ecfeff" style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:12px 14px;font:13.5px/1.5 ${SANS};color:#155e75">
         <span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.cyan}">[ EK ]</span>&nbsp; Raporun tamamı PDF olarak ekte: tüm bulgular, kanıt satırları ve düzeltme önerileri.</td></tr></table>`
     : "";
   const dugme = o.link
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>
-        <td bgcolor="${R.cyan}" style="background:${R.cyan};border-radius:6px">
-          <a href="${esc(o.link)}" target="_blank" style="display:inline-block;padding:12px 22px;font:700 13px/1 ${MONO};letter-spacing:1.5px;color:#03141a;text-decoration:none;border-radius:6px">RAPORU AÇ &rarr;</a>
+        <td bgcolor="${NEON.cyan}" style="background:${NEON.cyan};border:1px solid ${R.cyan};border-radius:6px">
+          <a href="${esc(o.link)}" target="_blank" style="display:inline-block;padding:12px 22px;font:700 13px/1 ${MONO};letter-spacing:1.5px;color:#083344;text-decoration:none;border-radius:6px">RAPORU AÇ &rarr;</a>
         </td></tr></table>`
     : "";
 
@@ -208,11 +215,11 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
 <title>${esc(subject)}</title>
 <style>
-  :root { color-scheme:dark; supported-color-schemes:dark; }
+  :root { color-scheme:light; supported-color-schemes:light; }
   @media (max-width:620px) {
     .kap { width:100% !important; }
     .ic { padding-left:16px !important; padding-right:16px !important; }
@@ -221,29 +228,29 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 </head>
 <body bgcolor="${R.dis}" style="margin:0;padding:0;background:${R.dis};-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${esc(onIzleme)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${R.dis}" style="background:${R.dis};background-image:linear-gradient(rgba(34,211,238,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.05) 1px,transparent 1px);background-size:28px 28px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${R.dis}" style="background:${R.dis};background-image:linear-gradient(rgba(14,116,144,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(14,116,144,.06) 1px,transparent 1px);background-size:28px 28px">
 <tr><td align="center" style="padding:24px 12px">
   <table role="presentation" class="kap" width="600" cellpadding="0" cellspacing="0" bgcolor="${R.kart}" style="width:600px;max-width:600px;background:${R.kart};border:1px solid ${R.cizgi};border-radius:12px;border-collapse:separate;overflow:hidden">
-    <tr><td height="3" bgcolor="${R.cyan}" style="height:3px;font-size:0;line-height:0;background:${R.cyan};background-image:linear-gradient(90deg,${R.cyan},${R.yesil} 60%,${renk})">&nbsp;</td></tr>
-    <tr><td class="ic" bgcolor="#08101d" style="background:#08101d;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);padding:18px 28px;border-bottom:1px solid ${R.cizgi}">
+    <tr><td height="4" bgcolor="${NEON.cyan}" style="height:4px;font-size:0;line-height:0;background:${NEON.cyan};background-image:linear-gradient(90deg,${NEON.cyan},${NEON.yesil} 60%,${renk})">&nbsp;</td></tr>
+    <tr><td class="ic" bgcolor="${R.kart}" style="background:${R.kart};padding:18px 28px;border-bottom:1px solid ${R.cizgi}">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td valign="middle">
           <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td width="36" height="36" align="center" valign="middle" bgcolor="#062a33" style="background:#062a33;border:1px solid ${R.cyan};border-radius:8px;font:700 15px/36px ${MONO};color:${R.cyan}">&gt;_</td>
+            <td width="36" height="36" align="center" valign="middle" bgcolor="#ecfeff" style="background:#ecfeff;border:1px solid ${NEON.cyan};border-radius:8px;font:700 15px/36px ${MONO};color:${R.cyan}">&gt;_</td>
             <td style="padding-left:12px;font:700 15px/1.2 ${MONO};letter-spacing:3px;color:${R.yazi}">KURMAY
               <div style="font:500 10px/1.7 ${MONO};letter-spacing:2px;color:${R.cyan}">SİBER GÜVENLİK DENETİMİ</div></td>
           </tr></table>
         </td>
         <td align="right" valign="middle">
           <table role="presentation" cellpadding="0" cellspacing="0" align="right"><tr>
-            <td style="border:1px solid #145c40;border-radius:999px;padding:4px 11px;font:600 10.5px/1.4 ${MONO};letter-spacing:1px;color:${R.yesil};white-space:nowrap">● TARAMA TAMAMLANDI</td>
+            <td style="border:1px solid #a7f3d0;border-radius:999px;padding:4px 11px;font:600 10.5px/1.4 ${MONO};letter-spacing:1px;color:${R.yesil};white-space:nowrap">● TARAMA TAMAMLANDI</td>
           </tr></table>
         </td>
       </tr></table>
     </td></tr>
     <tr><td class="ic" style="padding:24px 28px 8px">
       <div style="font:600 11px/1.4 ${MONO};letter-spacing:2px;color:${R.cyan}">${r.standalone ? "// KOD TABANI DENETİMİ" : "// GÖREV DENETİMİ"}</div>
-      <div style="font:700 22px/1.3 ${SANS};color:#f8fafc;padding:6px 0 16px;overflow-wrap:anywhere">${esc(r.task)}</div>
+      <div style="font:700 22px/1.3 ${SANS};color:${R.yazi};padding:6px 0 16px;overflow-wrap:anywhere">${esc(r.task)}</div>
       ${terminal}
       ${riskBandi}
       ${matris}
