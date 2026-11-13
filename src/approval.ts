@@ -18,6 +18,8 @@ export interface ApprovalResult {
   comment?: string;
   /** Onaylandıysa çalıştırmanın erteleneceği zaman (epoch ms). Yoksa/geçmişse hemen. */
   runAt?: number;
+  /** Kart açıkken oturumun "Plan onayı" ayarı "onaysız ilet"e çevrildi — onayı ayar verdi */
+  auto?: boolean;
 }
 
 /** Zamanlanmış beklemenin nasıl sona erdiği */
@@ -163,7 +165,7 @@ export async function askUserApproval(
     agent: agentName,
     approved: winner.result.approved,
     comment: winner.result.comment,
-    source: winner.source,
+    source: winner.result.auto ? "auto" : winner.source,
   });
 
   return winner.result;
