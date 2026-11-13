@@ -230,7 +230,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 
 /* — Sohbet içindeki kartlar (cevap, onay, zamanlama, karar, build): mesaj gibi avatarlı — */
 #cards { display:flex; flex-direction:column; gap:14px; margin-top:14px; }
-#cards > .card { margin:0; max-width:100%; border-radius:6px 20px 20px 20px; background:var(--bubble); box-shadow:0 4px 18px color-mix(in srgb, var(--md-primary) 9%, transparent); }
+#cards > .card, #stream > .card.frozen { margin:0; max-width:100%; border-radius:6px 20px 20px 20px; background:var(--bubble); box-shadow:0 4px 18px color-mix(in srgb, var(--md-primary) 9%, transparent); }
 #cards > .card.hidden { display:none; }
 .card-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
 .card-head .label { margin:0; }
@@ -369,7 +369,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 [data-theme="evrak"] .main { background:var(--chatBg); }
 [data-theme="evrak"] .chat-head { border-top:3px solid var(--md-primary); }
 [data-theme="evrak"] .ch-title .task { font-weight:700; }
-[data-theme="evrak"] :is(.bub, #cards > .card) { border-radius:2px; box-shadow:0 1px 1px rgba(0,0,0,.08), 0 8px 18px rgba(60,40,10,.10); }
+[data-theme="evrak"] :is(.bub, #cards > .card, #stream > .card.frozen) { border-radius:2px; box-shadow:0 1px 1px rgba(0,0,0,.08), 0 8px 18px rgba(60,40,10,.10); }
 [data-theme="evrak"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .dchip, .ftag, .logfilter) { border-radius:3px; }
 [data-theme="evrak"] .sidebar { background:#D8C79A; }
 [data-theme="evrak"] .rail { background:#DED6C1; }
@@ -427,8 +427,8 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 /* Radar: gece görüşü; fosfor yeşili, tarama çizgileri, terminal dili */
 [data-theme="radar"] .main { background:radial-gradient(ellipse at 50% 30%, rgba(75,227,138,.07), transparent 65%),
   repeating-linear-gradient(0deg, rgba(75,227,138,.035) 0 1px, transparent 1px 3px), var(--chatBg); }
-[data-theme="radar"] :is(.bub, #cards > .card, .rbox, #taskCard, .sess, .node.mem, .node.group, button, .pill, .tchip, .fchip, .dchip, .av, .ftag, .term, .logfilter, #stream > .me) { border-radius:2px; }
-[data-theme="radar"] :is(.bub, #cards > .card) { box-shadow:0 0 0 1px rgba(75,227,138,.10), 0 0 18px rgba(75,227,138,.05); }
+[data-theme="radar"] :is(.bub, #cards > .card, #stream > .card.frozen, .rbox, #taskCard, .sess, .node.mem, .node.group, button, .pill, .tchip, .fchip, .dchip, .av, .ftag, .term, .logfilter, #stream > .me) { border-radius:2px; }
+[data-theme="radar"] :is(.bub, #cards > .card, #stream > .card.frozen) { box-shadow:0 0 0 1px rgba(75,227,138,.10), 0 0 18px rgba(75,227,138,.05); }
 [data-theme="radar"] :is(.bub .who, .ch-title .task, .sidebar-head .brand) { text-transform:uppercase; letter-spacing:.1em; text-shadow:0 0 8px rgba(75,227,138,.45); }
 [data-theme="radar"] :is(.bub .who small, .bub .who .zone) { text-transform:none; letter-spacing:0; text-shadow:none; }
 [data-theme="radar"] .av { box-shadow:0 0 0 1px currentColor inset; }
@@ -454,7 +454,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 [data-theme="harita"] :is(.bub .who, .label, .rbox h4, .node.mem .nm) { font-stretch:85%; }
 [data-theme="harita"] :is(.sess, .rbox, #taskCard, .mtool, .term) { border-radius:6px; }
 [data-theme="harita"] :is(.mcpchip, .node.mem, .node.group, .tchip, .pill, .rail-tools .tool, .ftag, #stream > .sys, .logfilter) { border-radius:4px; }
-[data-theme="harita"] :is(.bub, #cards > .card) { border-radius:2px 8px 8px 8px; box-shadow:var(--md-elev-1); }
+[data-theme="harita"] :is(.bub, #cards > .card, #stream > .card.frozen) { border-radius:2px 8px 8px 8px; box-shadow:var(--md-elev-1); }
 [data-theme="harita"] #stream > .me { border-radius:8px 8px 2px 8px; }
 [data-theme="harita"] .sess.active { box-shadow:inset 3px 0 var(--md-primary), var(--md-elev-1); }
 [data-theme="harita"] #approval { border:1.5px dashed var(--md-primary); }
@@ -471,7 +471,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 [data-theme="karargah"] .ch-title .task { font-size:19px; }
 [data-theme="karargah"] .chat-head { border-bottom:2px solid var(--md-outline-variant); box-shadow:0 1px 0 rgba(0,0,0,.4); }
 [data-theme="karargah"] :is(button, .pill, .node.mem, .node.group, .tchip, .rbox, #taskCard, .av, .fchip, .dchip, .ftag, .logfilter, .sess, .mcpchip, .mtool, .term, .rail-tools .tool, #stream > .sys, #stream > .me) { border-radius:3px; }
-[data-theme="karargah"] :is(.bub, #cards > .card) { border-radius:3px; box-shadow:0 1px 0 rgba(233,226,200,.04) inset, 0 6px 16px rgba(0,0,0,.28); }
+[data-theme="karargah"] :is(.bub, #cards > .card, #stream > .card.frozen) { border-radius:3px; box-shadow:0 1px 0 rgba(233,226,200,.04) inset, 0 6px 16px rgba(0,0,0,.28); }
 [data-theme="karargah"] .sess.active { background:var(--md-surface-container-high); box-shadow:inset 3px 0 var(--md-primary); }
 [data-theme="karargah"] .sess.sess-new { background:var(--md-primary); color:var(--md-on-primary); box-shadow:inset 3px 0 var(--md-primary); }
 [data-theme="karargah"] .av { box-shadow:0 0 0 1px currentColor inset; }
@@ -485,7 +485,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 :is([data-theme="sade"], [data-theme="gece"]) .main { background:var(--chatBg); }
 :is([data-theme="sade"], [data-theme="gece"]) .chat-head { background:color-mix(in srgb, var(--chatBg) 82%, transparent); }
 /* Kenarlık rengi verilmez: onay/cevap kartının kendi rengi (sarı/yeşil) kalsın */
-:is([data-theme="sade"], [data-theme="gece"]) :is(.bub, #cards > .card) { border-radius:12px; box-shadow:var(--md-elev-1); }
+:is([data-theme="sade"], [data-theme="gece"]) :is(.bub, #cards > .card, #stream > .card.frozen) { border-radius:12px; box-shadow:var(--md-elev-1); }
 :is([data-theme="sade"], [data-theme="gece"]) :is(#taskCard, .rbox) { border-radius:12px; box-shadow:var(--md-elev-1); }
 :is([data-theme="sade"], [data-theme="gece"]) #taskCard { box-shadow:var(--md-elev-2); }
 :is([data-theme="sade"], [data-theme="gece"]) :is(.sess, .rail-tools .tool, .term, .mtool) { border-radius:8px; }
@@ -517,6 +517,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
   #taskCard .row textarea, #approval .row textarea { flex-basis:100%; min-width:0; min-height:64px; }
 }
 .issue { display:flex; gap:8px; align-items:baseline; margin-bottom:6px; font-size:13px; }
+.issue .sev { white-space:nowrap; overflow-wrap:normal; flex:none; } /* akışa sabitlenen kartta "yükse/k" diye bölünmesin */
 .sev.low { background:var(--amberBg); color:var(--amber); }
 .sev.medium, .sev.high { background:var(--redBg); color:var(--red); }
 #approval, #schedule { border:1px solid var(--amber); }
@@ -596,7 +597,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 .fchip:disabled { cursor:wait; }
 /* Bilgi cevabı (analist route=done): Markdown biçimlendirilmiş okuma kartı.
    Düz metin yığını yerine başlık/liste/tablo/kod — okuma yorgunluğunu azaltır. */
-#answerCard { border-color:var(--teal); }
+#answerCard, #stream > .card.f-answerCard { border-color:var(--teal); }
 /* Şema gelmediğinde ajanın metni: düz <pre> yerine Markdown okuma kutusu */
 .rawmd { max-width:none; max-height:clamp(320px, 60vh, 900px); overflow-y:auto; padding:14px 18px; margin:10px 0;
   border:1px solid var(--border); border-radius:var(--md-shape-md); background:var(--md-surface-container-low); }
@@ -1333,6 +1334,7 @@ function showAnswer(agent, structured) {
   const refs = referencesHtml(structured.references);
   $("answerRefs").innerHTML = refs ? `<div class="label" style="margin:0">Kaynak dosyalar</div>${refs}` : "";
   $("answerRefs").classList.toggle("hidden", !refs);
+  anchorCard("answerCard");
   $("answerCard").classList.remove("hidden");
 }
 // Kaynak dosya yoluna tıklayınca panoya kopyala (IDE'de aç-git için)
@@ -1488,6 +1490,39 @@ function appendStream(el) {
   if (logFilter) { logFilterCount++; renderLogFilterBar(); }
   scrollChat();
 }
+
+// Sonuç kartları (cevap, Teftiş kararı, derleme) sohbetin altındaki sabit alanda duruyor.
+// Akış sürerse (red sonrası ajan yeniden çalışınca) eski kart en altta kalıp yeni mesajlar
+// onun ÜSTÜNE düşüyordu. Kart gösterildiği anda akışa bir yer işareti konur; akış ilerleyince
+// kartın o anki hali bu işaretin yerine kopyalanır, alttaki asıl kart gizlenir — sıra korunur.
+const FROZEN_CARDS = ["answerCard", "verdictCard", "buildCard"];
+const cardAnchors = {};
+function anchorCard(id) {
+  freezeCard(id); // aynı kart yeniden gösteriliyorsa öncekini yerinde bırak
+  const m = document.createElement("div");
+  m.className = "card-anchor";
+  m.hidden = true;
+  m.dataset.agent = logAgent || "";
+  $("stream").appendChild(m);
+  cardAnchors[id] = m;
+}
+function freezeCard(id) {
+  const m = cardAnchors[id];
+  delete cardAnchors[id];
+  if (!m) return;
+  const card = $(id);
+  if (!m.isConnected || card.classList.contains("hidden")) { m.remove(); return; }
+  const c = card.cloneNode(true);
+  c.removeAttribute("id");
+  c.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  c.classList.add("frozen", "f-" + id);
+  c.dataset.agent = m.dataset.agent;
+  if (m.dataset.ei) c.dataset.ei = m.dataset.ei;
+  if (logFilter && !logFilter.has(c.dataset.agent)) c.classList.add("flt-out");
+  m.replaceWith(c);
+  card.classList.add("hidden");
+}
+function freezeCards() { FROZEN_CARDS.forEach(freezeCard); }
 
 // Sistem olayı: sohbetin ortasında küçük kapsül (ajan mesajları balonlarda)
 function addLog(ts, html, cls) {
@@ -1741,6 +1776,7 @@ function handleEvent(e) {
       states = {};
       agents.forEach((a) => (states[a] = "pending"));
       (e.disabled || []).forEach((a) => (states[a] = "disabled"));
+      if (e.resumed) freezeCards(); // aynı oturumda önceki görevin kartları geçmişte kalsın
       $("answerCard").classList.add("hidden");
       $("task").textContent = e.task;
       $("provider").textContent = e.provider === "ollama" ? "yerel sunucu" : "bulut";
@@ -1810,6 +1846,7 @@ function handleEvent(e) {
       runningSince[e.agent] = Date.now();
       ensurePipelineTicker();
       renderPipeline();
+      freezeCards(); // önceki sonuç kartları yerinde kalsın, yeni mesajlar altlarına düşsün
       delete bubbles[e.agent]; // her koşu yeni bir mesaj balonu açar
       const b = bubbleOf(e.agent, e.ts);
       b.querySelector(".who .typing").classList.remove("hidden");
@@ -2076,6 +2113,7 @@ function handleEvent(e) {
       addLog(e.ts, `<b>${esc(agentName(e.agent))}</b> kararı: ${e.approved ? "onay" : "iade"} — ${esc(e.summary)}`,
         e.approved ? "ok" : "err");
       $("verdictAv").innerHTML = avatar(e.agent);
+      anchorCard("verdictCard");
       $("verdictCard").classList.remove("hidden");
       scrollChat(true);
       const head = $("verdictHead");
@@ -2123,6 +2161,7 @@ function handleEvent(e) {
     case "build_started":
       buildOrder = e.order; buildStates = {};
       e.order.forEach((m) => (buildStates[m] = ""));
+      anchorCard("buildCard"); // önceki derleme kartı yerinde kalır, bu tur yenisi
       $("buildLog").textContent = "";
       $("buildCard").classList.remove("hidden");
       renderBuild();
