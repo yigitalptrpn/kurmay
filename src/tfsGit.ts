@@ -85,26 +85,32 @@ export async function gitAvailable(): Promise<boolean> {
 export async function authEnv(c: TfsConnection | undefined, remoteUrl: string): Promise<Record<string, string>> {
   if (!c) return {};
   let remote: URL;
-  let tfsHost: string;
+  let tfs: URL;
   try {
     remote = new URL(remoteUrl);
-    tfsHost = new URL(c.url).hostname.toLowerCase();
+    tfs = new URL(c.url);
   } catch {
     return {}; // ssh ya da bozuk adres
   }
-  if (!/^https?:$/.test(remote.protocol) || remote.hostname.toLowerCase() !== tfsHost) return {};
+  if (!/^https?:$/.test(remote.protocol) || remote.hostname.toLowerCase() !== tfs.hostname.toLowerCase()) return {};
+  // Ayarlar https iken depo http ile klonlanmışsa anahtar ağda şifresiz gitmesin — kullanıcının kendi kimliği kullanılır
+  if (tfs.protocol === "https:" && remote.protocol === "http:") return {};
   const v = await version();
   if (!v || v[0] < 2 || (v[0] === 2 && v[1] < 31)) return {};
-  const env: Record<string, string> = {
-    GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: "Authorization: Basic " + Buffer.from(":" + c.token).toString("base64"),
-  };
-  if (c.insecureTls) {
-    env.GIT_CONFIG_COUNT = "2";
-    env.GIT_CONFIG_KEY_1 = "http.sslVerify";
-    env.GIT_CONFIG_VALUE_1 = "false";
-  }
+  // Başlık yalnızca bu sunucuya giden isteklere eklenir (http.<adres>.extraHeader) — alt modül ya da
+  // başka bir uzak depo farklı sunucudaysa anahtar oraya gitmez. Kimlik yardımcısı (Windows kimlik
+  // yöneticisi) bu komutta kapalı: anahtar reddedilirse pencere açılmasın — çağıran kullanıcının
+  // kendi kimliğiyle ayrıca dener.
+  const pairs: Array<[string, string]> = [
+    [`http.${remote.origin}/.extraHeader`, "Authorization: Basic " + Buffer.from(":" + c.token).toString("base64")],
+    ["credential.helper", ""],
+  ];
+  if (c.insecureTls) pairs.push([`http.${remote.origin}/.sslVerify`, "false"]);
+  const env: Record<string, string> = { GIT_CONFIG_COUNT: String(pairs.length) };
+  pairs.forEach(([k, val], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = k;
+    env[`GIT_CONFIG_VALUE_${i}`] = val;
+  });
   return env;
 }
 

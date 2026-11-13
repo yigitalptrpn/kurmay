@@ -25,9 +25,11 @@ import {
   forgetServer,
   getStates,
   getSummaries,
+  linkArtifact,
   myWorkItems,
   probe as probeTfs,
   searchWorkItems,
+  serverVersion,
   TfsError,
   writeWorkItem,
 } from "./tfs.js";
@@ -58,9 +60,11 @@ import {
 import {
   createPullRequest,
   createThread,
+  getIterationChanges,
   getPullRequest,
   getRepository,
   myPullRequests,
+  repoInfoFromRemote,
   replyToThread,
   setThreadStatus,
   type TfsPullRequest,
@@ -493,14 +497,33 @@ async function main() {
         errors.push(`yorum ${r.threadId}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    for (const cm of input.comments.filter((x) => x.send && x.text.trim())) {
+    // Satır yorumları için son yineleme: dosya isteğin farkında mı, bağlam kimliği (changeTrackingId) ne
+    const yazilacak = input.comments.filter((x) => x.send && x.text.trim());
+    const it = yazilacak.some((x) => x.file) ? await getIterationChanges(c, api).catch(() => undefined) : undefined;
+    const izler = new Map((it?.changes ?? []).map((ch) => [ch.path.toLowerCase(), ch.changeTrackingId]));
+    const yerli = (cm: { file?: string; line?: number }) =>
+      `\n\n**Yer:** \`${(cm.file ?? "").replace(/^\//, "")}${cm.line ? `:${cm.line}` : ""}\``;
+    for (const cm of yazilacak) {
       try {
-        await createThread(
-          c,
-          api,
-          cm.text.trim(),
-          cm.file ? { file: cm.file, ...(cm.line ? { line: cm.line } : {}) } : undefined,
-        );
+        const yol = cm.file ? "/" + cm.file.replace(/\\/g, "/").replace(/^\/+/, "") : undefined;
+        if (yol && it && !izler.has(yol.toLowerCase())) {
+          // Dosya bu isteğin farkında yok — satıra bağlanamaz; yeri yazılarak genel yorum
+          await createThread(c, api, cm.text.trim() + yerli(cm));
+        } else {
+          await createThread(
+            c,
+            api,
+            cm.text.trim(),
+            yol
+              ? {
+                  file: yol,
+                  ...(cm.line ? { line: cm.line } : {}),
+                  changeTrackingId: izler.get(yol.toLowerCase()),
+                  iteration: it?.iteration,
+                }
+              : undefined,
+          );
+        }
         created++;
       } catch (e) {
         // Satıra bağlanamadı (dosya/satır PR farkında değil): yeri yazılarak genel yorum
@@ -509,11 +532,7 @@ async function main() {
           continue;
         }
         try {
-          await createThread(
-            c,
-            api,
-            `${cm.text.trim()}\n\n**Yer:** \`${cm.file.replace(/^\//, "")}${cm.line ? `:${cm.line}` : ""}\``,
-          );
+          await createThread(c, api, cm.text.trim() + yerli(cm));
           created++;
         } catch (e2) {
           errors.push(`yorum (${cm.file}): ${e2 instanceof Error ? e2.message : String(e2)}`);
@@ -522,7 +541,8 @@ async function main() {
     }
     if (input.general?.trim()) {
       try {
-        await createThread(c, api, input.general.trim() + (input.push ? kisa : ""));
+        // Özet bilgi içindir: "kapatıldı" açılır — "yorumlar çözülmeli" kuralı birleştirmeyi kilitlemesin
+        await createThread(c, api, input.general.trim() + (input.push ? kisa : ""), undefined, undefined, 4);
         general = true;
       } catch (e) {
         errors.push(`genel yorum: ${e instanceof Error ? e.message : String(e)}`);
@@ -859,12 +879,15 @@ async function main() {
           }
           let branch: string | undefined;
           try {
-            const name = repoNameFromRemote(repo.remoteUrl) ?? path.basename(root);
+            // Depo ve proje: önce sunucuya sorulur (klon adresi/vsts/info); olmazsa adresten çıkarılır
+            const uzak = await repoInfoFromRemote(c, repo.remoteUrl);
+            const name = uzak?.name ?? repoNameFromRemote(repo.remoteUrl) ?? path.basename(root);
             const project =
+              uzak?.project ??
               projectFromRemote(repo.remoteUrl) ??
               (e.workItem?.id === pend.id ? e.workItem.project : undefined) ??
               c.project;
-            const info = await getRepository(c, project, name);
+            const info = await getRepository(c, project, uzak?.id ?? name);
             branch = await uniqueBranch(repo, `kurmay/${pend.id}-${slug(pend.title)}`);
             const target = pr.target?.trim() || info.defaultBranch || (await defaultBranch(repo)) || "main";
             const pushed = await commitAndPush(
@@ -885,6 +908,14 @@ async function main() {
               workItems: [pend.id],
               draft: !!pr.draft,
             });
+            // Eski sunucular (5.0 öncesi) açılışta verilen iş öğesi bağını yok sayabiliyor — bağ ayrıca eklenir
+            if ((await serverVersion(c)) < 5 && made.artifactId) {
+              await linkArtifact(c, pend.id, made.artifactId, "Pull Request").catch((err) =>
+                console.warn(
+                  `⚠ TFS #${pend.id}: çekme isteği bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
+                ),
+              );
+            }
             prs.push({
               repo: label,
               id: made.id,

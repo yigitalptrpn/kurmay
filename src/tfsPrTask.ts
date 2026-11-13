@@ -13,7 +13,7 @@ import {
   type LocalRepo,
 } from "./tfsGit.js";
 import {
-  getChanges,
+  getIterationChanges,
   getPrWorkItems,
   getPullRequest,
   getThreads,
@@ -144,9 +144,11 @@ export async function previewPr(
   signal?: AbortSignal,
 ): Promise<PrPreview> {
   const pr = await getPullRequest(c, id, signal);
-  const [threads, changes, wiIds, local] = await Promise.all([
-    getThreads(c, pr, signal),
-    getChanges(c, pr, signal).catch(() => []),
+  // Son yineleme önce: yorumların satırları ona göre izlenir (sonraki gönderimler satırı kaydırmış olabilir)
+  const it = await getIterationChanges(c, pr, signal).catch(() => ({ iteration: 0, changes: [] }));
+  const changes = it.changes;
+  const [threads, wiIds, local] = await Promise.all([
+    getThreads(c, pr, signal, it.iteration || undefined),
     getPrWorkItems(c, pr, signal),
     localStatus(targetDir, pr),
   ]);
@@ -240,9 +242,10 @@ export async function preparePrTask(
     throw new Error(
       `!${id} çekme isteği açık değil (${pr.status === "completed" ? "tamamlanmış" : pr.status === "abandoned" ? "bırakılmış" : pr.status})`,
     );
-  const [threads, changes, wiIds, local] = await Promise.all([
-    getThreads(c, pr, signal),
-    getChanges(c, pr, signal).catch(() => []),
+  const it = await getIterationChanges(c, pr, signal).catch(() => ({ iteration: 0, changes: [] }));
+  const changes = it.changes;
+  const [threads, wiIds, local] = await Promise.all([
+    getThreads(c, pr, signal, it.iteration || undefined),
     getPrWorkItems(c, pr, signal),
     localStatus(targetDir, pr),
   ]);
@@ -302,7 +305,7 @@ export async function preparePrTask(
   } else if (acik.length) {
     L.push("", `### Zaten açık yorumlar (${acik.length}) — tekrarlama`);
     for (const t of acik.slice(0, 30)) {
-      const ilk = t.comments.find((x) => !x.system);
+      const ilk = t.comments.find((x) => x.parentId === 0 && !x.system) ?? t.comments.find((x) => !x.system);
       L.push(
         `- ${t.file ? `${t.file.replace(/^\//, "")}${t.line ? `:${t.line}` : ""}` : "genel"} — ${kirp((ilk?.content ?? "").replace(/\s+/g, " "), 200)}`,
       );
@@ -345,7 +348,11 @@ export async function preparePrTask(
     ...(mode === "yorum"
       ? {
           threads: acik.map((t) => {
-            const ilk = t.comments.find((x) => !x.system) ?? t.comments[0];
+            // Cevap dizinin kök yorumuna (parentCommentId 0) bağlanır
+            const ilk =
+              t.comments.find((x) => x.parentId === 0 && !x.system) ??
+              t.comments.find((x) => !x.system) ??
+              t.comments[0];
             return {
               id: t.id,
               firstCommentId: ilk?.id ?? 1,

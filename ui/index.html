@@ -4071,6 +4071,8 @@ $("wiInput").addEventListener("input", () => {
     wiTimer = setTimeout(() => selectWi(id), /^#?\d+$/.test(v) ? 700 : 0);
     return;
   }
+  // Eski menü (bana atananlar / önceki arama) yeni sonuçlar gelene kadar ekranda kalıp yanlış seçime yol açmasın
+  closeWiMenu();
   if (v.length < 2) return;
   wiTimer = setTimeout(async () => {
     const r = await wiFetch(`/tfs/ara?q=${encodeURIComponent(v)}`, "Aranıyor…");
@@ -4123,6 +4125,10 @@ $("wiCard").addEventListener("change", (ev) => {
   if (ev.target.name === "prKip") { prMode = ev.target.value; renderWi(); }
 });
 document.addEventListener("click", (ev) => { if (!ev.target.closest("#wiRow")) closeWiMenu(); });
+// Esc menüyü odak nerede olursa olsun kapatır (ör. "Bana atananlar" düğmesindeyken)
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !$("wiMenu").classList.contains("hidden")) { closeWiMenu(); $("wiInput").focus(); }
+});
 
 // Sonucu TFS'e yazma kartı
 function showTfsCard() {

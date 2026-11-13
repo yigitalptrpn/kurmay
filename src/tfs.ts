@@ -402,7 +402,8 @@ const MAX_VERSION = 7.1;
 /** Yayımlanmış (önizleme olmayan) sürümler. Sunucunun en yüksek sürümü önizleme olabilir (ör.
  *  2020 güncellemesi 6.1 der ama düz "6.1" isteğini VssInvalidPreviewVersionException ile reddeder,
  *  "6.0" çalışır) — istekler bu listeden sunucununkine eşit ya da küçük en büyük sürümle gider. */
-const RELEASED = [7.1, 7.0, 6.0, 5.1, 5.0, 4.1, 4.0, 3.2, 3.1, 3.0, 2.0, 1.0];
+// 3.1 / 3.2 / 4.0 için belgelenmiş düz sürüm yok (TFS 2017 güncellemeleri ve TFS 2018 ilk sürüm) — oralarda 3.0
+const RELEASED = [7.1, 7.0, 6.0, 5.1, 5.0, 4.1, 3.0, 2.0, 1.0];
 const versions = new Map<string, Promise<number>>();
 
 /**
@@ -1279,6 +1280,33 @@ export function getStates(c: TfsConnection, type: string, signal?: AbortSignal):
 export interface TfsWriteResult {
   rev?: number;
   state?: string;
+}
+
+/**
+ * İş öğesine bağ ekler (ör. çekme isteği: `vstfs:///Git/PullRequestId/{proje}%2F{depo}%2F{no}`, ad "Pull Request").
+ * Eski sunucularda istek açılırken verilen iş öğesi bağı yok sayılabildiği için sonradan eklenir; bağ zaten
+ * varsa sunucunun "Relation already exists" hatası sessizce yutulur.
+ */
+export async function linkArtifact(
+  c: TfsConnection,
+  id: number,
+  url: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const v = await serverVersion(c, signal);
+  try {
+    await call(c, "PATCH", `/_apis/wit/workitems/${id}`, {
+      query: { "api-version": ver(v) },
+      json: [{ op: "add", path: "/relations/-", value: { rel: "ArtifactLink", url, attributes: { name } } }],
+      patch: true,
+      what: `#${id} bağı`,
+      signal,
+    });
+  } catch (e) {
+    if (e instanceof TfsError && /already exists|zaten (var|mevcut)/i.test(e.message)) return;
+    throw e;
+  }
 }
 
 /**
