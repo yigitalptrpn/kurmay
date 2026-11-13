@@ -194,6 +194,8 @@ async function executeRun(o: {
     entryContext: entry.contextTokens,
     recap: () => sessionRecap(bus.history.slice(0, priorEvents), cfg.workflow.entry),
     onSession: (id) => o.sessions.setSdkSession(entry.id, id),
+    // Panelden koşu sürerken değiştirilebilir — orkestratör plan bitince son halini okur
+    autoForward: () => o.sessions.get(entry.id)?.autoForward,
   };
 
   console.log(`\n🎯 [${entry.name}] Görev: ${display}`);
@@ -1050,13 +1052,35 @@ async function main() {
     }
   };
 
+  /** Oturumda bekleyen onay kartı iletilebilir bir plan mı (dolu file_plan, akışı bitirmiyor) —
+   *  öyleyse "onaysız ilet" seçilince onay ayar adına verilir */
+  const forwardPendingPlan = (sessionId: string): boolean => {
+    const rt = runtimes.peek(sessionId);
+    if (!rt || rt.status !== "approval") return false;
+    const h = rt.bus.history;
+    let last: (typeof h)[number] | undefined;
+    for (let i = h.length - 1; i >= 0; i--) {
+      if (h[i].type === "approval_required") {
+        last = h[i];
+        break;
+      }
+    }
+    if (!last || last.type !== "approval_required" || last.endsFlow) return false;
+    const plan = (last.structured as { file_plan?: unknown } | undefined)?.file_plan;
+    if (!Array.isArray(plan) || plan.length === 0) return false;
+    return rt.resolveApproval({ approved: true, auto: true });
+  };
+
   /** Planı otomatik iletme: session verilirse yalnızca o oturum (config.json'a dokunmaz),
    *  yoksa genel ayar (Ayarlar) — config.json'a yazar, yeni oturumlar bunu alır */
   const setAutoForward = (enabled: boolean, sessionId?: string): { ok: boolean; error?: string; enabled?: boolean } => {
     if (sessionId) {
       if (!sessions.setAutoForward(sessionId, enabled)) return { ok: false, error: "oturum bulunamadı" };
+      // Onay kartı şu an açıksa ve ayar "onaysız ilet"e çevrildiyse bekleyen planı hemen
+      // ilet — ayar son haliyle davransın (plan dolu, bilgi cevabı değil)
+      const forwarded = enabled ? forwardPendingPlan(sessionId) : false;
       runtimes.notify();
-      return { ok: true, enabled };
+      return { ok: true, enabled, ...(forwarded ? { forwarded } : {}) };
     }
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     try {

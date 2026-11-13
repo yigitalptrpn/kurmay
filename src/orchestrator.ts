@@ -361,6 +361,9 @@ export async function runWorkflow(
     entryContext?: number;
     recap?: () => string | undefined;
     onSession?: (id: string) => void;
+    /** Oturumun "Plan onayı" ayarının o anki hali (koşu sürerken değişebilir);
+     *  undefined → koşu başındaki genel ayar (workflow.autoForwardPlan) */
+    autoForward?: () => boolean | undefined;
   } = {},
   /** Verilirse akış (ilk düğüm dahil) bu zamana kadar bekler — görevin kendisini
    *  ileri bir saate kurmak için. Beklerken "şimdi çalıştır"/iptal/Durdur çalışır. */
@@ -520,7 +523,9 @@ export async function runWorkflow(
       // yazar) — saha timi plansız koşmasın. Akışı bitiren rotada (bilgi cevabı) onay sorulur.
       let autoBlocked: "empty" | "unreadable" | undefined;
       let forwarded = false;
-      if (agent.config.requiresUserApproval && workflow.autoForwardPlan && !endsFlow && producesPlan(agent)) {
+      // Ayar plan bittiği anda okunur — koşu sürerken panelden değiştirilmişse son hali geçerli
+      const autoOn = sessionStore.autoForward?.() ?? workflow.autoForwardPlan;
+      if (agent.config.requiresUserApproval && autoOn && !endsFlow && producesPlan(agent)) {
         const plan = (result.structured as { file_plan?: unknown } | undefined)?.file_plan;
         if (Array.isArray(plan) && plan.length > 0) {
           const to = routeTarget !== undefined ? routeTarget : (agent.config.next ?? null);

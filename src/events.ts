@@ -220,7 +220,8 @@ export type OrchestratorEvent =
       agent: string;
       approved: boolean;
       comment?: string;
-      source: "terminal" | "web";
+      /** auto: kart açıkken oturumda "onaysız ilet" seçildi, plan ayarla iletildi */
+      source: "terminal" | "web" | "auto";
     }
   | {
       type: "verdict";

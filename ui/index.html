@@ -1054,7 +1054,7 @@ const ACTION_NAMES = { create: "yeni", created: "yeni", modify: "değişecek", m
 const SEVERITY_NAMES = { low: "düşük", medium: "orta", high: "yüksek", critical: "kritik", info: "bilgi" };
 // Güvenlik denetçisinin genel risk düzeyi (şema enum'u İngilizce kalır, ekranda Türkçe)
 const RISK_NAMES = { none: "risk yok", low: "düşük", medium: "orta", high: "yüksek", critical: "kritik" };
-const SOURCE_NAMES = { web: "panel", terminal: "terminal", timer: "zamanlayıcı" };
+const SOURCE_NAMES = { web: "panel", terminal: "terminal", timer: "zamanlayıcı", auto: "plan onayı ayarı" };
 const ROUTE_VALUES = { implement: "uygulama", done: "bitir", developer: "uygulama" }; // son değer: eski kayıtlar
 const TOOL_NAMES = { Read: "Dosya oku", Write: "Dosya yaz", Edit: "Düzenle", MultiEdit: "Çoklu düzenle", NotebookEdit: "Defter düzenle",
   Glob: "Dosya bul", Grep: "Metin ara", Bash: "Komut", WebSearch: "İnternette ara", WebFetch: "Sayfa getir",
@@ -2268,6 +2268,11 @@ function handleEvent(e) {
     case "approval_resolved":
       $("approval").classList.add("hidden");
       setStatus("çalışıyor", "run");
+      if (e.source === "auto") {
+        // Kart açıkken oturumun "Plan onayı" ayarı "onaysız ilet"e çevrildi
+        addLog(e.ts, `⏩ "Plan onayı" onaysız ilet yapıldı — bekleyen plan onaysız iletildi`, "ok");
+        break;
+      }
       addLog(e.ts, `onay: ${e.approved ? "verildi" : "reddedildi"} (${SOURCE_NAMES[e.source] || e.source})${e.comment ? " — " + esc(e.comment) : ""}`, e.approved ? "ok" : "err");
       break;
     case "verdict": {
@@ -3432,7 +3437,7 @@ function fillFwdSelect() {
   const sel = $("fwdSel");
   sel.value = viewAutoForward() ? "1" : "0";
   sel.title = (viewSessionId
-    ? "Bu oturumda Analist'in planı onay beklesin mi, onaysız Saha Timi'ne mi geçsin — oturumdaki sıradaki görevde geçerli (diğer oturumlar etkilenmez)"
+    ? "Bu oturumda Analist'in planı onay beklesin mi, onaysız Saha Timi'ne mi geçsin — hemen geçerli: çalışan görevde de plan bitince bu ayara bakılır, onay kartı açıksa “onaysız ilet” bekleyen planı iletir (diğer oturumlar etkilenmez)"
     : "Yeni oturumlarda Analist'in planı onay beklesin mi, onaysız Saha Timi'ne mi geçsin (Ayarlar'daki ayarla aynı)") +
     ". Plan boş ya da okunamazsa onay yine sorulur.";
   renderFlowNote();
@@ -3453,7 +3458,7 @@ $("fwdSel").addEventListener("change", async () => {
     fillFwdSelect();
     addLog(new Date().toISOString(), (s ? "bu oturumda " : "yeni oturumlarda ") +
       (enabled ? "Analist'in planı onay beklemeden Saha Timi'ne iletilecek" : "Analist'in planı onay bekleyecek") +
-      (s ? " — oturumdaki sıradaki görevde geçerli" : ""), "ok");
+      (s ? " — hemen geçerli" : ""), "ok");
   } catch (e) {
     alert("plan onayı ayarı kaydedilemedi: " + (e.message || e));
     fillFwdSelect();
