@@ -29,7 +29,7 @@ const R = {
   yazi: "#0f172a",
   govde: "#334155", // uzun metin
   ikincil: "#475569",
-  soluk: "#64748b",
+  soluk: "#5b6b80",
   cyan: "#0e7490", // yazıda camgöbeği
   yesil: "#047857", // yazıda yeşil
 };
@@ -110,7 +110,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   const renk = rk ? rk.renk : R.ikincil;
   const olcek = RISK_ORDER.map((k, i) => {
     const dolu = rk && i <= rk.n;
-    return `<td width="20%" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="8" bgcolor="${dolu ? renk : R.cizgi}" style="height:8px;font-size:0;line-height:0;background:${dolu ? renk : R.cizgi}">&nbsp;</td></tr></table>
+    return `<td width="20%" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="1" style="height:1px;font-size:0;line-height:0;border-top:8px solid ${dolu ? renk : R.cizgi}">&nbsp;</td></tr></table>
       <div style="font:${r.risk === k ? "700" : "400"} 9.5px/1.6 ${MONO};letter-spacing:.5px;color:${r.risk === k ? renk : R.soluk};padding-top:4px">${buyuk(RISK[k].ad)}</div></td>`;
   }).join("");
   const riskBandi = `
@@ -134,7 +134,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td bgcolor="${R.panel}" style="background:${R.panel};border:1px solid ${R.cizgi};border-top:2px solid ${SEV[s].renk};border-radius:6px;padding:9px 10px">
             <div style="font:600 9.5px/1.4 ${MONO};letter-spacing:1px;color:${R.ikincil}">${buyuk(SEV[s].ad)}</div>
-            <div style="font:700 24px/1.2 ${MONO};color:${c[s] ? SEV[s].renk : "#94a3b8"}">${String(c[s]).padStart(2, "0")}</div>
+            <div style="font:700 24px/1.2 ${MONO};color:${c[s] ? SEV[s].renk : R.soluk}">${String(c[s]).padStart(2, "0")}</div>
           </td></tr></table>
       </td>`).join("")}</tr></table>`;
 
@@ -168,7 +168,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
               <td valign="middle">
                 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
                   <td bgcolor="${s.zemin}" style="background:${s.zemin};border:1px solid ${s.kenar};border-radius:4px;padding:2px 7px;font:700 10px/1.5 ${MONO};letter-spacing:1px;color:${s.renk};white-space:nowrap">${buyuk(s.ad)}</td>
-                  <td style="padding-left:8px;font:600 11.5px/1.5 ${MONO};color:${R.soluk}">${kod(i)}</td>
+                  <td style="padding-left:2px;font:600 11.5px/1.5 ${MONO};color:${R.soluk}">&nbsp;${kod(i)}</td>
                 </tr></table>
               </td>
               <td align="right" valign="middle" style="font:11.5px/1.5 ${MONO};color:${R.ikincil}">${esc(f.cwe ?? "")}</td>
