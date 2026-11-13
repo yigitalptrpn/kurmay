@@ -1,10 +1,25 @@
 import os from "node:os";
 import path from "node:path";
-import { getSessionInfo, getSessionMessages, query, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type McpServerStatus } from "@anthropic-ai/claude-agent-sdk";
+import {
+  getSessionInfo,
+  getSessionMessages,
+  query,
+  type HookCallbackMatcher,
+  type HookEvent,
+  type McpServerConfig,
+  type McpServerStatus,
+} from "@anthropic-ai/claude-agent-sdk";
 import { activeMcpServers, buildAgentEnv, disabledMcpServers, isOffMcpTool } from "./config.js";
 import { mcpStatus, toLights } from "./mcpStatus.js";
 import { refreshModelContext } from "./models.js";
-import { compactPercent, contextInfo, DEFAULT_OUTPUT_RESERVE, FORCE_NEW_PERCENT, tokensOfUsage, type ContextInfo } from "./context.js";
+import {
+  compactPercent,
+  contextInfo,
+  DEFAULT_OUTPUT_RESERVE,
+  FORCE_NEW_PERCENT,
+  tokensOfUsage,
+  type ContextInfo,
+} from "./context.js";
 import { buildHooks } from "./hooks.js";
 import { withUserPrompt } from "./agents.js";
 import {
@@ -55,7 +70,10 @@ const lineCount = (v: unknown): number => (typeof v === "string" && v ? v.split(
  * düzenlemelerde yaklaşık +/− satır (değiştirilen bloğun eski/yeni satır sayısı —
  * gerçek diff değil, ama "ne kadar dokundu" hissi için yeterli).
  */
-function toolFacts(tool: string, input: unknown): { file?: string; command?: string; added?: number; removed?: number } {
+function toolFacts(
+  tool: string,
+  input: unknown,
+): { file?: string; command?: string; added?: number; removed?: number } {
   if (!input || typeof input !== "object") return {};
   const i = input as Record<string, unknown>;
   const facts: { file?: string; command?: string; added?: number; removed?: number } = {};
@@ -129,7 +147,9 @@ const WRITTEN_NOTE_MAX = 50;
  * baştan başlarsa aynı değişikliği ikinci kez uygular ya da üzerine yazar.
  */
 function writtenNote(session: SessionHolder, cwd: string): { text: string; files: number } | undefined {
-  const files = [...(session.written ?? new Map<string, number>()).keys()].filter((f) => !session.blockedWrites?.has(f));
+  const files = [...(session.written ?? new Map<string, number>()).keys()].filter(
+    (f) => !session.blockedWrites?.has(f),
+  );
   if (!files.length) return undefined;
   const shown = files.slice(0, WRITTEN_NOTE_MAX).map((f) => {
     const rel = path.relative(cwd, f);
@@ -181,9 +201,16 @@ async function reportMcpStatus(
   const servers = toLights(list);
   mcpStatus.update(servers, "ajan"); // paneldeki durum ışığı
   const sorunlu = servers.some((s) => s.status !== "connected");
-  console.log(`  ${sorunlu ? "⚠" : "🔌"} eklentiler — ` + servers.map((s) =>
-    `${s.name}: ${MCP_STATUS_NAMES[s.status] ?? s.status}` +
-    `${s.tools !== undefined ? ` (${s.tools} araç)` : ""}${s.error ? ` (${s.error})` : ""}`).join(" · "));
+  console.log(
+    `  ${sorunlu ? "⚠" : "🔌"} eklentiler — ` +
+      servers
+        .map(
+          (s) =>
+            `${s.name}: ${MCP_STATUS_NAMES[s.status] ?? s.status}` +
+            `${s.tools !== undefined ? ` (${s.tools} araç)` : ""}${s.error ? ` (${s.error})` : ""}`,
+        )
+        .join(" · "),
+  );
   // Araç listesi olaya konmaz (her ajan koşusunda kayda yazılırdı) — panel /mcp-status'tan alır
   bus.emit({ type: "mcp_status", agent: agentKey, servers: servers.map(({ toolList: _, version: __, ...s }) => s) });
 }
@@ -313,15 +340,17 @@ async function compactSession(
         cwd,
         resume: sessionId,
         abortController: ac,
-        systemPrompt: { type: "preset", preset: "claude_code", append: withUserPrompt(agent.systemPrompt, cfg.userPrompt) },
+        systemPrompt: {
+          type: "preset",
+          preset: "claude_code",
+          append: withUserPrompt(agent.systemPrompt, cfg.userPrompt),
+        },
         allowedTools: [],
         permissionMode: "acceptEdits",
         strictMcpConfig: true,
         ...(env ? { env } : {}),
         ...(model ? { model } : {}),
-        ...(effort === "off"
-          ? { thinking: { type: "disabled" as const } }
-          : effort ? { effort } : {}),
+        ...(effort === "off" ? { thinking: { type: "disabled" as const } } : effort ? { effort } : {}),
       },
     });
     for await (const m of q) {
@@ -382,7 +411,9 @@ async function compactWithRetry(
   knownInfo?: ContextInfo,
 ): Promise<CompactResult> {
   const info = contextInfo(agent.config.model ?? cfg.model, withLiveResilience(cfg)) ?? knownInfo;
-  console.log(`  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : reason === "is" ? "iş ortasında eşik aşıldı" : "bağlam doldu"})…`);
+  console.log(
+    `  📦 ${agent.name}: konuşma özetleniyor (${reason === "esik" ? "eşik aşıldı" : reason === "is" ? "iş ortasında eşik aşıldı" : "bağlam doldu"})…`,
+  );
   bus.emit({ type: "context_compacting", agent: agent.key, tokens: tokens ?? 0, limit: info?.limit, reason });
   let step = 0;
   let suspect = 0;
@@ -391,17 +422,25 @@ async function compactWithRetry(
     const f = r.failure;
     const s = retrySettings(cfg.retry);
     const giveUp =
-      r.ok || !f || f.kind === "context_full" || f.kind === "lost_session" ||
+      r.ok ||
+      !f ||
+      f.kind === "context_full" ||
+      f.kind === "lost_session" ||
       (!f.infra && ++suspect >= SUSPECT_SWITCH) ||
-      !s.enabled || (s.maxAttempts > 0 && attempt >= s.maxAttempts);
+      !s.enabled ||
+      (s.maxAttempts > 0 && attempt >= s.maxAttempts);
     if (giveUp) {
-      console.log(r.ok
-        ? `  📦 ${agent.name}: konuşma özetlendi (${r.pre ?? "?"} → ${r.post ?? "?"} token)`
-        : `  ⚠ ${agent.name}: konuşma özetlenemedi (${r.error})`);
+      console.log(
+        r.ok
+          ? `  📦 ${agent.name}: konuşma özetlendi (${r.pre ?? "?"} → ${r.post ?? "?"} jeton)`
+          : `  ⚠ ${agent.name}: konuşma özetlenemedi (${r.error})`,
+      );
       return r;
     }
     const delay = backoffDelay(step++, s);
-    console.warn(`  🔌 ${agent.name}: özetleme — ${f.reason}, ${(delay / 1000).toFixed(1)}sn sonra yeniden [${(r.error ?? "").slice(0, 200)}]`);
+    console.warn(
+      `  🔌 ${agent.name}: özetleme — ${f.reason}, ${(delay / 1000).toFixed(1)}sn sonra yeniden [${(r.error ?? "").slice(0, 200)}]`,
+    );
     bus.emit({
       type: "agent_retrying",
       agent: agent.key,
@@ -454,7 +493,9 @@ function writeScopeHook(
                 scope: root,
                 repo: info.repo,
               });
-              console.log(`\n🚫 ${info.agent}: ${full} ${info.repo ? "mıntıkası" : "hedef dizin"} dışında — yazma engellendi`);
+              console.log(
+                `\n🚫 ${info.agent}: ${full} ${info.repo ? "mıntıkası" : "hedef dizin"} dışında — yazma engellendi`,
+              );
               return {
                 decision: "block",
                 reason: info.repo
@@ -527,7 +568,12 @@ async function executeQuery(
     // Config hook'larına ek olarak yazma kapsamı kapısı (ikisi de çalışır): fanout kopyası
     // kendi mıntıkasıyla, diğer ajanlar hedef dizinle sınırlı — dışarı yazma girişimi
     // ajanı düşürmez, engellenip kullanıcıya gösterilir
-    const scope = writeScopeHook(opts.writeScope ?? cwd, cwd, { agent: agent.key, bus, repo: !!opts.writeScope, session });
+    const scope = writeScopeHook(opts.writeScope ?? cwd, cwd, {
+      agent: agent.key,
+      bus,
+      repo: !!opts.writeScope,
+      session,
+    });
     hooks = { ...hooks, PreToolUse: [...(hooks?.PreToolUse ?? []), ...scope.PreToolUse!] };
   }
   const result: AgentRunResult = { text: "" };
@@ -571,168 +617,180 @@ async function executeQuery(
   let iterator;
   try {
     iterator = query({
-    prompt,
-    options: {
-      cwd,
-      // Kullanıcı iptali (ve takılma bekçisi): abort edilince SDK alttaki Claude Code sürecini öldürür
-      abortController: attemptAc,
-      // Yanıt parça parça gelsin — takılma bekçisi akışın sürdüğünü buradan anlar
-      ...(watch ? { includePartialMessages: true } : {}),
-      // Verilirse önceki oturumu sürdürür (yeni session açmak yerine)
-      ...(resume ? { resume } : {}),
-      // Claude Code'un varsayılan system prompt'u korunur, md içeriği eklenir —
-      // böylece araç kullanımı davranışı bozulmaz.
-      systemPrompt: { type: "preset", preset: "claude_code", append: withUserPrompt(agent.systemPrompt, cfg.userPrompt) },
-      allowedTools: agent.config.tools.filter((t) => !isOffMcpTool(t, offMcp)),
-      permissionMode: "acceptEdits",
-      ...(useSchema && agent.outputSchema
-        ? { outputFormat: { type: "json_schema" as const, schema: agent.outputSchema } }
-        : {}),
-      ...(mcpServers ? { mcpServers: mcpServers as Record<string, McpServerConfig> } : {}),
-      // Yalnızca config'teki eklentiler: makinedeki kullanıcı ayarı (~/.claude.json),
-      // hedef projenin .mcp.json'u ve eklenti paketleri yok sayılır. Bu olmadan ajan
-      // onlara da bağlanıyordu (sahte eklentilerle doğrulandı) — Aç/Kapat'ta kapatılan
-      // bir eklenti de aynı adla başka yerde tanımlıysa yine açılırdı.
-      strictMcpConfig: true,
-      ...(hooks ? { hooks } : {}),
-      ...(env ? { env } : {}),
-      ...(model ? { model } : {}),
-      // Akıl yürütme derinliği — ajan düğümündeki ayar oturum/genel ayarı ezer.
-      // "off": düşünme kapalı (istekte thinking alanı hiç gitmez)
-      ...(effort === "off"
-        ? { thinking: { type: "disabled" as const } }
-        : effort ? { effort } : {}),
-    },
-  });
-  for await (const message of iterator) {
-    lastActivity = Date.now();
-    if (message.type === "stream_event") {
-      const t = (message.event as { type?: string }).type;
-      if (t === "message_start") streaming = true;
-      else if (t === "message_stop") streaming = false;
-      continue;
-    }
-    if (message.type === "system" && message.subtype === "status") {
-      streaming = false; // yeni istek başlıyor — ilk bayt beklemesi bekçinin dışında
-    } else if (message.type === "system" && message.subtype === "api_retry") {
-      // Claude Code isteği kendi içinde yeniden deniyor (503, zaman aşımı, kopma…)
-      streaming = false;
-      const reason = apiErrorReason(message.error_status, message.error);
-      console.warn(`  ⏳ ${agent.name}: ${reason} — model sunucusu yeniden deneniyor (${message.attempt}/${message.max_retries})`);
-      bus.emit({
-        type: "api_retry",
-        agent: agent.key,
-        attempt: message.attempt,
-        maxRetries: message.max_retries,
-        delayMs: Math.round(message.retry_delay_ms),
-        reason,
-      });
-    } else if (message.type === "system" && message.subtype === "init") {
-      // Oturum kimliği daha ilk mesajda gelir — bağlantı ortada kopsa bile
-      // elimizde kalsın ki yeniden deneme baştan değil resume ile yapılabilsin
-      if (session.id !== message.session_id) opts.onSession?.(message.session_id);
-      session.id = message.session_id;
-      if (mcpServers && !session.mcpReported) {
-        session.mcpReported = true;
-        void reportMcpStatus(iterator, agent.key, bus, () => queryDone);
-      }
-    } else if (message.type === "assistant") {
-      // Claude Code'un ürettiği hata mesajı ("API Error: 503 …") ajanın sözü değil —
-      // sohbete yazılmaz, hata kodu sınıflandırma için saklanır
-      if (message.error) {
-        session.apiError = message.error;
-        // Yanıt sınırı: Claude Code modele devam ettirmeyi dener ama şemalı çıktı yarıda
-        // kalmış olabilir — sessizce geçilmesin, panelde ve kartta görünsün
-        if (message.error === "max_output_tokens") {
-          const metin = (message.message.content as Array<{ type: string; text?: string }>)
-            .map((b) => (b.type === "text" ? b.text ?? "" : "")).join(" ");
-          const sayi = Number(/exceeded the (\d+) output token maximum/.exec(metin)?.[1]);
-          const limit = sayi > 0 ? sayi : (cfg.limits?.maxOutputTokens ?? DEFAULT_OUTPUT_RESERVE);
-          console.warn(`  ✂ ${agent.name}: yanıt sınırına (${limit} jeton) takıldı, Claude Code devam ettiremedi`);
-          bus.emit({ type: "output_limit", agent: agent.key, limit, exhausted: true });
-        }
+      prompt,
+      options: {
+        cwd,
+        // Kullanıcı iptali (ve takılma bekçisi): abort edilince SDK alttaki Claude Code sürecini öldürür
+        abortController: attemptAc,
+        // Yanıt parça parça gelsin — takılma bekçisi akışın sürdüğünü buradan anlar
+        ...(watch ? { includePartialMessages: true } : {}),
+        // Verilirse önceki oturumu sürdürür (yeni session açmak yerine)
+        ...(resume ? { resume } : {}),
+        // Claude Code'un varsayılan system prompt'u korunur, md içeriği eklenir —
+        // böylece araç kullanımı davranışı bozulmaz.
+        systemPrompt: {
+          type: "preset",
+          preset: "claude_code",
+          append: withUserPrompt(agent.systemPrompt, cfg.userPrompt),
+        },
+        allowedTools: agent.config.tools.filter((t) => !isOffMcpTool(t, offMcp)),
+        permissionMode: "acceptEdits",
+        ...(useSchema && agent.outputSchema
+          ? { outputFormat: { type: "json_schema" as const, schema: agent.outputSchema } }
+          : {}),
+        ...(mcpServers ? { mcpServers: mcpServers as Record<string, McpServerConfig> } : {}),
+        // Yalnızca config'teki eklentiler: makinedeki kullanıcı ayarı (~/.claude.json),
+        // hedef projenin .mcp.json'u ve eklenti paketleri yok sayılır. Bu olmadan ajan
+        // onlara da bağlanıyordu (sahte eklentilerle doğrulandı) — Aç/Kapat'ta kapatılan
+        // bir eklenti de aynı adla başka yerde tanımlıysa yine açılırdı.
+        strictMcpConfig: true,
+        ...(hooks ? { hooks } : {}),
+        ...(env ? { env } : {}),
+        ...(model ? { model } : {}),
+        // Akıl yürütme derinliği — ajan düğümündeki ayar oturum/genel ayarı ezer.
+        // "off": düşünme kapalı (istekte thinking alanı hiç gitmez)
+        ...(effort === "off" ? { thinking: { type: "disabled" as const } } : effort ? { effort } : {}),
+      },
+    });
+    for await (const message of iterator) {
+      lastActivity = Date.now();
+      if (message.type === "stream_event") {
+        const t = (message.event as { type?: string }).type;
+        if (t === "message_start") streaming = true;
+        else if (t === "message_stop") streaming = false;
         continue;
       }
-      session.progressed = true;
-      // Konuşmanın boyutu: bu yanıtın girdi+çıktısı (alt ajan mesajları ana konuşmaya girmez)
-      const tokens = message.parent_tool_use_id ? undefined : tokensOfUsage(message.message.usage);
-      if (tokens && tokens !== session.contextTokens) {
-        session.contextTokens = tokens;
-        bus.emit({ type: "context_usage", agent: agent.key, tokens, window: ctxInfo?.window, limit: ctxInfo?.limit });
-      }
-      // Eşik geçildi ve model araç kullanıyor (iş sürüyor): araç bitince turu kes.
-      // Şema çıktısı (StructuredOutput) ya da araçsız yanıt = iş bitiyor, kesilmez
-      if (midLimit && !midRequested && tokens && tokens >= midLimit) {
-        const blocks = message.message.content as Array<{ type: string; name?: string }>;
-        const working = blocks.some((b) => b.type === "tool_use" && !/StructuredOutput/i.test(b.name ?? ""));
-        midPending = working;
-      }
-      for (const block of message.message.content) {
-        if (block.type === "text" && block.text.trim()) {
-          console.log(block.text);
-          bus.emit({ type: "agent_text", agent: agent.key, text: block.text });
-        } else if (block.type === "tool_use") {
-          const detail = toolDetail(block.input);
-          if (WRITE_TOOLS.has(block.name)) {
-            const f = toolFacts(block.name, block.input).file;
-            if (f) {
-              const full = path.resolve(cwd, f);
-              (session.written ??= new Map()).set(full, (session.written.get(full) ?? 0) + 1);
+      if (message.type === "system" && message.subtype === "status") {
+        streaming = false; // yeni istek başlıyor — ilk bayt beklemesi bekçinin dışında
+      } else if (message.type === "system" && message.subtype === "api_retry") {
+        // Claude Code isteği kendi içinde yeniden deniyor (503, zaman aşımı, kopma…)
+        streaming = false;
+        const reason = apiErrorReason(message.error_status, message.error);
+        console.warn(
+          `  ⏳ ${agent.name}: ${reason} — model sunucusu yeniden deneniyor (${message.attempt}/${message.max_retries})`,
+        );
+        bus.emit({
+          type: "api_retry",
+          agent: agent.key,
+          attempt: message.attempt,
+          maxRetries: message.max_retries,
+          delayMs: Math.round(message.retry_delay_ms),
+          reason,
+        });
+      } else if (message.type === "system" && message.subtype === "init") {
+        // Oturum kimliği daha ilk mesajda gelir — bağlantı ortada kopsa bile
+        // elimizde kalsın ki yeniden deneme baştan değil resume ile yapılabilsin
+        if (session.id !== message.session_id) opts.onSession?.(message.session_id);
+        session.id = message.session_id;
+        if (mcpServers && !session.mcpReported) {
+          session.mcpReported = true;
+          void reportMcpStatus(iterator, agent.key, bus, () => queryDone);
+        }
+      } else if (message.type === "assistant") {
+        // Claude Code'un ürettiği hata mesajı ("API Error: 503 …") ajanın sözü değil —
+        // sohbete yazılmaz, hata kodu sınıflandırma için saklanır
+        if (message.error) {
+          session.apiError = message.error;
+          // Yanıt sınırı: Claude Code modele devam ettirmeyi dener ama şemalı çıktı yarıda
+          // kalmış olabilir — sessizce geçilmesin, panelde ve kartta görünsün
+          if (message.error === "max_output_tokens") {
+            const metin = (message.message.content as Array<{ type: string; text?: string }>)
+              .map((b) => (b.type === "text" ? (b.text ?? "") : ""))
+              .join(" ");
+            const sayi = Number(/exceeded the (\d+) output token maximum/.exec(metin)?.[1]);
+            const limit = sayi > 0 ? sayi : (cfg.limits?.maxOutputTokens ?? DEFAULT_OUTPUT_RESERVE);
+            console.warn(`  ✂ ${agent.name}: yanıt sınırına (${limit} jeton) takıldı, Claude Code devam ettiremedi`);
+            bus.emit({ type: "output_limit", agent: agent.key, limit, exhausted: true });
+          }
+          continue;
+        }
+        session.progressed = true;
+        // Konuşmanın boyutu: bu yanıtın girdi+çıktısı (alt ajan mesajları ana konuşmaya girmez)
+        const tokens = message.parent_tool_use_id ? undefined : tokensOfUsage(message.message.usage);
+        if (tokens && tokens !== session.contextTokens) {
+          session.contextTokens = tokens;
+          bus.emit({ type: "context_usage", agent: agent.key, tokens, window: ctxInfo?.window, limit: ctxInfo?.limit });
+        }
+        // Eşik geçildi ve model araç kullanıyor (iş sürüyor): araç bitince turu kes.
+        // Şema çıktısı (StructuredOutput) ya da araçsız yanıt = iş bitiyor, kesilmez
+        if (midLimit && !midRequested && tokens && tokens >= midLimit) {
+          const blocks = message.message.content as Array<{ type: string; name?: string }>;
+          const working = blocks.some((b) => b.type === "tool_use" && !/StructuredOutput/i.test(b.name ?? ""));
+          midPending = working;
+        }
+        for (const block of message.message.content) {
+          if (block.type === "text" && block.text.trim()) {
+            console.log(block.text);
+            bus.emit({ type: "agent_text", agent: agent.key, text: block.text });
+          } else if (block.type === "tool_use") {
+            const detail = toolDetail(block.input);
+            if (WRITE_TOOLS.has(block.name)) {
+              const f = toolFacts(block.name, block.input).file;
+              if (f) {
+                const full = path.resolve(cwd, f);
+                (session.written ??= new Map()).set(full, (session.written.get(full) ?? 0) + 1);
+              }
+            }
+            console.log(`  🔧 ${block.name}${detail ? `: ${detail}` : ""}`);
+            // Detaysız araç çağrıları loglanmaz — panelde gürültü yaratıyordu
+            if (detail) {
+              bus.emit({
+                type: "tool_used",
+                agent: agent.key,
+                tool: block.name,
+                detail,
+                ...toolFacts(block.name, block.input),
+              });
             }
           }
-          console.log(`  🔧 ${block.name}${detail ? `: ${detail}` : ""}`);
-          // Detaysız araç çağrıları loglanmaz — panelde gürültü yaratıyordu
-          if (detail) {
-            bus.emit({ type: "tool_used", agent: agent.key, tool: block.name, detail, ...toolFacts(block.name, block.input) });
+        }
+      } else if (message.type === "user" && midPending && !midRequested && !message.parent_tool_use_id) {
+        // Araç sonucu kayda geçti — sıradaki model isteğinden önce turu düzgünce kes
+        midRequested = true;
+        midPending = false;
+        console.log(
+          `  📦 ${agent.name}: bağlam eşiği geçti (${session.contextTokens} jeton) — tur kesiliyor, konuşma özetlenecek`,
+        );
+        void iterator.interrupt().catch(() => {});
+      } else if (message.type === "result") {
+        // Kurmay'ın kestiği tur: hata değil — özetlenip sürdürülecek
+        if (midRequested && (message.subtype !== "success" || message.is_error)) {
+          throw new MidCompactSignal(session.contextTokens ?? 0);
+        }
+        if (message.subtype === "success") {
+          // Hata sonucu (CLI denemeleri tükendi): metin "API Error: …" — çıktı sayılmaz
+          if (message.is_error) throw new Error(message.result || "model sunucusu hata döndürdü");
+          result.text = message.result;
+          result.sessionId = message.session_id;
+          result.contextTokens = session.contextTokens;
+          session.id = message.session_id;
+          // SDK bu alanı her zaman gönderir; yine de eski sürümde patlamasın diye korumalı
+          const modelUsage: Record<string, { inputTokens: number; outputTokens: number }> = message.modelUsage ?? {};
+          result.metrics = {
+            durationMs: message.duration_ms,
+            apiDurationMs: message.duration_api_ms,
+            turns: message.num_turns,
+            inputTokens: message.usage.input_tokens,
+            outputTokens: message.usage.output_tokens,
+            cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+            costUsd: message.total_cost_usd,
+            perModel: Object.entries(modelUsage).map(([model, u]) => ({
+              model,
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+            })),
+          };
+          if (message.structured_output !== undefined) {
+            result.structured = message.structured_output;
           }
+        } else if (message.subtype === "error_max_structured_output_retries") {
+          return SCHEMA_FAILED;
+        } else {
+          const detail = "errors" in message && message.errors?.length ? `: ${message.errors.join("; ")}` : "";
+          throw new Error(`${agent.name} hata ile durdu: ${message.subtype}${detail}`);
         }
-      }
-    } else if (message.type === "user" && midPending && !midRequested && !message.parent_tool_use_id) {
-      // Araç sonucu kayda geçti — sıradaki model isteğinden önce turu düzgünce kes
-      midRequested = true;
-      midPending = false;
-      console.log(`  📦 ${agent.name}: bağlam eşiği geçti (${session.contextTokens} jeton) — tur kesiliyor, konuşma özetlenecek`);
-      void iterator.interrupt().catch(() => {});
-    } else if (message.type === "result") {
-      // Kurmay'ın kestiği tur: hata değil — özetlenip sürdürülecek
-      if (midRequested && (message.subtype !== "success" || message.is_error)) {
-        throw new MidCompactSignal(session.contextTokens ?? 0);
-      }
-      if (message.subtype === "success") {
-        // Hata sonucu (CLI denemeleri tükendi): metin "API Error: …" — çıktı sayılmaz
-        if (message.is_error) throw new Error(message.result || "model sunucusu hata döndürdü");
-        result.text = message.result;
-        result.sessionId = message.session_id;
-        result.contextTokens = session.contextTokens;
-        session.id = message.session_id;
-        // SDK bu alanı her zaman gönderir; yine de eski sürümde patlamasın diye korumalı
-        const modelUsage: Record<string, { inputTokens: number; outputTokens: number }> =
-          message.modelUsage ?? {};
-        result.metrics = {
-          durationMs: message.duration_ms,
-          apiDurationMs: message.duration_api_ms,
-          turns: message.num_turns,
-          inputTokens: message.usage.input_tokens,
-          outputTokens: message.usage.output_tokens,
-          cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
-          costUsd: message.total_cost_usd,
-          perModel: Object.entries(modelUsage).map(([model, u]) => ({
-            model,
-            inputTokens: u.inputTokens,
-            outputTokens: u.outputTokens,
-          })),
-        };
-        if (message.structured_output !== undefined) {
-          result.structured = message.structured_output;
-        }
-      } else if (message.subtype === "error_max_structured_output_retries") {
-        return SCHEMA_FAILED;
-      } else {
-        const detail = "errors" in message && message.errors?.length ? `: ${message.errors.join("; ")}` : "";
-        throw new Error(`${agent.name} hata ile durdu: ${message.subtype}${detail}`);
       }
     }
-  }
   } catch (err) {
     // Kullanıcı iptali (abort) → koşuyu temiz durdur; takılma → yeniden denensin
     if (abortController.signal.aborted) throw new RunCancelledError();
@@ -801,13 +859,21 @@ async function reportLostSession(
   const projectsDir = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), "projects");
   console.warn(
     `  ⚠ ${agent.name}: önceki konuşma (${sessionId}) ` +
-      (foundDir ? `başka klasörde kayıtlı: ${foundDir} (bu koşunun dizini: ${cwd})` : `bulunamadı (aranan yer: ${projectsDir})`) +
+      (foundDir
+        ? `başka klasörde kayıtlı: ${foundDir} (bu koşunun dizini: ${cwd})`
+        : `bulunamadı (aranan yer: ${projectsDir})`) +
       (searchError ? ` [arama hatası: ${searchError}]` : "") +
       ` — yeni konuşmayla başlanıyor${recap ? ", önceki görevlerin özeti verildi" : ""}`,
   );
   bus.emit({
-    type: "session_lost", agent: agent.key, sessionId, cwd, projectsDir,
-    ...(foundDir ? { foundDir } : {}), ...(searchError ? { searchError } : {}), ...(recap ? { recap } : {}),
+    type: "session_lost",
+    agent: agent.key,
+    sessionId,
+    cwd,
+    projectsDir,
+    ...(foundDir ? { foundDir } : {}),
+    ...(searchError ? { searchError } : {}),
+    ...(recap ? { recap } : {}),
   });
 }
 
@@ -821,7 +887,8 @@ async function countOutputLimits(sessionId: string, cwd: string): Promise<number
     let msgs = await getSessionMessages(sessionId, { dir: cwd });
     if (msgs.length === 0) msgs = await getSessionMessages(sessionId);
     return msgs.filter(
-      (m) => m.type === "assistant" && (m.message as { stop_reason?: unknown } | undefined)?.stop_reason === "max_tokens",
+      (m) =>
+        m.type === "assistant" && (m.message as { stop_reason?: unknown } | undefined)?.stop_reason === "max_tokens",
     ).length;
   } catch {
     return undefined;
@@ -895,7 +962,8 @@ async function executeWithRetry(
     attemptPrompt = taskText;
     return {
       recap: !!recap,
-      note: (recap ? ", önceki görevlerin özeti verildi" : "") +
+      note:
+        (recap ? ", önceki görevlerin özeti verildi" : "") +
         (written ? `, önceki konuşmada yazdığı ${written.files} dosya kendisine bildirildi` : ""),
     };
   };
@@ -912,17 +980,38 @@ async function executeWithRetry(
         // İş ortasında eşik geçti: özetle ve aynı konuşmadan kaldığı yerden sürdür.
         // Deneme/hata sayılmaz. Özetlenemezse ya da işe yaramazsa bu koşuda bir daha
         // denenmez — duvara çarparsa "bağlam doldu" kurtarması devrede
-        const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "is", err.tokens, session.ctxInfo);
+        const r = await compactWithRetry(
+          agent,
+          session.id,
+          cwd,
+          cfg,
+          bus,
+          abortController,
+          "is",
+          err.tokens,
+          session.ctxInfo,
+        );
         const lim = session.ctxInfo?.limit;
         const pct = compactPercent(withLiveResilience(cfg));
-        if (!r.ok || !r.post || (lim && pct > 0 && r.post >= (lim * pct) / 100 * 0.9)) session.midCompactOff = true;
+        if (!r.ok || !r.post || (lim && pct > 0 && r.post >= ((lim * pct) / 100) * 0.9)) session.midCompactOff = true;
         bus.emit({
-          type: "context_compacted", agent: agent.key, ok: r.ok, pre: r.pre, post: r.post, error: r.error,
+          type: "context_compacted",
+          agent: agent.key,
+          ok: r.ok,
+          pre: r.pre,
+          post: r.post,
+          error: r.error,
           ...(r.ok ? {} : { fallback: "devam" as const }),
         });
         if (r.ok && r.post) {
           session.contextTokens = r.post;
-          bus.emit({ type: "context_usage", agent: agent.key, tokens: r.post, window: session.ctxInfo?.window, limit: lim });
+          bus.emit({
+            type: "context_usage",
+            agent: agent.key,
+            tokens: r.post,
+            window: session.ctxInfo?.window,
+            limit: lim,
+          });
         }
         // Görev konuşmada (özetin içinde) — tekrar gönderilmez, kaldığı yerden.
         // Özetlenemediyse konuşma olduğu gibi duruyor: yalnızca "devam et"
@@ -957,7 +1046,9 @@ async function executeWithRetry(
         note = "konuşma sunucuya gönderilemiyor — yeni konuşmayla başlanacak" + freshConversation().note;
         decided = true;
       } else if (info.kind === "permanent" && s.permanentMaxAttempts > 0 && permanentRun >= s.permanentMaxAttempts) {
-        throw new Error(`${error} — ${info.reason}: üst üste ${permanentRun} denemede düzelmedi, ayarları kontrol et`);
+        throw new Error(`${error} — ${info.reason}: üst üste ${permanentRun} denemede düzelmedi, ayarları kontrol et`, {
+          cause: err,
+        });
       } else if (info.kind === "lost_session") {
         // Önceki konuşma kayboldu: nerede olduğunu (varsa) bul, panele sebebiyle yaz —
         // "neden hatırlamıyor" sorusu tahmine kalmasın
@@ -981,15 +1072,33 @@ async function executeWithRetry(
         contextFull++;
         // Özet ve yeni konuşma denendi, model arada hiç ilerleyemedi → görev sığmıyor
         if (!session.id || contextFull >= 3) {
-          throw new Error(`${error} — ${info.reason}: görev yeni bir konuşmaya da sığmadı (modelin bağlam penceresi küçük)`);
+          throw new Error(
+            `${error} — ${info.reason}: görev yeni bir konuşmaya da sığmadı (modelin bağlam penceresi küçük)`,
+            { cause: err },
+          );
         }
         let compacted = false;
         if (contextFull === 1) {
-          const r = await compactWithRetry(agent, session.id, cwd, cfg, bus, abortController, "dolu", session.contextTokens, session.ctxInfo);
+          const r = await compactWithRetry(
+            agent,
+            session.id,
+            cwd,
+            cfg,
+            bus,
+            abortController,
+            "dolu",
+            session.contextTokens,
+            session.ctxInfo,
+          );
           compacted = r.ok;
           if (r.ok) session.contextTokens = r.post;
           bus.emit({
-            type: "context_compacted", agent: agent.key, ok: r.ok, pre: r.pre, post: r.post, error: r.error,
+            type: "context_compacted",
+            agent: agent.key,
+            ok: r.ok,
+            pre: r.pre,
+            post: r.post,
+            error: r.error,
             ...(r.ok ? {} : { fallback: "yeni" as const }),
           });
         }
@@ -1019,7 +1128,8 @@ async function executeWithRetry(
       const delay = info.kind === "lost_session" ? 0 : backoffDelay(step, s);
       if (info.kind !== "lost_session") step++;
       const continued = attemptPrompt === CONTINUE_PROMPT || attemptPrompt === CONTINUE_PROMPT_SHORT;
-      const nasil = note || (!session.id ? "oturum baştan" : continued ? "kaldığı yerden devam" : "oturum sürdürülecek");
+      const nasil =
+        note || (!session.id ? "oturum baştan" : continued ? "kaldığı yerden devam" : "oturum sürdürülecek");
       const sn = delay < 10_000 ? (delay / 1000).toFixed(1) : String(Math.round(delay / 1000));
       console.warn(
         `\n🔌 ${agent.name}: ${info.reason} — ${sn}sn sonra ${attempt}. yeniden deneme (${nasil}) [${error.slice(0, 200)}]`,
@@ -1068,7 +1178,8 @@ export async function runAgent(
   let outputLimit: { hits: number; limit: number } | undefined;
   const unsubscribe = bus.subscribe((e) => {
     if (e.type === "agent_retrying" && e.agent === agent.key) retries++;
-    if (e.type === "output_limit" && e.agent === agent.key) outputLimit = { hits: (outputLimit?.hits ?? 0) + (e.hits ?? 1), limit: e.limit };
+    if (e.type === "output_limit" && e.agent === agent.key)
+      outputLimit = { hits: (outputLimit?.hits ?? 0) + (e.hits ?? 1), limit: e.limit };
   });
   try {
     // Bağlam penceresi model listesinden — yalnızca henüz bilinmiyorsa çekilir, bir kez yeter
@@ -1080,7 +1191,18 @@ export async function runAgent(
       const recap = had && !resume ? opts.recap?.() : undefined;
       if (recap) prompt = `${recap}\n\n${prompt}`;
     }
-    return await runAgentInner(agent, prompt, cwd, cfg, bus, abortController, resume, opts, () => retries, () => outputLimit);
+    return await runAgentInner(
+      agent,
+      prompt,
+      cwd,
+      cfg,
+      bus,
+      abortController,
+      resume,
+      opts,
+      () => retries,
+      () => outputLimit,
+    );
   } finally {
     unsubscribe();
   }
@@ -1113,11 +1235,18 @@ async function compactIfNeeded(
   const r = await compactWithRetry(agent, resume, cwd, cfg, bus, abortController, "esik", tokens);
   if (r.ok) {
     bus.emit({ type: "context_compacted", agent: agent.key, ok: true, pre: r.pre, post: r.post });
-    if (r.post) bus.emit({ type: "context_usage", agent: agent.key, tokens: r.post, window: info.window, limit: info.limit });
+    if (r.post)
+      bus.emit({ type: "context_usage", agent: agent.key, tokens: r.post, window: info.window, limit: info.limit });
     return { resume, opts: { ...opts, contextTokens: r.post } };
   }
   const yeni = pct >= FORCE_NEW_PERCENT;
-  bus.emit({ type: "context_compacted", agent: agent.key, ok: false, error: r.error, fallback: yeni ? "yeni" : "devam" });
+  bus.emit({
+    type: "context_compacted",
+    agent: agent.key,
+    ok: false,
+    error: r.error,
+    fallback: yeni ? "yeni" : "devam",
+  });
   return yeni ? { resume: undefined, opts: { ...opts, contextTokens: undefined } } : { resume, opts };
 }
 
@@ -1163,7 +1292,17 @@ async function runAgentInner(
     console.warn(`\n⚠ ${note}`);
     bus.emit({ type: "agent_text", agent: agent.key, text: `⚠ ${note}` });
     const repairSession: SessionHolder = { id: result.sessionId };
-    const repaired = await executeWithRetry(agent, REPAIR_PROMPT, cwd, cfg, bus, true, abortController, repairSession, opts);
+    const repaired = await executeWithRetry(
+      agent,
+      REPAIR_PROMPT,
+      cwd,
+      cfg,
+      bus,
+      true,
+      abortController,
+      repairSession,
+      opts,
+    );
     if (repaired !== SCHEMA_FAILED) {
       const metrics = mergeMetrics(result.metrics, repaired.metrics);
       if (repaired.structured !== undefined) {
@@ -1181,10 +1320,12 @@ async function runAgentInner(
   // Sürdürme tükendiyse (hata mesajı) zaten anında bildirildi — iki kez sayılmasın
   if (!outputLimit() && result.sessionId) {
     const after = await countOutputLimits(result.sessionId, cwd);
-    const hits = (after ?? 0) - (result.sessionId === resume ? limitsBefore ?? 0 : 0);
+    const hits = (after ?? 0) - (result.sessionId === resume ? (limitsBefore ?? 0) : 0);
     if (hits > 0) {
       const limit = cfg.limits?.maxOutputTokens ?? DEFAULT_OUTPUT_RESERVE;
-      console.warn(`  ✂ ${agent.name}: ${hits} yanıt sınıra (${limit} jeton) takılıp kesildi — Claude Code devam ettirdi`);
+      console.warn(
+        `  ✂ ${agent.name}: ${hits} yanıt sınıra (${limit} jeton) takılıp kesildi — Claude Code devam ettirdi`,
+      );
       bus.emit({ type: "output_limit", agent: agent.key, limit, hits });
     }
   }
@@ -1209,7 +1350,7 @@ async function runAgentInner(
     const sn = (ms: number) => (ms / 1000).toFixed(1);
     console.log(
       `  📊 ${sn(m.durationMs)}sn (API ${sn(m.apiDurationMs)}sn) · ${m.turns} tur · ` +
-        `${m.inputTokens} girdi / ${m.outputTokens} çıktı token`,
+        `${m.inputTokens} girdi / ${m.outputTokens} çıktı jeton`,
     );
     // Birden fazla model = arka planda ikinci bir model çalışmış (ör. SMALL_FAST)
     if (m.perModel.length > 1) {

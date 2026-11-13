@@ -75,12 +75,7 @@ export function buildPlan(
 const MAX_LOG_TAIL = 6000; // hata geri bildiriminde tutulacak çıktı sonu (karakter)
 
 /** Tek bir reponun build komutunu kendi dizininde çalıştırır */
-function runOne(
-  module: string,
-  command: string,
-  cwd: string,
-  bus: EventBus,
-): Promise<{ code: number; tail: string }> {
+function runOne(module: string, command: string, cwd: string, bus: EventBus): Promise<{ code: number; tail: string }> {
   return new Promise((resolve) => {
     bus.emit({ type: "build_module_started", module, command });
     let tail = "";

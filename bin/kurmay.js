@@ -27,7 +27,9 @@ if (args[0] === "init") {
   // "serve" yalnızca okunaklılık için — orkestratör görev verilmezse zaten sunucu modunda açılır
   if (args[0] === "serve") process.argv.splice(2, 1);
   if (!args.includes("--config") && !fs.existsSync("config.json")) {
-    console.error("Bu klasörde config.json yok. Önce çalışma klasörünü hazırla:\n  kurmay init\n(ya da --config ile ayar dosyasının yolunu ver)");
+    console.error(
+      "Bu klasörde config.json yok. Önce çalışma klasörünü hazırla:\n  kurmay init\n(ya da --config ile ayar dosyasının yolunu ver)",
+    );
     process.exit(1);
   }
   await import(pathToFileURL(path.join(paket, "dist", "index.js")).href);
@@ -123,9 +125,12 @@ function update(hedef) {
   kayitYaz(hedef, kayit);
 
   console.log(`Çalışma klasörü: ${hedef}`);
-  console.log(`  paket sürümü: ${surum}${onceki && onceki !== surum ? ` (klasör en son ${onceki} ile tazelenmişti)` : ""}`);
+  console.log(
+    `  paket sürümü: ${surum}${onceki && onceki !== surum ? ` (klasör en son ${onceki} ile tazelenmişti)` : ""}`,
+  );
   if (eklendi.length) console.log(`\n  ＋ eklendi (${eklendi.length}):\n${liste(eklendi)}`);
-  if (guncellendi.length) console.log(`\n  ↻ güncellendi — sen değiştirmemiştin (${guncellendi.length}):\n${liste(guncellendi)}`);
+  if (guncellendi.length)
+    console.log(`\n  ↻ güncellendi — sen değiştirmemiştin (${guncellendi.length}):\n${liste(guncellendi)}`);
   if (karar.length) {
     console.log(
       `\n  ✋ senin değiştirdiğin dosyalar — dokunulmadı, yeni sürümü yanına ".yeni" olarak kondu (${karar.length}):\n${liste(karar)}` +
@@ -133,7 +138,8 @@ function update(hedef) {
         "\n    (Sonraki update, asıl dosya yeni sürümle aynıysa .yeni'yi kendisi temizler.)",
     );
   }
-  if (!eklendi.length && !guncellendi.length && !karar.length) console.log(`\n  Şablonlar zaten güncel (${ayni} dosya).`);
+  if (!eklendi.length && !guncellendi.length && !karar.length)
+    console.log(`\n  Şablonlar zaten güncel (${ayni} dosya).`);
   console.log("\n  config.json'a dokunulmadı. Değişikliklerin geçerli olması için kurmay serve'ü yeniden başlat.");
 }
 
@@ -178,7 +184,15 @@ function kayitYaz(hedef, kayit) {
   fs.mkdirSync(path.join(hedef, ".claude"), { recursive: true });
   fs.writeFileSync(
     path.join(hedef, KAYIT),
-    JSON.stringify({ aciklama: "kurmay init/update parmak izleri — elle düzenleme", surum: kayit.surum ?? surum, dosyalar: kayit.dosyalar }, null, 2) + "\n",
+    JSON.stringify(
+      {
+        aciklama: "kurmay init/update parmak izleri — elle düzenleme",
+        surum: kayit.surum ?? surum,
+        dosyalar: kayit.dosyalar,
+      },
+      null,
+      2,
+    ) + "\n",
   );
 }
 

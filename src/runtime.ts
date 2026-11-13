@@ -183,7 +183,7 @@ export class RuntimeRegistry {
 export function readRunLogs(runsDir: string, files: readonly string[]): TimedEvent[] {
   const out: TimedEvent[] = [];
   for (const f of files) {
-    let text = "";
+    let text: string;
     try {
       text = fs.readFileSync(path.join(runsDir, f), "utf8");
     } catch {

@@ -88,7 +88,10 @@ export class SecurityAuditRunner {
   start(dir: string, agent: AgentDefinition, cfg: AppConfig): AuditJob {
     const now = new Date();
     const job: AuditJob = {
-      id: `denetim-${now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `denetim-${now
+        .toISOString()
+        .replace(/[-:.TZ]/g, "")
+        .slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`,
       dir,
       model: agent.config.model ?? cfg.model,
       startedAt: now.toISOString(),
@@ -174,7 +177,9 @@ export class SecurityAuditRunner {
       job.findings = report.findings.length;
       job.status = "finished";
       const c = countBySeverity(report.findings);
-      console.log(`🛡  Bağımsız denetim bitti (${job.dir}): ${report.findings.length} bulgu (kritik ${c.critical}, yüksek ${c.high}), risk ${report.risk ?? "?"}`);
+      console.log(
+        `🛡  Bağımsız denetim bitti (${job.dir}): ${report.findings.length} bulgu (kritik ${c.critical}, yüksek ${c.high}), risk ${report.risk ?? "?"}`,
+      );
     } catch (err) {
       job.status = ac.signal.aborted ? "cancelled" : "failed";
       if (!ac.signal.aborted) {

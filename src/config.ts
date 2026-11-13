@@ -1,7 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLI_STALL_MIN_MS } from "./resilience.js";
-import { EFFORT_LEVELS, isCommandNode, isFanoutNode, type AppConfig, type EffortSetting, type McpServerJson, type ProviderConfig } from "./types.js";
+import {
+  EFFORT_LEVELS,
+  isCommandNode,
+  isFanoutNode,
+  TFS_WRITE_BACK,
+  type AppConfig,
+  type EffortSetting,
+  type McpServerJson,
+  type ProviderConfig,
+} from "./types.js";
 
 /**
  * Tek config dosyasını yükler ve doğrular: sağlayıcı bilgileri (adres, token,
@@ -10,7 +19,7 @@ import { EFFORT_LEVELS, isCommandNode, isFanoutNode, type AppConfig, type Effort
 export function loadAppConfig(configPath: string): AppConfig {
   const resolved = path.resolve(configPath);
   if (!fs.existsSync(resolved)) {
-    throw new Error(`Config dosyası bulunamadı: ${resolved}`);
+    throw new Error(`Ayar dosyası bulunamadı: ${resolved}`);
   }
 
   const cfg = JSON.parse(fs.readFileSync(resolved, "utf8")) as AppConfig;
@@ -33,11 +42,13 @@ export function loadAppConfig(configPath: string): AppConfig {
   }
   if ((cfg.effort as string | undefined) === "") delete cfg.effort;
   if (cfg.effort !== undefined && !isEffort(cfg.effort)) {
-    throw new Error(`config: "effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(cfg.effort)})`);
+    throw new Error(
+      `ayar dosyası: "effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(cfg.effort)})`,
+    );
   }
 
   if (cfg.provider !== "anthropic" && cfg.provider !== "ollama") {
-    throw new Error('config: "provider" alanı "anthropic" veya "ollama" olmalı');
+    throw new Error('ayar dosyası: "provider" alanı "anthropic" veya "ollama" olmalı');
   }
 
   if (cfg.provider === "ollama") {
@@ -50,83 +61,142 @@ export function loadAppConfig(configPath: string): AppConfig {
   // Sınırlar sayı olmalı — hatalı değer env'e "NaN" olarak sızmasın
   for (const [key, value] of Object.entries(cfg.limits ?? {})) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-      throw new Error(`config: "limits.${key}" negatif olmayan bir sayı olmalı (verilen: ${JSON.stringify(value)})`);
+      throw new Error(
+        `ayar dosyası: "limits.${key}" negatif olmayan bir sayı olmalı (verilen: ${JSON.stringify(value)})`,
+      );
     }
   }
   // Claude Code 15'in üstünü uyarıyla 15'e indiriyor — sessiz kırpma yerine açık hata
   const icDeneme = cfg.limits?.apiMaxRetries;
   if (icDeneme !== undefined && (!Number.isInteger(icDeneme) || icDeneme > 15)) {
-    throw new Error(`config: "limits.apiMaxRetries" 0 ile 15 arasında bir tam sayı olmalı (verilen: ${JSON.stringify(icDeneme)})`);
+    throw new Error(
+      `ayar dosyası: "limits.apiMaxRetries" 0 ile 15 arasında bir tam sayı olmalı (verilen: ${JSON.stringify(icDeneme)})`,
+    );
   }
   const esik = cfg.limits?.compactPercent;
   if (esik !== undefined && esik > 100) {
-    throw new Error(`config: "limits.compactPercent" 0 ile 100 arasında olmalı (verilen: ${JSON.stringify(esik)})`);
+    throw new Error(
+      `ayar dosyası: "limits.compactPercent" 0 ile 100 arasında olmalı (verilen: ${JSON.stringify(esik)})`,
+    );
   }
 
   // Yeniden deneme ayarları: "enabled"/"jitter" mantıksal, diğerleri negatif olmayan sayı
   for (const [key, value] of Object.entries(cfg.retry ?? {})) {
     if (key === "enabled" || key === "jitter") {
       if (typeof value !== "boolean") {
-        throw new Error(`config: "retry.${key}" true/false olmalı (verilen: ${JSON.stringify(value)})`);
+        throw new Error(`ayar dosyası: "retry.${key}" true/false olmalı (verilen: ${JSON.stringify(value)})`);
       }
       continue;
     }
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-      throw new Error(`config: "retry.${key}" negatif olmayan bir sayı olmalı (verilen: ${JSON.stringify(value)})`);
+      throw new Error(
+        `ayar dosyası: "retry.${key}" negatif olmayan bir sayı olmalı (verilen: ${JSON.stringify(value)})`,
+      );
     }
   }
 
-  for (const [key, ne] of [["disabledSkills", "beceri"], ["disabledRules", "kural"]] as const) {
+  for (const [key, ne] of [
+    ["disabledSkills", "beceri"],
+    ["disabledRules", "kural"],
+  ] as const) {
     const list = cfg[key];
     if (list !== undefined && (!Array.isArray(list) || list.some((s) => typeof s !== "string"))) {
-      throw new Error(`config: "${key}" ${ne} adlarından oluşan bir liste olmalı (verilen: ${JSON.stringify(list)})`);
+      throw new Error(
+        `ayar dosyası: "${key}" ${ne} adlarından oluşan bir liste olmalı (verilen: ${JSON.stringify(list)})`,
+      );
     }
   }
   for (const [name, server] of Object.entries(cfg.mcpServers ?? {})) {
     if (server.disabled !== undefined && typeof server.disabled !== "boolean") {
-      throw new Error(`config: "mcpServers.${name}.disabled" true/false olmalı (verilen: ${JSON.stringify(server.disabled)})`);
+      throw new Error(
+        `ayar dosyası: "mcpServers.${name}.disabled" true/false olmalı (verilen: ${JSON.stringify(server.disabled)})`,
+      );
     }
   }
 
   if (cfg.userPrompt === "" || (typeof cfg.userPrompt === "string" && !cfg.userPrompt.trim())) delete cfg.userPrompt;
   else if (cfg.userPrompt !== undefined && typeof cfg.userPrompt !== "string") {
-    throw new Error(`config: "userPrompt" metin olmalı (verilen: ${JSON.stringify(cfg.userPrompt)})`);
+    throw new Error(`ayar dosyası: "userPrompt" metin olmalı (verilen: ${JSON.stringify(cfg.userPrompt)})`);
   }
 
   if (cfg.maxParallelRuns !== undefined && (!Number.isInteger(cfg.maxParallelRuns) || cfg.maxParallelRuns < 1)) {
-    throw new Error(`config: "maxParallelRuns" 1 veya daha büyük bir tam sayı olmalı (verilen: ${JSON.stringify(cfg.maxParallelRuns)})`);
+    throw new Error(
+      `ayar dosyası: "maxParallelRuns" 1 veya daha büyük bir tam sayı olmalı (verilen: ${JSON.stringify(cfg.maxParallelRuns)})`,
+    );
   }
 
   if (cfg.planWebhook !== undefined) {
     const w = cfg.planWebhook as { url?: unknown; apiKey?: unknown } | null;
     if (!w || typeof w !== "object" || typeof w.url !== "string") {
-      throw new Error(`config: "planWebhook" {"url": "http://…", "apiKey"?: "…"} biçiminde olmalı (verilen: ${JSON.stringify(w)})`);
+      throw new Error(
+        `ayar dosyası: "planWebhook" {"url": "http://…", "apiKey"?: "…"} biçiminde olmalı (verilen: ${JSON.stringify(w)})`,
+      );
     }
     if (!w.url.trim()) delete cfg.planWebhook;
     else if (!/^https?:\/\/[^\s]+$/i.test(w.url.trim())) {
-      throw new Error(`config: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`);
+      throw new Error(
+        `ayar dosyası: "planWebhook.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(w.url)})`,
+      );
     } else if (w.apiKey !== undefined && typeof w.apiKey !== "string") {
-      throw new Error(`config: "planWebhook.apiKey" metin olmalı`);
+      throw new Error(`ayar dosyası: "planWebhook.apiKey" metin olmalı`);
+    }
+  }
+
+  if (cfg.tfs !== undefined) {
+    const t = cfg.tfs as Record<string, unknown> | null;
+    if (!t || typeof t !== "object" || Array.isArray(t)) {
+      throw new Error(
+        `ayar dosyası: "tfs" bir nesne olmalı ({"enabled", "url", "project", …}) (verilen: ${JSON.stringify(t)})`,
+      );
+    }
+    for (const k of ["enabled", "insecureTls"]) {
+      if (t[k] !== undefined && typeof t[k] !== "boolean")
+        throw new Error(`ayar dosyası: "tfs.${k}" true/false olmalı (verilen: ${JSON.stringify(t[k])})`);
+    }
+    for (const k of ["url", "project", "caFile"]) {
+      if (t[k] !== undefined && typeof t[k] !== "string")
+        throw new Error(`ayar dosyası: "tfs.${k}" metin olmalı (verilen: ${JSON.stringify(t[k])})`);
+      if (t[k] === "") delete t[k];
+    }
+    if (typeof t.url === "string" && !/^https?:\/\/[^\s]+$/i.test(t.url.trim())) {
+      throw new Error(
+        `ayar dosyası: "tfs.url" http:// ya da https:// ile başlayan koleksiyon adresi olmalı (verilen: ${JSON.stringify(t.url)})`,
+      );
+    }
+    if (t.writeBack !== undefined && !(TFS_WRITE_BACK as readonly unknown[]).includes(t.writeBack)) {
+      throw new Error(
+        `ayar dosyası: "tfs.writeBack" şunlardan biri olmalı: ${TFS_WRITE_BACK.join(", ")} (verilen: ${JSON.stringify(t.writeBack)})`,
+      );
+    }
+    if ("token" in t) {
+      // Anahtar config.json'a yazılmaz (git'e gidebilir, panele açık) — Ayarlar'dan girilince .gizli/'ye taşınır
+      throw new Error(
+        'ayar dosyası: "tfs.token" config.json\'da tutulmaz — anahtarı Ayarlar → TFS modu kartından gir ya da KURMAY_TFS_TOKEN ortam değişkeniyle ver',
+      );
     }
   }
 
   if (!cfg.workflow?.entry || !cfg.workflow.agents) {
-    throw new Error('config: "workflow" bölümü eksik ("entry" ve "agents" alanları zorunlu)');
+    throw new Error('ayar dosyası: "workflow" bölümü eksik ("entry" ve "agents" alanları zorunlu)');
   }
   for (const [key, node] of Object.entries(cfg.workflow.agents)) {
     const effort = (node as { effort?: unknown }).effort;
     if (effort === "") delete (node as { effort?: unknown }).effort;
     else if (effort !== undefined && !isEffort(effort)) {
-      throw new Error(`config: "${key}.effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(effort)})`);
+      throw new Error(
+        `ayar dosyası: "${key}.effort" şunlardan biri olmalı: ${EFFORT_LEVELS.join(", ")} (verilen: ${JSON.stringify(effort)})`,
+      );
     }
   }
   if (!cfg.workflow.agents[cfg.workflow.entry]) {
-    throw new Error(`config: workflow.entry "${cfg.workflow.entry}" agents içinde tanımlı değil`);
+    throw new Error(`ayar dosyası: workflow.entry "${cfg.workflow.entry}" agents içinde tanımlı değil`);
   }
   if (!cfg.workflow.maxCycles) cfg.workflow.maxCycles = 5;
   const autoForward = cfg.workflow.autoForwardPlan;
   if (autoForward !== undefined && typeof autoForward !== "boolean") {
-    throw new Error(`config: "workflow.autoForwardPlan" true/false olmalı (verilen: ${JSON.stringify(autoForward)})`);
+    throw new Error(
+      `ayar dosyası: "workflow.autoForwardPlan" true/false olmalı (verilen: ${JSON.stringify(autoForward)})`,
+    );
   }
 
   // Ajanların tools listesindeki mcp__ araçları tanımlı bir sunucuya işaret etmeli
@@ -134,27 +204,29 @@ export function loadAppConfig(configPath: string): AppConfig {
     const type = (node as { type?: unknown }).type;
     if (type !== undefined && type !== "agent" && type !== "command" && type !== "fanout") {
       throw new Error(
-        `config: "${key}" düğümünün tipi ${JSON.stringify(type)} tanınmıyor (agent | command | fanout)` +
+        `ayar dosyası: "${key}" düğümünün tipi ${JSON.stringify(type)} tanınmıyor (agent | command | fanout)` +
           (type === "parallel" ? ' — paralel inceleme kaldırıldı; tek teftiş düğümü için "verdict" kullan' : ""),
       );
     }
     const sr = (node as { securityReport?: unknown }).securityReport;
     if (sr !== undefined && typeof sr !== "boolean") {
-      throw new Error(`config: "${key}.securityReport" true/false olmalı (verilen: ${JSON.stringify(sr)})`);
+      throw new Error(`ayar dosyası: "${key}.securityReport" true/false olmalı (verilen: ${JSON.stringify(sr)})`);
     }
     if (node.disabled !== undefined && typeof node.disabled !== "boolean") {
-      throw new Error(`config: "${key}.disabled" true/false olmalı (verilen: ${JSON.stringify(node.disabled)})`);
+      throw new Error(`ayar dosyası: "${key}.disabled" true/false olmalı (verilen: ${JSON.stringify(node.disabled)})`);
     }
     if (isCommandNode(node)) {
       if (typeof node.command !== "string" || !node.command.trim()) {
-        throw new Error(`config: "${key}" komut düğümü için "command" (build komutu) zorunlu`);
+        throw new Error(`ayar dosyası: "${key}" komut düğümü için "command" (derleme komutu) zorunlu`);
       }
       continue; // komut düğümünün tools listesi yok
     }
     if (isFanoutNode(node)) {
       const mc = node.maxConcurrency;
       if (mc !== undefined && (!Number.isInteger(mc) || mc < 0)) {
-        throw new Error(`config: "${key}.maxConcurrency" negatif olmayan bir tam sayı olmalı (verilen: ${JSON.stringify(mc)})`);
+        throw new Error(
+          `ayar dosyası: "${key}.maxConcurrency" negatif olmayan bir tam sayı olmalı (verilen: ${JSON.stringify(mc)})`,
+        );
       }
       continue; // fanout da bir kapı; çoğalttığı ajanın araçları kendi düğümünde kontrol edilir
     }
@@ -163,7 +235,7 @@ export function loadAppConfig(configPath: string): AppConfig {
         const serverName = tool.slice(5).split("__")[0];
         if (!cfg.mcpServers?.[serverName]) {
           throw new Error(
-            `config: "${key}" ajanı "${tool}" aracını istiyor ama "${serverName}" mcpServers içinde tanımlı değil`,
+            `ayar dosyası: "${key}" ajanı "${tool}" aracını istiyor ama "${serverName}" mcpServers içinde tanımlı değil`,
           );
         }
       }

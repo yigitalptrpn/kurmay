@@ -29,7 +29,9 @@ export const RETRY_DEFAULTS = {
   stallTimeoutMs: 300_000,
 } as const;
 
-export type RetrySettings = { -readonly [K in keyof typeof RETRY_DEFAULTS]: (typeof RETRY_DEFAULTS)[K] extends boolean ? boolean : number };
+export type RetrySettings = {
+  -readonly [K in keyof typeof RETRY_DEFAULTS]: (typeof RETRY_DEFAULTS)[K] extends boolean ? boolean : number;
+};
 
 /**
  * Claude Code'un kendi akış bekçisinin alt sınırı (CLAUDE_STREAM_IDLE_TIMEOUT_MS,
@@ -42,10 +44,20 @@ export const CLI_STALL_MIN_MS = 300_000;
 
 /** Ayarlar sayfasının değiştirebildiği alanlar (POST /resilience) */
 export const RESILIENCE_RETRY_KEYS = [
-  "enabled", "maxAttempts", "permanentMaxAttempts", "initialDelayMs", "maxDelayMs", "jitter", "stallTimeoutMs",
+  "enabled",
+  "maxAttempts",
+  "permanentMaxAttempts",
+  "initialDelayMs",
+  "maxDelayMs",
+  "jitter",
+  "stallTimeoutMs",
 ] as const;
 export const RESILIENCE_LIMIT_KEYS = [
-  "apiTimeoutMs", "apiMaxRetries", "contextTokens", "compactPercent", "maxOutputTokens",
+  "apiTimeoutMs",
+  "apiMaxRetries",
+  "contextTokens",
+  "compactPercent",
+  "maxOutputTokens",
 ] as const;
 
 /** Servis açıkken Ayarlar'dan gelen güncel değerler (yoksa koşunun config kopyası geçerli) */
@@ -137,7 +149,11 @@ const API_ERROR_NAMES: Record<string, string> = {
 
 /** Kalıcı sayılan Claude Code hata kodları */
 const PERMANENT_API_ERRORS = new Set([
-  "authentication_failed", "oauth_org_not_allowed", "billing_error", "invalid_request", "model_not_found",
+  "authentication_failed",
+  "oauth_org_not_allowed",
+  "billing_error",
+  "invalid_request",
+  "model_not_found",
 ]);
 
 /** HTTP durum kodu → Türkçe sebep */
@@ -201,7 +217,8 @@ export function classifyError(err: unknown, apiError?: string): ClassifiedError 
     };
   }
 
-  if (/timed? ?out|timeout|ETIMEDOUT/i.test(msg)) return { kind: "transient", infra: true, reason: "zaman aşımı (yanıt gelmedi)" };
+  if (/timed? ?out|timeout|ETIMEDOUT/i.test(msg))
+    return { kind: "transient", infra: true, reason: "zaman aşımı (yanıt gelmedi)" };
   // Önce kopma: Claude Code ECONNRESET'i de "Unable to connect to API (ECONNRESET)" diye yazıyor
   if (/ECONNRESET|socket hang up|EPIPE|terminated|premature|aborted|Connection error|network/i.test(msg)) {
     return { kind: "transient", infra: true, reason: "bağlantı koptu" };

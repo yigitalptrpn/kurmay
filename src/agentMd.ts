@@ -76,7 +76,10 @@ export function checkAgentMd(text: string): string | null {
     const line = (e as { mark?: { line?: number } }).mark?.line;
     return `Üst bölüm (--- arası) okunamadı${typeof line === "number" ? ` — ${line + 2}. satırın çevresine bak` : ""}; yazım bozuk`;
   }
-  if (data.output !== undefined && (typeof data.output !== "object" || data.output === null || Array.isArray(data.output))) {
+  if (
+    data.output !== undefined &&
+    (typeof data.output !== "object" || data.output === null || Array.isArray(data.output))
+  ) {
     return "Üst bölümdeki çıktı şeması bir nesne olmalı";
   }
   return null;

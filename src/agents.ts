@@ -63,38 +63,29 @@ export function skillInfo(name: string, projectRoot: string): { name: string; de
  *   3. Beceriler — ad + açıklama + dosya yolu; ajan ilgili görürse Read ile okur
  *      (progressive disclosure). inline: true olan becerinin tamamı gömülür.
  */
-function composeSystemPrompt(
-  persona: string,
-  rules: LoadedRule[],
-  skills: LoadedSkill[],
-  mcpTools: string[],
-): string {
+function composeSystemPrompt(persona: string, rules: LoadedRule[], skills: LoadedSkill[], mcpTools: string[]): string {
   const parts = [persona];
 
   if (mcpTools.length > 0) {
     parts.push(
       "## MCP araçların\n\n" +
-        "Şu MCP araçlarına erişimin var: " + mcpTools.join(", ") + "\n" +
+        "Şu MCP araçlarına erişimin var: " +
+        mcpTools.join(", ") +
+        "\n" +
         "Bu araçlar oturum başında araç listende görünmeyebilir — görünmüyorsa " +
         "ToolSearch ile adını aratıp yükle, ilgili işler için Bash yerine bunları tercih et.",
     );
   }
 
   if (rules.length > 0) {
-    parts.push(
-      "## Kurallar (her zaman geçerli)\n\n" +
-        rules.map((r) => `### ${r.name}\n${r.content}`).join("\n\n"),
-    );
+    parts.push("## Kurallar (her zaman geçerli)\n\n" + rules.map((r) => `### ${r.name}\n${r.content}`).join("\n\n"));
   }
 
   const inlineSkills = skills.filter((s) => s.inline);
   const lazySkills = skills.filter((s) => !s.inline);
 
   if (inlineSkills.length > 0) {
-    parts.push(
-      "## Beceriler\n\n" +
-        inlineSkills.map((s) => `### ${s.name}\n${s.content}`).join("\n\n"),
-    );
+    parts.push("## Beceriler\n\n" + inlineSkills.map((s) => `### ${s.name}\n${s.content}`).join("\n\n"));
   }
 
   if (lazySkills.length > 0) {
@@ -136,9 +127,7 @@ function validateEdges(
   /** Bu ajanı yöneten fanout düğümü (ajan onun işçisi) — işçinin kendi kenarı olamaz */
   fanoutOwner: string | null,
 ): void {
-  const routeTargets = config.routes
-    ? [...Object.values(config.routes.cases), config.routes.default]
-    : [];
+  const routeTargets = config.routes ? [...Object.values(config.routes.cases), config.routes.default] : [];
   const targets = [config.next, config.verdict?.onApprove, config.verdict?.onReject, ...routeTargets];
   for (const target of targets) {
     if (target != null && !workflow.agents[target]) {
@@ -155,7 +144,7 @@ function validateEdges(
   // editöründe çizilmeyen bir kenar kafa karıştırır.
   if (fanoutOwner && branchCount > 0) {
     throw new Error(
-      `"${key}" "${fanoutOwner}" fanout düğümünün işçisi — kendi next/verdict/routes kenarı olamaz; ` +
+      `"${key}" "${fanoutOwner}" dağıtım (fanout) düğümünün işçisi — kendi next/verdict/routes kenarı olamaz; ` +
         `kopyalar bitince geçişi "${fanoutOwner}.next" yapar`,
     );
   }
@@ -187,17 +176,21 @@ export function loadAgents(
     if (!isFanoutNode(config)) continue;
     const worker = workflow.agents[config.agent];
     if (!config.agent || !worker) {
-      throw new Error(`"${key}" fanout düğümü var olmayan bir ajana işaret ediyor: "${config.agent}"`);
+      throw new Error(`"${key}" dağıtım (fanout) düğümü var olmayan bir ajana işaret ediyor: "${config.agent}"`);
     }
     if (isGateNode(worker)) {
-      throw new Error(`"${key}" fanout düğümünün işçisi ajan olmalı; "${config.agent}" bir ${worker.type} düğümü`);
+      throw new Error(
+        `"${key}" dağıtım (fanout) düğümünün işçisi ajan olmalı; "${config.agent}" bir ${worker.type} düğümü`,
+      );
     }
     if (workerOf.has(config.agent)) {
-      throw new Error(`"${config.agent}" iki fanout düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`);
+      throw new Error(
+        `"${config.agent}" iki dağıtım (fanout) düğümünün ("${workerOf.get(config.agent)}", "${key}") işçisi olamaz`,
+      );
     }
     workerOf.set(config.agent, key);
     if (config.next != null && !workflow.agents[config.next]) {
-      throw new Error(`"${key}" fanout düğümü var olmayan bir düğüme işaret ediyor: "${config.next}"`);
+      throw new Error(`"${key}" dağıtım (fanout) düğümü var olmayan bir düğüme işaret ediyor: "${config.next}"`);
     }
   }
 
@@ -222,7 +215,7 @@ export function loadAgents(
       const yeni = ESKI_PERSONA[path.basename(mdPath)];
       const aday = yeni && path.join(path.dirname(mdPath), yeni);
       if (aday && fs.existsSync(aday)) {
-        console.warn(`⚠ "${key}": ${config.file} artık ${yeni} — config'teki yolu güncelle`);
+        console.warn(`⚠ "${key}": ${config.file} artık ${yeni} — ayar dosyasındaki yolu güncelle`);
         mdPath = aday;
       }
     }
@@ -254,7 +247,7 @@ export function loadAgents(
     if (config.verdict) {
       if (data.output) {
         console.warn(
-          `⚠ "${key}" verdict düğümü — md'deki "output" şeması yok sayılıyor, yerleşik karar şeması kullanılacak`,
+          `⚠ "${key}" karar (verdict) düğümü — rol dosyasındaki "output" şeması yok sayılıyor, yerleşik karar şeması kullanılacak`,
         );
       }
       outputSchema = reviewVerdictJsonSchema();

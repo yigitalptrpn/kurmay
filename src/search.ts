@@ -12,9 +12,19 @@ import { readRunLogs } from "./runtime.js";
  */
 
 export type SearchKind =
-  | "gorev" | "plan" | "cikti" | "mesaj" | "dosya" | "komut" | "teftis" | "ret" | "hata" | "guvenlik";
-export const SEARCH_KINDS: readonly SearchKind[] =
-  ["gorev", "plan", "cikti", "mesaj", "dosya", "komut", "teftis", "ret", "hata", "guvenlik"];
+  "gorev" | "plan" | "cikti" | "mesaj" | "dosya" | "komut" | "teftis" | "ret" | "hata" | "guvenlik";
+export const SEARCH_KINDS: readonly SearchKind[] = [
+  "gorev",
+  "plan",
+  "cikti",
+  "mesaj",
+  "dosya",
+  "komut",
+  "teftis",
+  "ret",
+  "hata",
+  "guvenlik",
+];
 
 /** Bir olaydan çıkan aranabilir metin */
 interface Doc {
@@ -51,8 +61,25 @@ const TEXT_MAX = 20_000;
 const SNIPPET = 160;
 
 const FOLD: Record<string, string> = {
-  ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", â: "a", î: "i", û: "u",
-  Ç: "c", Ğ: "g", I: "i", İ: "i", Ö: "o", Ş: "s", Ü: "u", Â: "a", Î: "i", Û: "u",
+  ç: "c",
+  ğ: "g",
+  ı: "i",
+  ö: "o",
+  ş: "s",
+  ü: "u",
+  â: "a",
+  î: "i",
+  û: "u",
+  Ç: "c",
+  Ğ: "g",
+  I: "i",
+  İ: "i",
+  Ö: "o",
+  Ş: "s",
+  Ü: "u",
+  Â: "a",
+  Î: "i",
+  Û: "u",
 };
 
 /** Küçük harf + Türkçe harfleri sadeleştir; uzunluk korunur (vurgu aralıkları özgün metne denk gelsin) */
@@ -108,6 +135,9 @@ function eventTexts(e: TimedEvent): Array<{ kind: SearchKind; text: string; agen
       return [
         { kind: "gorev", text: e.task },
         ...(e.attachments ?? []).map((a) => ({ kind: "gorev" as const, text: a.original })),
+        // TFS: iş öğesinin / çekme isteğinin ekibe giden metni (açıklama, kabul kriterleri, yorumlar…)
+        ...(e.workItem?.text ? [{ kind: "gorev" as const, text: e.workItem.text }] : []),
+        ...(e.pr?.text ? [{ kind: "gorev" as const, text: e.pr.text }] : []),
       ];
     case "agent_text":
       return [{ kind: "mesaj", text: e.text, agent: e.agent }];
@@ -116,7 +146,9 @@ function eventTexts(e: TimedEvent): Array<{ kind: SearchKind; text: string; agen
       if (!s || typeof s !== "object") return [];
       const parts: string[] = [];
       flatten(s, parts);
-      return parts.length ? [{ kind: structuredKind(s as Record<string, unknown>), text: parts.join(" · "), agent: e.agent }] : [];
+      return parts.length
+        ? [{ kind: structuredKind(s as Record<string, unknown>), text: parts.join(" · "), agent: e.agent }]
+        : [];
     }
     case "tool_used":
       if (e.command) return [{ kind: "komut", text: e.command, agent: e.agent }];
@@ -136,7 +168,15 @@ function toDocs(events: readonly TimedEvent[], offset = 0): Doc[] {
     for (const t of eventTexts(e)) {
       if (!t.text) continue;
       const text = t.text.replace(/\s+/g, " ").trim().slice(0, TEXT_MAX);
-      if (text) docs.push({ ei: offset + i, ts: e.ts, kind: t.kind, ...(t.agent ? { agent: t.agent } : {}), text, folded: fold(text) });
+      if (text)
+        docs.push({
+          ei: offset + i,
+          ts: e.ts,
+          kind: t.kind,
+          ...(t.agent ? { agent: t.agent } : {}),
+          text,
+          folded: fold(text),
+        });
     }
   });
   return docs;
@@ -236,7 +276,13 @@ export function searchSessions(
       if (!terms.every((t) => d.folded.includes(t))) continue;
       total++;
       if (found.length < perSession) {
-        found.push({ ei: d.ei, ts: d.ts, kind: d.kind, ...(d.agent ? { agent: d.agent } : {}), ...snippetOf(d, terms) });
+        found.push({
+          ei: d.ei,
+          ts: d.ts,
+          kind: d.kind,
+          ...(d.agent ? { agent: d.agent } : {}),
+          ...snippetOf(d, terms),
+        });
       }
     }
     if (!total) continue;
@@ -246,7 +292,14 @@ export function searchSessions(
     }
     hits += total;
     if (total > found.length) truncated = true;
-    results.push({ session: s.id, name: s.name, updatedAt: s.updatedAt, ...(s.targetDir ? { targetDir: s.targetDir } : {}), total, hits: found });
+    results.push({
+      session: s.id,
+      name: s.name,
+      updatedAt: s.updatedAt,
+      ...(s.targetDir ? { targetDir: s.targetDir } : {}),
+      total,
+      hits: found,
+    });
   }
   return { results, sessions: results.length, hits, truncated };
 }

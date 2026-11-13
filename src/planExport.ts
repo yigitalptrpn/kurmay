@@ -51,8 +51,13 @@ export function findPlan(history: readonly TimedEvent[]): FoundPlan | undefined 
       targetDir = e.targetDir;
     } else if (e.type === "approval_required") {
       found = { agent: e.agent, task, targetDir, at: e.ts, structured: e.structured, output: e.output, pending: true };
-    } else if (found && (e.type === "approval_resolved" || e.type === "workflow_cancelled" ||
-      e.type === "workflow_failed" || e.type === "workflow_finished")) {
+    } else if (
+      found &&
+      (e.type === "approval_resolved" ||
+        e.type === "workflow_cancelled" ||
+        e.type === "workflow_failed" ||
+        e.type === "workflow_finished")
+    ) {
       found.pending = false;
     }
   }
@@ -143,10 +148,7 @@ export interface PlanSendResult {
  * Planı başka makinedeki ajana JSON olarak POST eder. Sunucudan gider (tarayıcının
  * çapraz köken kısıtı yok, anahtar tarayıcıdan geçmez). 30 sn sınır.
  */
-export async function sendPlan(
-  target: { url: string; apiKey?: string },
-  payload: unknown,
-): Promise<PlanSendResult> {
+export async function sendPlan(target: { url: string; apiKey?: string }, payload: unknown): Promise<PlanSendResult> {
   const headers: Record<string, string> = { "content-type": "application/json; charset=utf-8" };
   if (target.apiKey) headers.authorization = `Bearer ${target.apiKey}`;
   try {
@@ -157,7 +159,9 @@ export async function sendPlan(
       signal: AbortSignal.timeout(30_000),
     });
     const body = (await res.text().catch(() => "")).slice(0, 500);
-    return res.ok ? { ok: true, status: res.status, body } : { ok: false, status: res.status, body, error: `sunucu ${res.status} döndü` };
+    return res.ok
+      ? { ok: true, status: res.status, body }
+      : { ok: false, status: res.status, body, error: `sunucu ${res.status} döndü` };
   } catch (e) {
     const err = e as Error & { cause?: { code?: string; message?: string } };
     if (err.name === "TimeoutError") return { ok: false, error: "30 sn içinde yanıt gelmedi" };

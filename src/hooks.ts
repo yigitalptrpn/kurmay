@@ -13,24 +13,35 @@ function commandHook(command: string, timeoutSec: number, cwd: string): HookCall
   return (input, _toolUseId, opts) =>
     new Promise<HookJSONOutput>((resolve) => {
       const child = spawn(command, { cwd, shell: true, signal: opts?.signal });
-      let out = "", err = "";
+      let out = "",
+        err = "";
       const timer = setTimeout(() => child.kill(), Math.max(1, timeoutSec) * 1000);
       child.stdout.on("data", (d) => (out += d));
       child.stderr.on("data", (d) => (err += d));
-      child.on("error", () => { clearTimeout(timer); resolve({ continue: true }); });
+      child.on("error", () => {
+        clearTimeout(timer);
+        resolve({ continue: true });
+      });
       child.on("close", (code) => {
         clearTimeout(timer);
         if (code === 2) {
-          resolve({ decision: "block", reason: err.trim() || out.trim() || "hook tarafından engellendi" });
+          resolve({ decision: "block", reason: err.trim() || out.trim() || "denetim komutu (hook) engelledi" });
           return;
         }
         if (code === 0) {
           const s = out.trim();
-          if (s.startsWith("{")) { try { resolve(JSON.parse(s) as HookJSONOutput); return; } catch { /* düz metin */ } }
+          if (s.startsWith("{")) {
+            try {
+              resolve(JSON.parse(s) as HookJSONOutput);
+              return;
+            } catch {
+              /* düz metin */
+            }
+          }
           resolve({ continue: true });
           return;
         }
-        console.warn(`⚠ hook komutu "${command}" çıkış kodu ${code}: ${err.trim()}`);
+        console.warn(`⚠ denetim komutu (hook) "${command}" çıkış kodu ${code}: ${err.trim()}`);
         resolve({ continue: true });
       });
       child.stdin.write(JSON.stringify(input));

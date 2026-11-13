@@ -36,6 +36,11 @@ export interface SessionEntry {
   /** Entry ajanın (Analist) konuşmasının bilinen boyutu, token — panelde doluluk,
    *  eşiği geçmişse sıradaki görevden önce özetlenir */
   contextTokens?: number;
+  /** TFS modu: oturumun bağlı olduğu iş öğesi (son iş öğesi görevi). Oturumda iş öğesi
+   *  seçmeden verilen sonraki görevler onun devamı sayılır, sonuç bu öğeye yazılır */
+  workItem?: { id: number; type: string; title: string; state: string; url: string; project: string };
+  /** TFS modu: oturumun bağlı olduğu çekme isteği (son PR görevi); sonraki görevler onun devamı */
+  pr?: { id: number; title: string; url: string; repository: string; mode: "yorum" | "incele" };
 }
 
 /** Görev metninden kısa bir oturum ismi türetir */
@@ -81,9 +86,21 @@ export class SessionStore {
   }
 
   /** İlk görevle yeni bir oturum açar (henüz SDK oturumu yok) */
-  create(task: string, model?: string, effort?: EffortSetting, targetDir?: string, autoForward?: boolean): SessionEntry {
+  create(
+    task: string,
+    model?: string,
+    effort?: EffortSetting,
+    targetDir?: string,
+    autoForward?: boolean,
+  ): SessionEntry {
     const now = new Date().toISOString();
-    const entry: SessionEntry = { id: randomUUID(), name: nameFromTask(task), createdAt: now, updatedAt: now, runLogs: [] };
+    const entry: SessionEntry = {
+      id: randomUUID(),
+      name: nameFromTask(task),
+      createdAt: now,
+      updatedAt: now,
+      runLogs: [],
+    };
     if (model) entry.model = model;
     if (effort) entry.effort = effort;
     if (targetDir) entry.targetDir = targetDir;
@@ -145,6 +162,26 @@ export class SessionStore {
     if (!s) return false;
     if (effort) s.effort = effort;
     else delete s.effort;
+    this.persist();
+    return true;
+  }
+
+  /** Oturumu bir TFS iş öğesine bağlar (iş öğesinden görev başlatılınca) */
+  setWorkItem(id: string, workItem: NonNullable<SessionEntry["workItem"]>): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    s.workItem = workItem;
+    delete s.pr; // oturum tek bir TFS kaydına bağlı: en son görev verilen
+    this.persist();
+    return true;
+  }
+
+  /** Oturumu bir TFS çekme isteğine bağlar (PR'dan görev başlatılınca); iş öğesi bağı kalkar */
+  setPr(id: string, pr: NonNullable<SessionEntry["pr"]>): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    s.pr = pr;
+    delete s.workItem;
     this.persist();
     return true;
   }
@@ -217,11 +254,17 @@ export function sessionRecap(events: readonly TimedEvent[], entryKey: string): s
     else if (!cur) continue;
     else if (e.type === "agent_finished" && e.agent === entryKey) {
       const st = (e.structured ?? {}) as { summary?: unknown; answer?: unknown; file_plan?: unknown };
-      const text = typeof st.answer === "string" && st.answer.trim() ? st.answer
-        : typeof st.summary === "string" && st.summary.trim() ? st.summary : e.output;
+      const text =
+        typeof st.answer === "string" && st.answer.trim()
+          ? st.answer
+          : typeof st.summary === "string" && st.summary.trim()
+            ? st.summary
+            : e.output;
       if (text) cur.analist = kisalt(text, RECAP_TEXT_MAX);
       if (Array.isArray(st.file_plan)) {
-        cur.files = st.file_plan.map((f) => (f as { path?: unknown })?.path).filter((p): p is string => typeof p === "string");
+        cur.files = st.file_plan
+          .map((f) => (f as { path?: unknown })?.path)
+          .filter((p): p is string => typeof p === "string");
       }
     } else if (e.type === "workflow_finished") cur.end = "tamamlandı";
     else if (e.type === "workflow_failed") cur.end = "hata ile bitti";
@@ -232,7 +275,8 @@ export function sessionRecap(events: readonly TimedEvent[], entryKey: string): s
   const satirlar = son.map((t, i) => {
     const parca = [`${i + 1}. Görev: ${kisalt(t.task, RECAP_TEXT_MAX)}`];
     if (t.analist) parca.push(`   Senin o zamanki sonucun: ${t.analist}`);
-    if (t.files?.length) parca.push(`   Plandaki dosyalar: ${t.files.slice(0, 12).join(", ")}${t.files.length > 12 ? " …" : ""}`);
+    if (t.files?.length)
+      parca.push(`   Plandaki dosyalar: ${t.files.slice(0, 12).join(", ")}${t.files.length > 12 ? " …" : ""}`);
     parca.push(`   Durum: ${t.end ?? "yarıda kaldı (servis durdurulmuş olabilir)"}`);
     return parca.join("\n");
   });

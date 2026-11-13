@@ -119,6 +119,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
 
 <div class="hdr">
   <span class="brand">Kurmay</span>
+  <a class="pill" id="verLink" href="/surumler" title="Sürüm notları" style="display:none;background:var(--bg);color:var(--muted);text-decoration:none"></a>
   <span class="pill" id="prov" style="background:var(--bg);color:var(--muted)"></span>
   <span class="pill" id="dir" style="background:var(--bg);color:var(--muted)"></span>
   <span class="sp"></span>
@@ -126,6 +127,62 @@ input.sw:disabled { opacity:.5; cursor:default; }
   <button class="primary" id="btnSave" disabled>Kaydet</button>
   <div class="tswitch" role="radiogroup" aria-label="Tema"></div>
   <a href="/">← izleme paneli</a>
+</div>
+
+<!-- TFS modu: iş öğesini (ürün iş öğesi, hata…) TFS'ten alıp görev yapar, bitince sonucu iş öğesine yazar.
+     config.json "tfs" (anahtar hariç) + erişim anahtarı .gizli/tfs.json — Kaydet'e basınca anında geçerli. -->
+<div class="card" id="tfsCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">TFS modu <span id="tfsState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Açıkken görev kutusunda bir <b>iş öğesi</b> (#123) ya da <b>çekme isteği</b> (!45) seçersin: numara, adres, başlıkta arama ya da sana atananlar.
+        İş öğesinde Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve görselleri TFS'ten kendisi alıp ekibe görev yapar;
+        bitince sonucu iş öğesine yazar, istersen değişiklikleri yeni dala gönderip iş öğesine bağlı çekme isteği açar. Çekme isteğinde ya açık yorumları ele alır
+        (kodu çekme isteğinin dalında düzeltir, her yoruma cevap yazar, "düzeltildi" yapar, değişikliği dala gönderir) ya da isteği inceleyip bulguları satır yorumu olarak yazar.
+        Kişisel erişim anahtarı gerekir — kapsam: <i>İş öğeleri</i> ve <i>Kod</i>, okuma ve yazma.</div>
+    </div>
+    <input type="checkbox" role="switch" class="sw" id="tfsSw" aria-label="TFS modu">
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow">
+      <label class="minl" for="tfsUrl">Sunucu (koleksiyon adresi)</label>
+      <input type="text" id="tfsUrl" spellcheck="false" placeholder="http://tfs-sunucusu:8080/tfs/DefaultCollection" style="width:100%">
+      <div class="fhint">Tarayıcıdaki bir iş öğesinin adresini de yapıştırabilirsin — koleksiyon ve proje ondan ayrılır.</div>
+    </div>
+    <div>
+      <label class="minl" for="tfsProject">Proje</label>
+      <input type="text" id="tfsProject" list="tfsProjects" spellcheck="false" placeholder="ör. Siparis" style="width:200px">
+      <datalist id="tfsProjects"></datalist>
+    </div>
+    <div class="grow">
+      <label class="minl" for="tfsToken">Erişim anahtarı</label>
+      <div style="display:flex;gap:6px"><input type="password" id="tfsToken" autocomplete="off" spellcheck="false" placeholder="kişisel erişim anahtarı" style="flex:1">
+      <button id="tfsTokenShow" type="button" title="Göster / gizle" style="min-height:auto;padding:4px 12px">👁</button></div>
+      <div class="fhint" id="tfsTokenHint"></div>
+    </div>
+  </div>
+  <div class="gbar" style="margin-top:10px">
+    <div>
+      <label class="minl" for="tfsWrite">İş bitince sonucu TFS'e yaz (iş öğesi / çekme isteği)</label>
+      <select id="tfsWrite">
+        <option value="ask">sorarak — panelde taslak hazır gelir, düzenleyip gönderirsin</option>
+        <option value="auto">kendiliğinden — not ve yorumlar doğrudan yazılır; çekme isteğinde değişiklik dala gönderilir</option>
+        <option value="off">yazma</option>
+      </select>
+    </div>
+    <div class="grow">
+      <label class="minl" for="tfsCa">Kurum kök sertifikası (isteğe bağlı)</label>
+      <input type="text" id="tfsCa" spellcheck="false" placeholder="https sunucu kurum sertifikasıyla imzalıysa: C:\sertifikalar\kurum-kok.pem" style="width:100%">
+    </div>
+    <label class="chkl" style="align-self:center" title="Yalnızca iç ağdaki, kendinden imzalı sertifikalı sunucu için — bağlantı doğrulanmaz">
+      <input type="checkbox" id="tfsInsecure"> Sertifikayı doğrulama</label>
+  </div>
+  <div class="rfoot" style="margin-top:10px">
+    <button id="tfsTest" type="button">Bağlantıyı dene</button>
+    <button class="primary" id="tfsSave" type="button" disabled>Kaydet</button>
+    <span id="tfsMsg" role="status"></span>
+  </div>
 </div>
 
 <!-- Güvenlik denetimi: denetçi ajan (securityReport düğümü) için tek dokunuşla aç/kapat.
@@ -191,7 +248,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><rect x="18" y="5" width="3" height="14" rx="1"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">Planı uzak ajana gönder <span id="pwState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Adres girilirse onay kartında <b>Uzak ajana gönder</b> düğmesi çıkar; basınca plan bu adrese JSON olarak gönderilir (görev, özet, varsayımlar, dosya planı ve okunur metni). Akış etkilenmez, onayın yine beklenir. Anahtar girilirse <code>Authorization: Bearer</code> başlığıyla gider; <code>config.json</code>'da düz metin durur. Adresi silip kaydedersen kapanır.</div>
+      <div class="fhint" style="font-size:12.5px">Adres girilirse onay kartında <b>Uzak ajana gönder</b> düğmesi çıkar; basınca plan bu adrese veri olarak (JSON) gönderilir (görev, özet, varsayımlar, dosya planı ve okunur metni). Akış etkilenmez, onayın yine beklenir. Anahtar girilirse <code>Authorization: Bearer</code> başlığıyla gider; <code>config.json</code>'da düz metin durur. Adresi silip kaydedersen kapanır.</div>
     </div>
   </div>
   <div class="gbar" style="margin-top:12px">
@@ -268,7 +325,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
       <select id="cEffort" title="Yeni oturumların varsayılanı — panelde oturum başına değişir"></select>
     </div>
   </div>
-  <div class="fhint" style="margin-top:8px">Kaydettikten sonra servisi yeniden başlat. Anahtar ayar dosyasına düz metin olarak yazılır — dosyayı git'e gönderirken dikkat et.</div>
+  <div class="fhint" style="margin-top:8px">Kaydettikten sonra servisi yeniden başlat. Anahtar ayar dosyasına düz metin olarak yazılır — dosyayı depoya kaydedersen anahtar da gider, dikkat et.</div>
 </div>
 
 <div class="card" id="resCard" style="margin-bottom:14px">
@@ -312,12 +369,12 @@ input.sw:disabled { opacity:.5; cursor:default; }
     eşikte Analist'in konuşması sıradaki görevden önce otomatik özetlenir (aynı oturumdan devam eder).</div>
   <div id="xModels" class="fhint"></div>
   <div class="rgrid">
-    <div><label class="minl" for="xWindow">Varsayılan pencere (token)</label><input type="number" id="xWindow" min="0" step="1" placeholder="bilinmiyor">
+    <div><label class="minl" for="xWindow">Varsayılan pencere (jeton)</label><input type="number" id="xWindow" min="0" step="1" placeholder="bilinmiyor">
       <div class="fhint">Model listesi sınır vermeyen modeller için. Boş = sınır bilinmiyor (gösterge ve otomatik özetleme çalışmaz).</div></div>
     <div><label class="minl" for="xPercent">Otomatik özetleme eşiği (%)</label><input type="number" id="xPercent" min="0" max="100" step="1" placeholder="75">
       <div class="fhint">Kullanılabilir sınırın bu yüzdesi geçilince konuşma özetlenir. 0 = kapalı (yalnızca uyarı).</div></div>
-    <div><label class="minl" for="xReserve">Yanıta ayrılan pay (token)</label><input type="number" id="xReserve" min="0" step="1" placeholder="32000">
-      <div class="fhint">Her istekte yanıt için istenen en fazla token. Küçük pencereli modellerde düşür — sunucu "girdi + bu pay" toplamını sınırla kıyaslar.</div></div>
+    <div><label class="minl" for="xReserve">Yanıta ayrılan pay (jeton)</label><input type="number" id="xReserve" min="0" step="1" placeholder="32000">
+      <div class="fhint">Her istekte yanıt için istenen en fazla jeton. Küçük pencereli modellerde düşür — sunucu "girdi + bu pay" toplamını sınırla kıyaslar.</div></div>
   </div>
   <div class="rfoot">
     <button class="primary" id="xApply" type="button">Uygula</button>
@@ -864,6 +921,113 @@ $("pwSave").addEventListener("click", async ()=>{
   renderPwCard();
 });
 
+// TFS modu kartı: GET/POST /tfs, POST /tfs/dene. Erişim anahtarı sunucuda .gizli/'de durur — sayfa
+// yalnızca "kayıtlı mı" ve son 4 karakterini bilir; boş bırakılan anahtar alanı kayıtlıyı değiştirmez.
+let tfsSaved = null; // son GET /tfs (ya da kaydın döndürdüğü görünüm)
+async function loadTfsCard(){
+  try { tfsSaved = await (await fetch("/tfs")).json(); } catch { tfsSaved = null; }
+  fillTfs();
+}
+function fillTfs(){
+  const t = tfsSaved || {};
+  $("tfsUrl").value = t.url || "";
+  $("tfsProject").value = t.project || "";
+  $("tfsToken").value = "";
+  $("tfsWrite").value = t.writeBack || "ask";
+  $("tfsCa").value = t.caFile || "";
+  $("tfsInsecure").checked = !!t.insecureTls;
+  $("tfsSw").checked = !!t.enabled;
+  renderTfsCard();
+}
+const tfsForm = ()=> ({ url: $("tfsUrl").value.trim().replace(/\/+$/, ""), project: $("tfsProject").value.trim(), token: $("tfsToken").value.trim(),
+  writeBack: $("tfsWrite").value, caFile: $("tfsCa").value.trim(), insecureTls: $("tfsInsecure").checked });
+function tfsDirty(){
+  const t = tfsSaved || {}, f = tfsForm();
+  return f.url !== (t.url || "") || f.project !== (t.project || "") || !!f.token || f.writeBack !== (t.writeBack || "ask") ||
+    f.caFile !== (t.caFile || "") || f.insecureTls !== !!t.insecureTls;
+}
+function renderTfsCard(){
+  const t = tfsSaved || {};
+  // http: anahtar ağda şifresiz gider (Basic kimlik doğrulaması) — engel değil, uyarı
+  const duz = /^http:\/\//i.test($("tfsUrl").value.trim());
+  $("tfsUrl").title = duz ? "Adres http: erişim anahtarı ağda şifrelenmeden gider. Sunucuda https varsa onu kullan." : "";
+  $("tfsState").textContent = t.enabled ? (t.ready ? "açık" : "açık · ayar eksik") : "kapalı";
+  $("tfsState").className = "secc-st" + (t.enabled && t.ready ? " on" : "");
+  $("tfsToken").disabled = t.tokenSource === "ortam";
+  $("tfsTokenHint").textContent = t.tokenSource === "ortam"
+    ? `Anahtar ${t.tokenEnv} ortam değişkeninden geliyor (sonu …${t.tokenHint}) — buradan değiştirilemez.`
+    : t.hasToken
+      ? `Kayıtlı anahtar: …${t.tokenHint}. Ayar dosyasına ve tarayıcıya gitmez (çalışma klasöründe .gizli/ altında). Değiştirmek için yenisini yaz. Panelde giriş olmadığı için panele erişen herkes bu anahtarla TFS'te okuyup yazabilir.`
+      : "Anahtar yok — TFS'te sağ üstteki profil → Güvenlik → Kişisel erişim anahtarları'ndan oluştur (kapsam: İş öğeleri ve Kod — okuma ve yazma).";
+  $("tfsSave").disabled = !tfsDirty();
+}
+/** Tarayıcıdan kopyalanan TFS adresini koleksiyon + projeye ayırır (…/Koleksiyon/Proje/_workitems/…) */
+function splitTfsUrl(v){
+  let u; try { u = new URL(v.trim()); } catch { return null; }
+  const segs = u.pathname.split("/").filter(Boolean);
+  const at = segs.findIndex((s)=> s.startsWith("_"));
+  if (at <= 0) return null;
+  const coll = segs.slice(0, at - 1);
+  if (!coll.length && !/\.visualstudio\.com$/i.test(u.hostname)) return null;
+  return { url: `${u.protocol}//${u.host}${coll.length ? "/" + coll.join("/") : ""}`, project: decodeURIComponent(segs[at - 1]) };
+}
+const tfsMsg = (html, renk)=> { $("tfsMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
+for (const id of ["tfsUrl","tfsProject","tfsToken","tfsCa"]){
+  $(id).addEventListener("input", ()=>{ tfsMsg(""); renderTfsCard(); });
+  $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("tfsSave").disabled){ e.preventDefault(); $("tfsSave").click(); } });
+}
+for (const id of ["tfsWrite","tfsInsecure"]) $(id).addEventListener("change", ()=>{ tfsMsg(""); renderTfsCard(); });
+$("tfsUrl").addEventListener("change", ()=>{
+  const p = splitTfsUrl($("tfsUrl").value);
+  if (p){
+    $("tfsUrl").value = p.url;
+    if (!$("tfsProject").value.trim()) $("tfsProject").value = p.project;
+    tfsMsg(`Adres ayrıldı — koleksiyon: <b>${esc(p.url)}</b>, proje: <b>${esc(p.project)}</b>`, "teal");
+  }
+  renderTfsCard();
+});
+$("tfsTokenShow").addEventListener("click", ()=>{ $("tfsToken").type = $("tfsToken").type === "password" ? "text" : "password"; });
+async function tfsPost(url, body){
+  try {
+    const res = await fetch(url, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+    return await res.json().catch(()=>({ ok:false, error:"yanıt okunamadı" }));
+  } catch { return { ok:false, error:"sunucuya ulaşılamadı" }; }
+}
+/** Kayıttan sonra sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa TFS ayarı silinmesin */
+function syncTfsCfg(raw){ if (!cfg) return; if (raw) cfg.tfs = raw; else delete cfg.tfs; }
+$("tfsTest").addEventListener("click", async ()=>{
+  $("tfsTest").disabled = true;
+  tfsMsg("Deneniyor…");
+  const f = tfsForm();
+  const r = await tfsPost("/tfs/dene", f);
+  $("tfsTest").disabled = false;
+  if (!r.ok) return tfsMsg(`✗ ${esc(r.error || "bağlanılamadı")}`, "red");
+  const p = r.probe;
+  $("tfsProjects").innerHTML = (p.projects || []).map((x)=> `<option value="${esc(x)}">`).join("");
+  const proje = f.project ? (p.projectFound === false ? ` · ⚠ "${esc(f.project)}" projesi bu koleksiyonda yok — listeden seç` : ` · proje bulundu`) : " · proje seç (listeden)";
+  tfsMsg(`✓ Bağlandı${p.user ? ` — ${esc(p.user)}` : ""} · ${esc(p.product)} (sürüm ${Number(p.version).toFixed(1)}) · ${p.projects.length} proje${proje}`, p.projectFound === false ? "amber" : "teal");
+});
+$("tfsSave").addEventListener("click", async ()=>{
+  const f = tfsForm();
+  $("tfsSave").disabled = true;
+  const r = await tfsPost("/tfs", { url:f.url, project:f.project, writeBack:f.writeBack, caFile:f.caFile, insecureTls:f.insecureTls, ...(f.token ? { token:f.token } : {}) });
+  if (!r.ok){ tfsMsg(`✗ ${esc(r.error || "kaydedilemedi")}`, "red"); renderTfsCard(); return; }
+  tfsSaved = r.view; syncTfsCfg(r.config); fillTfs();
+  tfsMsg(`✓ Kaydedildi — hemen geçerli${tfsSaved.enabled ? "" : ". Kullanmak için sağdaki anahtarla TFS modunu aç"}`, "teal");
+});
+$("tfsSw").addEventListener("change", async ()=>{
+  const want = $("tfsSw").checked;
+  const f = tfsForm();
+  // Açarken formdaki kaydedilmemiş değerler de gider (adres/proje/anahtar yeni girildiyse)
+  const body = want ? { enabled:true, url:f.url, project:f.project, writeBack:f.writeBack, caFile:f.caFile, insecureTls:f.insecureTls, ...(f.token ? { token:f.token } : {}) } : { enabled:false };
+  $("tfsSw").disabled = true;
+  const r = await tfsPost("/tfs", body);
+  $("tfsSw").disabled = false;
+  if (!r.ok){ $("tfsSw").checked = !want; tfsMsg(`✗ ${esc(r.error || "uygulanamadı")}`, "red"); return; }
+  tfsSaved = r.view; syncTfsCfg(r.config); fillTfs();
+  tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde iş öğesi seçici çıkar" : "TFS modu kapatıldı", "teal");
+});
+
 function render(){
   drawGraph();
   renderSecCard();
@@ -1347,6 +1511,13 @@ $("ndAddBtn").addEventListener("click", async ()=>{
   selected = key; markDirty(); refreshEntry(); render();
 });
 
+// Çalışan sürüm başlıkta; tıklayınca sürüm notları (alınamazsa hiç görünmez)
+fetch("/version").then((r) => r.json()).then((d) => {
+  if (!d.version) return;
+  $("verLink").textContent = "v" + d.version + " · sürüm notları";
+  $("verLink").style.display = "";
+}).catch(() => {});
+
 async function load(){
   const d = await (await fetch("/config-data")).json();
   cfg = JSON.parse(d.raw);
@@ -1358,6 +1529,7 @@ async function load(){
   fillUserPrompt();
   fillPar();
   fillPlanWebhook();
+  loadTfsCard();
   fillResilience();
   fillContext();
   loadContextModels();

@@ -59,7 +59,7 @@ docker compose up --build
 
 Panel `http://localhost:${PORT:-4141}` adresinde açılır (sunucu modu). `TARGET_DIR` env değişkeni, ajanların üzerinde çalışacağı hedef proje dizinini (host yolu) `/workspace/target` olarak konteynere bağlar ve `--cwd` bayrağıyla `config.json`'daki `targetDir`'in önüne geçer. Orkestratör kaynağı ve `.claude/` konteynere bind-mount edilir; persona/kural/config değişiklikleri için yeniden build gerekmez (kod değişikliğinde konteyneri yeniden başlatmak yeterli).
 
-Kimlik doğrulama: `ANTHROPIC_API_KEY` doluysa doğrudan Anthropic'e bağlanır. Boş bırakılırsa Claude Code oturumu aranır — bunun için host'taki `~/.claude` dizinini salt-okunur bağlamak gerekir (`docker-compose.yml`'e `- ~/.claude:/root/.claude:ro` ekle). `provider: "ollama"` gibi özel `baseUrl` kullanan config'ler için `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` env değişkenlerini doldur.
+Kimlik doğrulama: `ANTHROPIC_API_KEY` doluysa doğrudan Anthropic'e bağlanır. Boş bırakılırsa Claude Code oturumu aranır — bunun için host'taki `~/.claude` dizinini salt-okunur bağlamak gerekir (`docker-compose.yml`'e `- ~/.claude:/root/.claude:ro` ekle). `provider: "ollama"` gibi özel `baseUrl` kullanan config'ler için `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` env değişkenlerini doldur. TFS modu için erişim anahtarını panelden girebilir ya da `KURMAY_TFS_TOKEN` ile verebilirsin.
 
 Not: `config.json`'daki `mcpServers` girdileri Windows'a özgüyse (`"command": "cmd", "args": ["/c", "npx", ...]`) Linux konteynerinde çalışmaz; `cmd /c` olmadan doğrudan `npx` kullanacak şekilde uyarlanmalı.
 
@@ -109,6 +109,23 @@ Akış başlarken `http://localhost:4141` adresinde bir izleme paneli açılır 
 Her koşunun tüm olayları ayrı bir `runs/<tarih>.jsonl` dosyasına da yazılır — geçmiş koşuları incelemek için.
 
 HTTP arayüzü: `GET /` panel, `GET /events` SSE, `POST /approval` onay, `POST /task` yeni görev (sadece sunucu modunda; `files: [{name, data}]` ile ek), `GET /ekler/<oturum>/<dosya>` görev ekleri.
+
+## TFS modu
+
+TFS'teki iş öğelerini ve çekme isteklerini doğrudan Kurmay'a verirsin; açıklamayı, yorumları, ekleri elle kopyalamak gerekmez.
+
+1. TFS'te kişisel erişim anahtarı (PAT) oluştur. Yetkiler: **İş Öğeleri** okuma ve yazma, **Kod** okuma ve yazma; listede varsa **Proje ve Takım** okuma.
+2. Panelde Ayarlar → **TFS modu**: koleksiyon adresini (ör. `https://tfs.sirket.local/tfs/DefaultCollection` — tarayıcıdan bir iş öğesi adresi yapıştırırsan proje de ayrılır), projeyi ve anahtarı gir, **Bağlantıyı dene**, sonra aç.
+3. Görev kutusunun üstündeki alana iş öğesi numarasını (`1201`), adresini ya da başlığından bir kelime yaz; **Bana atananlar** listesinden de seçebilirsin. Çekme isteği için `!45` ya da adresi.
+
+- **İş öğesi**: açıklama, kabul kriterleri, yeniden üretme adımları, yorumlar, bağlı öğeler, ekler ve metindeki görseller ekibe görev olarak gider. Görev kutusuna yazdığın metin ek talimat olur. İş bitince panelde hazır bir not çıkar; düzenleyip iş öğesine yazarsın, istersen durumunu da değiştirirsin. Değişiklikler yeni bir dala gönderilip iş öğesine bağlı çekme isteği açılabilir.
+- **Çekme isteği**: iki kip var. *Açık yorumları ele al*: ekip düzeltir, değişiklikler isteğin dalına gönderilir, her yoruma cevap yazılır ve "düzeltildi" yapılır (önce isteğin dalına geçmek gerekir; panelde **Dala geç** düğmesi var). *İncele*: kod değişmez; satır yorumları ve genel bir yorum yazılır.
+- Ayarlar'da "İş bitince sonucu TFS'e yaz": sorarak (varsayılan), kendiliğinden ya da yazma.
+- TFS'e yazılan her metin `--- KURMAY POSTA KOMUTANI ---` başlığıyla başlar.
+
+Anahtar `config.json`'a yazılmaz: çalışma klasöründe `.gizli/tfs.json` dosyasında durur (klasör depoya girmez) ya da `KURMAY_TFS_TOKEN` ortam değişkeninden okunur. Kurum sertifikası: Node 22.15 ve sonrası Windows sertifika deposunu kendisi okur; olmazsa Ayarlar'da kök sertifika dosyasının (PEM) yolunu ver. Sunucunun sürümünü kendisi bulur ve isteklerini ona göre yapar; TFS 2017, 2018 ve 2022 gibi davranan deneme sunucularında denendi, gerçek bir TFS sunucusunda henüz denenmedi.
+
+**Dikkat:** panelde giriş yok — panele erişebilen herkes bu anahtarla TFS'e yazabilir ve dallara gönderebilir.
 
 ## config.json
 

@@ -32,8 +32,15 @@ export async function refreshModelContext(url: string | undefined, apiKey?: stri
   if (Date.now() - contextFetchedAt < 10_000) return;
   if (!contextFetching) {
     contextFetching = fetchModels(url, apiKey)
-      .then(() => undefined, () => { contextFetchedAt = Date.now(); }) // hatada da sık sık denenmesin
-      .finally(() => { contextFetching = null; });
+      .then(
+        () => undefined,
+        () => {
+          contextFetchedAt = Date.now();
+        },
+      ) // hatada da sık sık denenmesin
+      .finally(() => {
+        contextFetching = null;
+      });
   }
   await contextFetching;
 }
@@ -86,7 +93,8 @@ export async function fetchModels(url: string, apiKey?: string): Promise<ModelIn
       id = item;
     } else if (item && typeof item === "object") {
       const o = item as Record<string, unknown>;
-      const pick = (...keys: string[]) => keys.map((k) => o[k]).find((v) => typeof v === "string" && v) as string | undefined;
+      const pick = (...keys: string[]) =>
+        keys.map((k) => o[k]).find((v) => typeof v === "string" && v) as string | undefined;
       id = pick("id", "model", "name");
       name = pick("display_name", "name");
       const ctx = CONTEXT_KEYS.map((k) => o[k]).find((v) => typeof v === "number" && Number.isFinite(v) && v > 0);

@@ -1,0 +1,17 @@
+# Prettier kapsamı: src/ (TypeScript), bin/ ve ui/ altındaki .js dosyaları, .claude/hooks/, kök JSON ayarları.
+# Aşağıdakiler bilinçli olarak dışarıda:
+node_modules/
+dist/
+runs/
+.gizli/
+package-lock.json
+# Kurmay'ın kendisinin yazdığı ayar dosyaları (JSON.stringify biçimi) — biçimlendirici her kayıtta onunla çekişmesin
+config.json
+config.*.json
+# Markdown: rol tanımlarının ön bölümü (YAML çıktı şeması) ve notlar elle biçimli
+*.md
+# Büyük satır içi betikli sayfalar ve tanıtım sitesi — ayrı bir adımda ele alınacak
+*.html
+*.css
+tanitim/
+ui/fonts/

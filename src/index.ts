@@ -19,7 +19,80 @@ import { SecurityAuditRunner } from "./securityAudit.js";
 import { searchSessions } from "./search.js";
 import { SessionStore, sessionRecap, type SessionEntry } from "./sessions.js";
 import { attachmentSection, saveFiles, type Attachment, type FileInput } from "./attachments.js";
-import { isFanoutNode, mainPath, type AgentDefinition, type AppConfig, type WorkflowConfig } from "./types.js";
+import type { OrchestratorEvent, TimedEvent } from "./events.js";
+import {
+  fetchAttachment,
+  forgetServer,
+  getStates,
+  getSummaries,
+  linkArtifact,
+  myWorkItems,
+  probe as probeTfs,
+  searchWorkItems,
+  serverVersion,
+  TfsError,
+  writeWorkItem,
+} from "./tfs.js";
+import { textToTfsHtml } from "./tfsHtml.js";
+import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
+import {
+  prepareWorkItemTask,
+  previewWorkItem,
+  runChangedFiles,
+  runSucceeded,
+  workItemLabel,
+  writeBackDraft,
+} from "./tfsTask.js";
+import {
+  authEnv,
+  checkoutPrBranch,
+  commitAndPush,
+  currentBranch,
+  defaultBranch,
+  findRepo,
+  groupByRepo,
+  openRepo,
+  projectFromRemote,
+  repoNameFromRemote,
+  slug,
+  uniqueBranch,
+} from "./tfsGit.js";
+import {
+  createPullRequest,
+  createThread,
+  getIterationChanges,
+  getPullRequest,
+  getRepository,
+  myPullRequests,
+  repoInfoFromRemote,
+  replyToThread,
+  setThreadStatus,
+  type TfsPullRequest,
+} from "./tfsPr.js";
+import { preparePrFollowUp, preparePrTask, previewPr, prWriteDraft } from "./tfsPrTask.js";
+import {
+  isFanoutNode,
+  mainPath,
+  TFS_WRITE_BACK,
+  type AgentDefinition,
+  type AppConfig,
+  type TfsConfig,
+  type WorkflowConfig,
+} from "./types.js";
+
+/** Koşunun TFS iş öğesi (workflow_started.workItem) */
+type RunWorkItem = NonNullable<Extract<OrchestratorEvent, { type: "workflow_started" }>["workItem"]>;
+/** Koşunun TFS çekme isteği (workflow_started.pr) */
+type RunPr = NonNullable<Extract<OrchestratorEvent, { type: "workflow_started" }>["pr"]>;
+/** PR'a yazma isteği (panel kartı ya da kendiliğinden) */
+interface PrWriteInput {
+  push: boolean;
+  message?: string;
+  files?: string[];
+  replies: Array<{ threadId: number; firstCommentId: number; text: string; resolve: boolean; send: boolean }>;
+  comments: Array<{ file?: string; line?: number; text: string; send: boolean }>;
+  general?: string;
+}
 
 function parseArgs(argv: string[]): {
   task: string;
@@ -85,19 +158,31 @@ async function executeRun(o: {
   onDone: () => void;
   /** Verilirse akış bu zamana kadar bekler (zamanlanmış görev) */
   startAt?: number;
+  /** Panelde/lobide görünen görev (TFS: "#123 · Başlık"); yoksa task */
+  display?: string;
+  /** TFS iş öğesi (workflow_started'da taşınır) */
+  workItem?: RunWorkItem;
+  /** TFS çekme isteği (workflow_started'da taşınır) */
+  pr?: RunPr;
+  /** Ekler bölümünün ilk cümlesi (TFS ekleri için) */
+  attachmentIntro?: string;
+  /** Akış bittikten sonra, koşu kaydı kapanmadan (TFS'e yazma) — bu koşunun olaylarıyla */
+  afterRun?: (events: TimedEvent[]) => Promise<void>;
 }): Promise<void> {
   const { task, cfg, agents, cwd, runtime, entry } = o;
+  const display = o.display ?? task;
   const bus = runtime.bus;
-  const abortController = runtime.startRun(task, cwd);
+  const abortController = runtime.startRun(display, cwd);
   // Oturumda önceki görevler varsa panel akışı temizlemez, araya ayraç koyar
   const resumed = bus.history.length > 0 || !!entry.sdkSessionId;
   const logName = `${new Date().toISOString().replace(/[:.]/g, "-")}-${entry.id.slice(0, 8)}.jsonl`;
   const runLog = path.join(o.runsDir, logName);
-  o.sessions.addRunLog(entry.id, logName, task);
+  o.sessions.addRunLog(entry.id, logName, display);
   const unsubscribe = bus.subscribe((e) => fs.appendFileSync(runLog, JSON.stringify(e) + "\n"));
   // Güvenlik denetimi raporu: denetçi düğüm (securityReport) bitince runs/guvenlik/'e kaydedilir
   const unsubscribeReport = watchSecurityReports(bus, o.securityReports, {
-    isReportAgent: (agent) => !!(cfg.workflow.agents[agent] as { securityReport?: boolean } | undefined)?.securityReport,
+    isReportAgent: (agent) =>
+      !!(cfg.workflow.agents[agent] as { securityReport?: boolean } | undefined)?.securityReport,
     base: { session: entry.id, sessionName: entry.name, task, targetDir: cwd, model: cfg.model },
     label: entry.name,
   });
@@ -113,11 +198,15 @@ async function executeRun(o: {
     autoForward: () => o.sessions.get(entry.id)?.autoForward,
   };
 
-  console.log(`\n🎯 [${entry.name}] Görev: ${task}`);
+  console.log(`\n🎯 [${entry.name}] Görev: ${display}`);
+  // Bu koşunun olayları buradan başlar (TFS'e yazılacak notun kaynağı)
+  const firstEvent = bus.history.length;
   try {
     bus.emit({
       type: "workflow_started",
-      task,
+      task: display,
+      ...(o.workItem ? { workItem: o.workItem } : {}),
+      ...(o.pr ? { pr: o.pr } : {}),
       provider: cfg.provider,
       model: cfg.model,
       effort: cfg.effort,
@@ -126,7 +215,9 @@ async function executeRun(o: {
       maxCycles: cfg.workflow.maxCycles,
       agents: [...agents.keys()],
       resumed,
-      ...(o.attachments?.length ? { attachments: o.attachments.map(({ name, original }) => ({ name, original })) } : {}),
+      ...(o.attachments?.length
+        ? { attachments: o.attachments.map(({ name, original }) => ({ name, original })) }
+        : {}),
       fanouts: Object.fromEntries(
         Object.entries(cfg.workflow.agents)
           .filter(([, n]) => isFanoutNode(n))
@@ -136,7 +227,26 @@ async function executeRun(o: {
         .filter(([, n]) => n.disabled)
         .map(([key]) => key),
     });
-    await runWorkflow(cfg.workflow, agents, task + attachmentSection(o.attachments ?? []), cwd, cfg, bus, abortController, runtime.web, sessionStore, o.startAt);
+    await runWorkflow(
+      cfg.workflow,
+      agents,
+      task + attachmentSection(o.attachments ?? [], o.attachmentIntro),
+      cwd,
+      cfg,
+      bus,
+      abortController,
+      runtime.web,
+      sessionStore,
+      o.startAt,
+    );
+    // Kayıt (JSONL) hâlâ açıkken: yazma olayları da koşunun kaydına girer
+    if (o.afterRun) {
+      try {
+        await o.afterRun(bus.history.slice(firstEvent));
+      } catch (e) {
+        console.error(`⚠ [${entry.name}] Koşu sonrası adım başarısız:`, e instanceof Error ? e.message : e);
+      }
+    }
   } catch (err) {
     bus.emit({ type: "workflow_failed", error: err instanceof Error ? err.message : String(err) });
     throw err;
@@ -186,7 +296,9 @@ async function main() {
     // Dizin uyarısıyla aynı desen: tek görev modunda dur, sunucu modunda aç ve uyar
     const msg = 'provider "ollama" için model seçilmedi (örn. "qwen3-coder:30b")';
     if (task || noUi) throw new Error(`config: ${msg}`);
-    console.warn(`⚠ ${msg}\n  Panel yine de açılıyor — üst çubuktaki model listesinden seç (o zamana kadar görev başlatılamaz).`);
+    console.warn(
+      `⚠ ${msg}\n  Panel yine de açılıyor — üst çubuktaki model listesinden seç (o zamana kadar görev başlatılamaz).`,
+    );
   }
 
   if (!task && noUi) {
@@ -254,14 +366,281 @@ async function main() {
         dirExists: dirOk(e.targetDir ?? cwd),
         // Analist konuşmasının doluluğu — panelde yaklaşınca uyarı
         ...(e.contextTokens ? { context: { tokens: e.contextTokens, window: ctx?.window, limit: ctx?.limit } } : {}),
+        // TFS: oturumun bağlı olduğu iş öğesi (sol listede rozet)
+        ...(e.workItem ? { workItem: { id: e.workItem.id, type: e.workItem.type, state: e.workItem.state } } : {}),
+        ...(e.pr ? { pr: { id: e.pr.id, mode: e.pr.mode, repository: e.pr.repository } } : {}),
       };
     });
 
-  /** Bir oturumda görev başlatır (oturum yoksa açar); arka planda koşar */
-  const launch = (task: string, entry: SessionEntry | undefined, runAt?: number, files: FileInput[] = [], dir?: string) => {
+  /**
+   * TFS modu: iş bitince sonucu iş öğesine yazar (Ayarlar "kendiliğinden") ya da panele
+   * düzenlenebilir taslakla kart açtırır ("sorarak", varsayılan). Yalnızca iyi biten koşuda.
+   */
+  const tfsAfterRun = async (
+    rt: SessionRuntime,
+    wi: RunWorkItem,
+    events: TimedEvent[],
+    entryKey: string,
+    runDir: string,
+  ) => {
+    const mode = cfg.tfs?.writeBack ?? "ask";
+    if (!runSucceeded(events) || mode === "off" || !cfg.tfs?.enabled) return;
+    const text = writeBackDraft(events, entryKey, runDir, wi.id);
+    if (mode !== "auto") {
+      const files = runChangedFiles(events, entryKey, runDir);
+      rt.bus.emit({
+        type: "tfs_writeback",
+        id: wi.id,
+        title: wi.title,
+        workItemType: wi.type,
+        state: wi.state,
+        url: wi.url,
+        text,
+        ...(files.length ? { files } : {}),
+      });
+      return;
+    }
+    const conn = tfsConnection(cfg.tfs, configRoot);
+    if (!conn) {
+      rt.bus.emit({
+        type: "tfs_written",
+        id: wi.id,
+        ok: false,
+        auto: true,
+        error: "TFS bağlantısı ayarlı değil (Ayarlar → TFS modu)",
+      });
+      return;
+    }
+    try {
+      await writeWorkItem(conn, wi.id, { html: textToTfsHtml(text) });
+      rt.bus.emit({ type: "tfs_written", id: wi.id, ok: true, auto: true, url: wi.url });
+      console.log(`📌 TFS #${wi.id}: sonuç iş öğesine yazıldı`);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      rt.bus.emit({ type: "tfs_written", id: wi.id, ok: false, auto: true, error });
+      console.warn(`⚠ TFS #${wi.id}: sonuç yazılamadı — ${error}`);
+    }
+  };
+
+  /** API çağrıları için PR nesnesi (koşu kaydındaki bilgiden) */
+  const prRef = (pr: RunPr): TfsPullRequest =>
+    ({
+      id: pr.id,
+      title: pr.title,
+      repository: { id: pr.repositoryId, name: pr.repository, project: pr.project },
+    }) as TfsPullRequest;
+
+  /**
+   * PR'a yazar: (1) istenirse değişiklikleri commit'leyip PR'ın dalına gönderir — gönderilemezse
+   * DURUR (kod gitmeden "düzeltildi" yazılmasın); (2) yorum dizilerine cevap + "düzeltildi";
+   * (3) yeni yorumlar (satıra bağlı; olmazsa yeri yazılarak genel yorum); (4) genel yorum.
+   */
+  const executePrWrite = async (
+    pr: RunPr,
+    input: PrWriteInput,
+    runDir: string,
+  ): Promise<Extract<OrchestratorEvent, { type: "tfs_pr_written" }>> => {
+    const c = tfsConn();
+    const api = prRef(pr);
+    const errors: string[] = [];
+    let pushed: { branch: string; commit: string } | undefined;
+    let replied = 0;
+    let resolved = 0;
+    let created = 0;
+    let general = false;
+    const fail = (m: string): Extract<OrchestratorEvent, { type: "tfs_pr_written" }> => ({
+      type: "tfs_pr_written",
+      id: pr.id,
+      ok: false,
+      url: pr.url,
+      errors: [m],
+    });
+    if (input.push) {
+      if (!input.files?.length) return fail("gönderilecek dosya yok");
+      const repo = pr.repoDir ? await openRepo(pr.repoDir, runDir) : undefined;
+      if (!repo) return fail("çekme isteğinin bilgisayardaki kopyası bulunamadı — değişiklikler gönderilemedi");
+      const branch = await currentBranch(repo.dir).catch(() => "");
+      if (branch !== pr.source)
+        return fail(
+          `bilgisayardaki kopya artık "${branch}" dalında, çekme isteğinin dalı "${pr.source}" — değişiklikler gönderilmedi`,
+        );
+      try {
+        const r = await commitAndPush(
+          repo,
+          input.files,
+          input.message?.trim() || `!${pr.id} inceleme yorumları`,
+          await authEnv(c, repo.remoteUrl),
+        );
+        pushed = { branch: r.branch, commit: r.commit };
+        console.log(
+          `📤 Çekme isteği !${pr.id}: ${r.files.length} dosya ${r.branch} dalına gönderildi (kayıt ${r.commit.slice(0, 8)})`,
+        );
+      } catch (e) {
+        return fail(`değişiklikler gönderilemedi: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    const kisa = pushed ? `\n\n_Kayıt: ${pushed.commit.slice(0, 8)} — ${pushed.branch} dalı_` : "";
+    for (const r of input.replies.filter((x) => x.send && (x.text.trim() || x.resolve))) {
+      try {
+        if (r.text.trim()) {
+          await replyToThread(
+            c,
+            api,
+            { id: r.threadId, firstCommentId: r.firstCommentId },
+            r.text.trim() + (r.resolve ? kisa : ""),
+          );
+          replied++;
+        }
+        if (r.resolve) {
+          await setThreadStatus(c, api, r.threadId, "fixed");
+          resolved++;
+        }
+      } catch (e) {
+        errors.push(`yorum ${r.threadId}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    // Satır yorumları için son yineleme: dosya isteğin farkında mı, bağlam kimliği (changeTrackingId) ne
+    const yazilacak = input.comments.filter((x) => x.send && x.text.trim());
+    const it = yazilacak.some((x) => x.file) ? await getIterationChanges(c, api).catch(() => undefined) : undefined;
+    const izler = new Map((it?.changes ?? []).map((ch) => [ch.path.toLowerCase(), ch.changeTrackingId]));
+    const yerli = (cm: { file?: string; line?: number }) =>
+      `\n\n**Yer:** \`${(cm.file ?? "").replace(/^\//, "")}${cm.line ? `:${cm.line}` : ""}\``;
+    for (const cm of yazilacak) {
+      try {
+        const yol = cm.file ? "/" + cm.file.replace(/\\/g, "/").replace(/^\/+/, "") : undefined;
+        if (yol && it && !izler.has(yol.toLowerCase())) {
+          // Dosya bu isteğin farkında yok — satıra bağlanamaz; yeri yazılarak genel yorum
+          await createThread(c, api, cm.text.trim() + yerli(cm));
+        } else {
+          await createThread(
+            c,
+            api,
+            cm.text.trim(),
+            yol
+              ? {
+                  file: yol,
+                  ...(cm.line ? { line: cm.line } : {}),
+                  changeTrackingId: izler.get(yol.toLowerCase()),
+                  iteration: it?.iteration,
+                }
+              : undefined,
+          );
+        }
+        created++;
+      } catch (e) {
+        // Satıra bağlanamadı (dosya/satır PR farkında değil): yeri yazılarak genel yorum
+        if (!cm.file) {
+          errors.push(`yorum: ${e instanceof Error ? e.message : String(e)}`);
+          continue;
+        }
+        try {
+          await createThread(c, api, cm.text.trim() + yerli(cm));
+          created++;
+        } catch (e2) {
+          errors.push(`yorum (${cm.file}): ${e2 instanceof Error ? e2.message : String(e2)}`);
+        }
+      }
+    }
+    if (input.general?.trim()) {
+      try {
+        // Özet bilgi içindir: "kapatıldı" açılır — "yorumlar çözülmeli" kuralı birleştirmeyi kilitlemesin
+        await createThread(c, api, input.general.trim() + (input.push ? kisa : ""), undefined, undefined, 4);
+        general = true;
+      } catch (e) {
+        errors.push(`genel yorum: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return {
+      type: "tfs_pr_written" as const,
+      id: pr.id,
+      ok: errors.length === 0,
+      url: pr.url,
+      ...(pushed ? { pushed } : {}),
+      replied,
+      resolved,
+      created,
+      general,
+      ...(errors.length ? { errors } : {}),
+    };
+  };
+
+  /** PR görevi bitince: taslak kartı ("sorarak") ya da hepsini kendiliğinden yazma */
+  const tfsPrAfterRun = async (
+    rt: SessionRuntime,
+    pr: RunPr,
+    events: TimedEvent[],
+    entryKey: string,
+    runDir: string,
+  ) => {
+    const mode = cfg.tfs?.writeBack ?? "ask";
+    if (!runSucceeded(events) || mode === "off" || !cfg.tfs?.enabled) return;
+    const draft = prWriteDraft(events, pr, entryKey, runDir);
+    if (mode !== "auto") {
+      rt.bus.emit({
+        type: "tfs_pr_writeback",
+        id: pr.id,
+        title: pr.title,
+        url: pr.url,
+        source: pr.source,
+        repository: pr.repository,
+        ...draft,
+      });
+      return;
+    }
+    try {
+      const r = await executePrWrite(
+        pr,
+        {
+          push: !!draft.commit,
+          message: draft.commit?.message,
+          files: draft.commit?.files,
+          replies: draft.replies.map((x) => ({ ...x, send: true })),
+          comments: draft.comments.map((x) => ({ ...x, send: true })),
+          general: draft.general,
+        },
+        runDir,
+      );
+      rt.bus.emit({ ...r, auto: true });
+    } catch (e) {
+      rt.bus.emit({
+        type: "tfs_pr_written",
+        id: pr.id,
+        ok: false,
+        auto: true,
+        errors: [e instanceof Error ? e.message : String(e)],
+      });
+    }
+  };
+
+  /** Bir oturumda görev başlatır (oturum yoksa açar); arka planda koşar.
+   *  tfs: görev bir TFS iş öğesinden ya da çekme isteğinden (ya da oturumun bağlı olduğunun devamı) */
+  const launch = (
+    task: string,
+    entry: SessionEntry | undefined,
+    runAt?: number,
+    files: FileInput[] = [],
+    dir?: string,
+    tfs?: { display: string; name?: string; workItem?: RunWorkItem; pr?: RunPr; attachmentIntro?: string },
+  ) => {
     // Yeni oturum o anki genel model/derinlik/dizinle (ya da görevle seçilen dizinle) açılır;
     // sonra panelden yalnızca kendisi için değişebilir
-    const e = entry ?? sessions.create(task, cfg.model, cfg.effort, dir ?? cwd, !!cfg.workflow.autoForwardPlan);
+    const e =
+      entry ??
+      sessions.create(
+        tfs?.name ?? tfs?.display ?? task,
+        cfg.model,
+        cfg.effort,
+        dir ?? cwd,
+        !!cfg.workflow.autoForwardPlan,
+      );
+    if (tfs?.workItem && !tfs.workItem.inherited) {
+      const { id, type, title, state, url, project } = tfs.workItem;
+      sessions.setWorkItem(e.id, { id, type, title, state, url, project });
+    }
+    if (tfs?.pr && !tfs.pr.inherited) {
+      const { id, title, url, repository, mode } = tfs.pr;
+      sessions.setPr(e.id, { id, title, url, repository, mode });
+    }
     // Eski kayıt (dizinsiz): o anki genel dizine sabitlenir — konuşması da o dizinde
     if (!e.targetDir) sessions.setTargetDir(e.id, cwd, true);
     const runDir = e.targetDir ?? cwd;
@@ -288,9 +667,358 @@ async function main() {
       securityReports,
       onDone: () => runtimes.notify(),
       startAt: runAt,
+      ...(tfs
+        ? {
+            display: tfs.display,
+            ...(tfs.workItem ? { workItem: tfs.workItem } : {}),
+            ...(tfs.pr ? { pr: tfs.pr } : {}),
+            attachmentIntro: tfs.attachmentIntro,
+            afterRun: (events: TimedEvent[]) =>
+              tfs.pr
+                ? tfsPrAfterRun(runtime, tfs.pr, events, runCfg.workflow.entry, runDir)
+                : tfsAfterRun(runtime, tfs.workItem!, events, runCfg.workflow.entry, runDir),
+          }
+        : {}),
     });
     runtimes.notify();
     return { entry: e, run };
+  };
+
+  // ── TFS modu (Ayarlar + panel uçları) ──
+  /** Kullanıma hazır bağlantı; değilse açıklamalı hata */
+  const tfsConn = () => {
+    const c = cfg.tfs?.enabled ? tfsConnection(cfg.tfs, configRoot) : undefined;
+    if (!c || !c.project)
+      throw new TfsError(
+        "TFS modu kapalı ya da ayarları eksik — Ayarlar → TFS modu kartından sunucu, proje ve erişim anahtarını gir",
+      );
+    return c;
+  };
+  /** Oturumda yazılmayı bekleyen sonuç (son tfs_writeback; ardından yazıldı/atlandı olayı yoksa) */
+  const pendingWriteback = (rt: SessionRuntime) => {
+    const h = rt.bus.history;
+    for (let i = h.length - 1; i >= 0; i--) {
+      const e = h[i];
+      if (e.type === "tfs_written" && (e.ok || e.skipped)) return undefined;
+      if (e.type === "workflow_started") return undefined;
+      if (e.type === "tfs_writeback") return e;
+    }
+    return undefined;
+  };
+  /** Oturumda PR'a yazılmayı bekleyen taslak (son tfs_pr_writeback; ardından yazıldı/atlandı yoksa) */
+  const pendingPrWriteback = (rt: SessionRuntime) => {
+    const h = rt.bus.history;
+    for (let i = h.length - 1; i >= 0; i--) {
+      const e = h[i];
+      if (e.type === "tfs_pr_written" && (e.ok || e.skipped)) return undefined;
+      if (e.type === "workflow_started") return undefined;
+      if (e.type === "tfs_pr_writeback") {
+        // Koşunun PR bilgisi (yerel depo yolu dahil) aynı koşunun başındaki olayda
+        for (let j = i; j >= 0; j--) {
+          const s = h[j];
+          if (s.type === "workflow_started") return s.pr ? { draft: e, pr: s.pr, targetDir: s.targetDir } : undefined;
+        }
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+  /** Son koşunun olayları (son workflow_started'dan bu yana) */
+  const lastRunEvents = (rt: SessionRuntime) => {
+    const h = rt.bus.history;
+    for (let i = h.length - 1; i >= 0; i--) if (h[i].type === "workflow_started") return h.slice(i);
+    return [];
+  };
+  /** Koşu bittikten sonra çıkan olay: oturumun son koşu kaydına da yazılır (yeniden başlatınca kart geri gelmesin) */
+  const emitAfterRun = (entry: SessionEntry, rt: SessionRuntime, ev: OrchestratorEvent) => {
+    const last = entry.runLogs?.[entry.runLogs.length - 1];
+    const off = last
+      ? rt.bus.subscribe((e) => fs.appendFileSync(path.join(runsDir, last), JSON.stringify(e) + "\n"))
+      : () => {};
+    try {
+      rt.bus.emit(ev);
+    } finally {
+      off();
+    }
+  };
+  const tfsApi = {
+    view: () => tfsView(cfg.tfs, configRoot),
+    /** Ayarları kaydeder: config.json "tfs" (anahtar hariç) + anahtar .gizli/'ye; canlı */
+    save: async (input: Record<string, unknown>) => {
+      const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+      try {
+        const parsed = JSON.parse(prev) as AppConfig;
+        const t: TfsConfig = { ...(parsed.tfs ?? {}) };
+        const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : undefined);
+        const url = str("url");
+        if (url !== undefined) {
+          if (url) t.url = url.replace(/\/+$/, "");
+          else delete t.url;
+        }
+        const project = str("project");
+        if (project !== undefined) {
+          if (project) t.project = project;
+          else delete t.project;
+        }
+        const caFile = str("caFile");
+        if (caFile !== undefined) {
+          if (caFile) t.caFile = caFile;
+          else delete t.caFile;
+        }
+        if (typeof input.insecureTls === "boolean") {
+          if (input.insecureTls) t.insecureTls = true;
+          else delete t.insecureTls;
+        }
+        if (input.writeBack !== undefined) {
+          if (!(TFS_WRITE_BACK as readonly unknown[]).includes(input.writeBack))
+            return { ok: false, error: "geçersiz yazma ayarı" };
+          t.writeBack = input.writeBack as TfsConfig["writeBack"];
+        }
+        // Anahtar: dolu metin = kaydet, null = sil, boş/yok = olduğu gibi kalsın
+        const token = typeof input.token === "string" ? input.token.trim() : input.token === null ? null : undefined;
+        if (typeof input.enabled === "boolean") {
+          if (input.enabled) t.enabled = true;
+          else delete t.enabled;
+        }
+        const willHaveToken =
+          token === null ? !!readTfsToken(configRoot).env : !!token || !!readTfsToken(configRoot).token;
+        if (t.enabled && (!t.url || !t.project || !willHaveToken)) {
+          return { ok: false, error: "TFS modunu açmak için sunucu adresi, proje ve erişim anahtarı gerekli" };
+        }
+        if (Object.keys(t).length) parsed.tfs = t;
+        else delete parsed.tfs;
+        fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+        const c = loadAppConfig(resolvedConfigPath); // doğrulama (adres biçimi, yazma ayarı)
+        if (token) writeTfsToken(configRoot, token);
+        else if (token === null) writeTfsToken(configRoot, null);
+        cfg.tfs = c.tfs; // yeni nesne — çalışan koşunun kopyası etkilenmez
+        forgetServer(); // adres/anahtar değişmiş olabilir: sürüm ve durum önbelleği tazelensin
+        runtimes.notify();
+        // config: dosyaya yazılan "tfs" (anahtarsız) — Ayarlar sayfası kendi kopyasını eşitler
+        return { ok: true, view: tfsView(cfg.tfs, configRoot), config: parsed.tfs ?? null };
+      } catch (e) {
+        fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    /** Bağlantıyı dener (formdaki henüz kaydedilmemiş değerlerle; boş anahtar = kayıtlı anahtar) */
+    probe: async (input: Record<string, unknown>) => {
+      const s = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : undefined);
+      const c = tfsConnection(cfg.tfs, configRoot, {
+        url: s("url"),
+        project: s("project"),
+        token: s("token"),
+        caFile: s("caFile"),
+        ...(typeof input.insecureTls === "boolean" ? { insecureTls: input.insecureTls } : {}),
+      });
+      if (!c) return { ok: false, error: "sunucu adresi ve erişim anahtarı gerekli" };
+      try {
+        return { ok: true, probe: await probeTfs(c) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    preview: (id: number) => previewWorkItem(tfsConn(), id),
+    mine: (done: boolean) => myWorkItems(tfsConn(), { done }),
+    search: (q: string) => searchWorkItems(tfsConn(), q),
+    attachment: (guid: string, name: string) => fetchAttachment(tfsConn(), guid, name, 20 * 1024 * 1024),
+    /** Yazma kartı için: iş öğesinin güncel durumu ve türünün durumları */
+    states: async (sessionId: string) => {
+      const e = sessions.get(sessionId);
+      const pend = e ? pendingWriteback(runtimes.get(e.id, e.runLogs)) : undefined;
+      if (!pend) throw new TfsError("bu oturumda yazılmayı bekleyen sonuç yok");
+      const c = tfsConn();
+      const [states, now] = await Promise.all([
+        getStates({ ...c, project: sessions.get(sessionId)?.workItem?.project || c.project }, pend.workItemType),
+        getSummaries(c, [pend.id]).then((m) => m.get(pend.id)),
+      ]);
+      return { id: pend.id, type: pend.workItemType, current: now?.state ?? pend.state, states };
+    },
+    /**
+     * Sonucu iş öğesine yazar (kartta düzenlenen metin + isteğe bağlı durum). pr.open: önce
+     * değişen dosyalar depo başına yeni dala commit'lenip gönderilir ve iş öğesine bağlı çekme
+     * isteği açılır; bağlantıları nota eklenir.
+     */
+    write: async (
+      sessionId: string,
+      text: string,
+      state?: string,
+      pr?: { open?: boolean; target?: string; draft?: boolean },
+    ) => {
+      const e = sessions.get(sessionId);
+      if (!e) return { ok: false, error: "oturum bulunamadı" };
+      const rt = runtimes.get(e.id, e.runLogs);
+      const pend = pendingWriteback(rt);
+      if (!pend) return { ok: false, error: "bu oturumda yazılmayı bekleyen sonuç yok" };
+      if (!text.trim() && !state && !pr?.open) return { ok: false, error: "yazılacak not boş" };
+      let c;
+      try {
+        c = tfsConn();
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+      const prs: Array<{
+        repo: string;
+        id?: number;
+        url?: string;
+        existed?: boolean;
+        branch?: string;
+        error?: string;
+      }> = [];
+      if (pr?.open) {
+        const events = lastRunEvents(rt);
+        const started = events[0]?.type === "workflow_started" ? events[0] : undefined;
+        const runDir = started?.targetDir ?? e.targetDir ?? cwd;
+        const { repos } = await groupByRepo(runChangedFiles(events, cfg.workflow.entry, runDir), runDir);
+        if (!repos.size)
+          return { ok: false, error: "değişen dosyalar bir git deposunda değil — çekme isteği açılamaz" };
+        for (const [root, rels] of repos) {
+          const repo = await openRepo(root, runDir);
+          const label = repo?.rel ?? root;
+          if (!repo?.remote) {
+            prs.push({ repo: label, error: "uzak depo tanımlı değil" });
+            continue;
+          }
+          let branch: string | undefined;
+          try {
+            // Depo ve proje: önce sunucuya sorulur (klon adresi/vsts/info); olmazsa adresten çıkarılır
+            const uzak = await repoInfoFromRemote(c, repo.remoteUrl);
+            const name = uzak?.name ?? repoNameFromRemote(repo.remoteUrl) ?? path.basename(root);
+            const project =
+              uzak?.project ??
+              projectFromRemote(repo.remoteUrl) ??
+              (e.workItem?.id === pend.id ? e.workItem.project : undefined) ??
+              c.project;
+            const info = await getRepository(c, project, uzak?.id ?? name);
+            branch = await uniqueBranch(repo, `kurmay/${pend.id}-${slug(pend.title)}`);
+            const target = pr.target?.trim() || info.defaultBranch || (await defaultBranch(repo)) || "main";
+            const pushed = await commitAndPush(
+              repo,
+              rels,
+              `#${pend.id} ${pend.title}\n\nKurmay — TFS #${pend.id}`,
+              await authEnv(c, repo.remoteUrl),
+              { newBranch: branch },
+            );
+            const made = await createPullRequest(c, {
+              project,
+              repositoryId: info.id,
+              repositoryName: info.name,
+              source: pushed.branch,
+              target,
+              title: `#${pend.id} ${pend.title}`,
+              description: text,
+              workItems: [pend.id],
+              draft: !!pr.draft,
+            });
+            // Eski sunucular (5.0 öncesi) açılışta verilen iş öğesi bağını yok sayabiliyor — bağ ayrıca eklenir
+            if ((await serverVersion(c)) < 5 && made.artifactId) {
+              await linkArtifact(c, pend.id, made.artifactId, "Pull Request").catch((err) =>
+                console.warn(
+                  `⚠ TFS #${pend.id}: çekme isteği bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
+                ),
+              );
+            }
+            prs.push({
+              repo: label,
+              id: made.id,
+              url: made.webUrl,
+              ...(made.existed ? { existed: true } : {}),
+              branch: pushed.branch,
+            });
+            console.log(`🔀 TFS #${pend.id}: çekme isteği !${made.id} (${label}, ${pushed.branch} → ${target})`);
+          } catch (err) {
+            prs.push({
+              repo: label,
+              ...(branch ? { branch } : {}),
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        if (prs.every((p) => p.error)) {
+          return {
+            ok: false,
+            error: `çekme isteği açılamadı — ${prs.map((p) => `${p.repo}: ${p.error}`).join("; ")}`,
+            prs,
+          };
+        }
+      }
+      const prLines = prs.filter((p) => p.id).map((p) => `[!${p.id}](${p.url}) (${p.repo}, dal ${p.branch})`);
+      const note = text.trim() + (prLines.length ? `\n\n**Çekme isteği:** ${prLines.join(", ")}` : "");
+      try {
+        const r = await writeWorkItem(c, pend.id, {
+          ...(note.trim() ? { html: textToTfsHtml(note) } : {}),
+          ...(state ? { state } : {}),
+        });
+        emitAfterRun(e, rt, {
+          type: "tfs_written",
+          id: pend.id,
+          ok: true,
+          url: pend.url,
+          ...(state ? { state: r.state ?? state } : {}),
+          ...(prs.length ? { prs } : {}),
+        });
+        if (state && e.workItem?.id === pend.id) sessions.setWorkItem(e.id, { ...e.workItem, state: r.state ?? state });
+        return { ok: true, ...(prs.length ? { prs } : {}) };
+      } catch (err) {
+        return {
+          ok: false,
+          error: `${prs.length ? "çekme isteği açıldı ama " : ""}iş öğesine yazılamadı: ${err instanceof Error ? err.message : String(err)}`,
+          ...(prs.length ? { prs } : {}),
+        };
+      }
+    },
+    // ── Çekme istekleri ──
+    /** PR kartı: PR, açık yorumlar, değişen dosyalar, yerel deponun durumu (dir: görevin dizini) */
+    prPreview: (id: number, dir?: string) => previewPr(tfsConn(), id, dir && dirOk(dir) ? dir : cwd),
+    prMine: () => myPullRequests(tfsConn()),
+    /** "Dala geç": yerel depoyu PR'ın kaynak dalına geçirir (çalışma ağacı temizse) */
+    prCheckout: async (id: number, dir?: string) => {
+      const c = tfsConn();
+      const pr = await getPullRequest(c, id);
+      const target = dir && dirOk(dir) ? dir : cwd;
+      const repo = await findRepo(target, pr.repository.name);
+      if (!repo) throw new TfsError(`"${pr.repository.name}" deposu hedef dizinde bulunamadı (${target})`);
+      const commit = await checkoutPrBranch(repo, pr.source, await authEnv(c, repo.remoteUrl));
+      console.log(`🔀 ${repo.rel}: çekme isteği !${id} dalına geçildi (${pr.source}, kayıt ${commit})`);
+      return { branch: pr.source, commit, repo: repo.rel };
+    },
+    /** PR'a yaz (kartta düzenlenmiş haliyle) */
+    prWrite: async (sessionId: string, input: PrWriteInput) => {
+      const e = sessions.get(sessionId);
+      if (!e) return { ok: false, error: "oturum bulunamadı" };
+      const rt = runtimes.get(e.id, e.runLogs);
+      const pend = pendingPrWriteback(rt);
+      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      const r = await executePrWrite(
+        pend.pr,
+        { ...input, files: input.push ? pend.draft.commit?.files : undefined },
+        pend.targetDir,
+      );
+      // Kısmen yazıldıysa (ör. bir dizi hata verdi) kart kapanır, hatalar akışta görünür; hiçbir şey
+      // yazılamadıysa kart açık kalır, tekrar denenebilir
+      const any = !!(r.pushed || r.replied || r.resolved || r.created || r.general);
+      if (r.ok || any) emitAfterRun(e, rt, { ...r, ok: true });
+      return r.ok ? { ok: true } : { ok: any, error: (r.errors ?? []).join("; ") };
+    },
+    prDismiss: (sessionId: string) => {
+      const e = sessions.get(sessionId);
+      if (!e) return { ok: false, error: "oturum bulunamadı" };
+      const rt = runtimes.get(e.id, e.runLogs);
+      const pend = pendingPrWriteback(rt);
+      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      emitAfterRun(e, rt, { type: "tfs_pr_written", id: pend.pr.id, ok: false, skipped: true });
+      return { ok: true };
+    },
+    /** "Şimdilik yazma": kart kapanır, geçmişte de kapalı kalır */
+    dismiss: (sessionId: string) => {
+      const e = sessions.get(sessionId);
+      if (!e) return { ok: false, error: "oturum bulunamadı" };
+      const rt = runtimes.get(e.id, e.runLogs);
+      const pend = pendingWriteback(rt);
+      if (!pend) return { ok: false, error: "bu oturumda yazılmayı bekleyen sonuç yok" };
+      emitAfterRun(e, rt, { type: "tfs_written", id: pend.id, ok: false, skipped: true });
+      return { ok: true };
+    },
   };
 
   /** .claude/<alt> dizininin girdileri (yoksa boş) */
@@ -332,7 +1060,10 @@ async function main() {
     const h = rt.bus.history;
     let last: (typeof h)[number] | undefined;
     for (let i = h.length - 1; i >= 0; i--) {
-      if (h[i].type === "approval_required") { last = h[i]; break; }
+      if (h[i].type === "approval_required") {
+        last = h[i];
+        break;
+      }
     }
     if (!last || last.type !== "approval_required" || last.endsFlow) return false;
     const plan = (last.structured as { file_plan?: unknown } | undefined)?.file_plan;
@@ -447,7 +1178,9 @@ async function main() {
   };
   /** Onay/red kararı veren inceleme adımı (öncelik "teftis") — denetçi onun ayarlarını alır */
   const inspectorKey = (): string | undefined => {
-    const verdicts = Object.keys(cfg.workflow.agents).filter((k) => (cfg.workflow.agents[k] as { verdict?: unknown }).verdict);
+    const verdicts = Object.keys(cfg.workflow.agents).filter(
+      (k) => (cfg.workflow.agents[k] as { verdict?: unknown }).verdict,
+    );
     return verdicts.includes("teftis") ? "teftis" : verdicts[0];
   };
   /** Denetçi düğümü (geçişsiz): Teftiş'in eklentileri ve kuralları; dosya yazan araç yok,
@@ -485,7 +1218,11 @@ async function main() {
     // loadAppConfig'in yaptığı gibi: hook komutundaki ${configDir} = config.json'ın klasörü
     for (const h of node.hooks ?? []) h.command = h.command.split("${configDir}").join(configRoot.replace(/\\/g, "/"));
     try {
-      const wf = { entry: "guvenlik", maxCycles: 1, agents: { guvenlik: { ...node, next: null } } } as unknown as WorkflowConfig;
+      const wf = {
+        entry: "guvenlik",
+        maxCycles: 1,
+        agents: { guvenlik: { ...node, next: null } },
+      } as unknown as WorkflowConfig;
       const def = loadAgents(wf, configRoot, offOf(cfg)).get("guvenlik");
       return def ?? { error: "denetçi yüklenemedi" };
     } catch (e) {
@@ -497,7 +1234,8 @@ async function main() {
   const startAudit = (dir: string): { ok: boolean; error?: string; job?: unknown } => {
     const resolvedDir = path.resolve(dir);
     if (!dirOk(resolvedDir)) return { ok: false, error: `dizin bulunamadı: ${resolvedDir}` };
-    if (modelMissing(cfg)) return { ok: false, error: "Model seçilmedi — izleme panelindeki model listesinden bir model seç" };
+    if (modelMissing(cfg))
+      return { ok: false, error: "Model seçilmedi — izleme panelindeki model listesinden bir model seç" };
     if (audits.runningIn(resolvedDir)) return { ok: false, error: "Bu dizinde zaten bir denetim sürüyor" };
     if (runtimes.busy().length + audits.running() >= maxParallel()) {
       return {
@@ -528,7 +1266,10 @@ async function main() {
     // Bağlanacak yer: onay/red kararı veren inceleme adımı (öncelik "teftis")
     const inspector = inspectorKey();
     if (!inspector) {
-      return { ok: false, error: "akışta onay/red kararı veren bir inceleme adımı yok — denetçi Teftiş onayından sonra çalışır" };
+      return {
+        ok: false,
+        error: "akışta onay/red kararı veren bir inceleme adımı yok — denetçi Teftiş onayından sonra çalışır",
+      };
     }
     if (!ensureTemplate(SEC_PERSONA)) return { ok: false, error: `denetçinin rol tanımı bulunamadı: ${SEC_PERSONA}` };
 
@@ -537,7 +1278,8 @@ async function main() {
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     try {
       const parsed = JSON.parse(prev) as AppConfig;
-      const insp = parsed.workflow?.agents?.[inspector] as { tools?: string[]; rules?: string[]; verdict?: { onApprove: string | null } } | undefined;
+      const insp = parsed.workflow?.agents?.[inspector] as
+        { tools?: string[]; rules?: string[]; verdict?: { onApprove: string | null } } | undefined;
       if (!insp?.verdict) return { ok: false, error: `düğüm ayar dosyasında yok: ${inspector}` };
       const node = { ...securityNode(insp), next: insp.verdict.onApprove ?? null };
       parsed.workflow.agents[key] = node as AppConfig["workflow"]["agents"][string];
@@ -565,7 +1307,11 @@ async function main() {
     );
     const off = offOf(cfg);
     // Diskteki beceri klasörleri + düğümlerde adı geçip diskte olmayanlar
-    const skillNames = new Set(lsClaude("skills").filter((e) => e.isDirectory()).map((e) => e.name));
+    const skillNames = new Set(
+      lsClaude("skills")
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name),
+    );
     for (const [, n] of agentNodes) for (const s of (n as { skills?: string[] }).skills ?? []) skillNames.add(s);
     // Kurallar: diskteki .claude/rules/*.md + düğümlerde adı geçip diskte olmayanlar
     const ruleNames = new Set(
@@ -618,7 +1364,9 @@ async function main() {
         name,
         disabled: !!s.disabled,
         usedBy: agentNodes
-          .filter(([, n]) => (n as { tools?: string[] }).tools?.some((t) => t === `mcp__${name}` || t.startsWith(`mcp__${name}__`)))
+          .filter(([, n]) =>
+            (n as { tools?: string[] }).tools?.some((t) => t === `mcp__${name}` || t.startsWith(`mcp__${name}__`)),
+          )
           .map(([k]) => k),
       })),
     };
@@ -632,7 +1380,10 @@ async function main() {
   const setToggle = (kind: ToggleKind, name: string, disabled: boolean): { ok: boolean; error?: string } => {
     if (kind === "agent") return setNodeDisabled(name, disabled);
     if (kind === "mcp" && !cfg.mcpServers?.[name]) {
-      return { ok: false, error: `eklenti bulunamadı: ${name} (ayar dosyasına yeni eklendiyse servisi yeniden başlat)` };
+      return {
+        ok: false,
+        error: `eklenti bulunamadı: ${name} (ayar dosyasına yeni eklendiyse servisi yeniden başlat)`,
+      };
     }
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     try {
@@ -658,7 +1409,10 @@ async function main() {
         if (disabled) server.disabled = true;
         else delete server.disabled;
         const { disabled: _, ...rest } = cfg.mcpServers![name];
-        nextMcp = { ...cfg.mcpServers, [name]: disabled ? { ...rest, disabled: true } : rest } as AppConfig["mcpServers"];
+        nextMcp = {
+          ...cfg.mcpServers,
+          [name]: disabled ? { ...rest, disabled: true } : rest,
+        } as AppConfig["mcpServers"];
       }
       fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
       loadAppConfig(resolvedConfigPath); // yapı doğrulaması
@@ -712,7 +1466,9 @@ async function main() {
         const rules = ls("rules")
           .filter((e) => e.isFile() && e.name.endsWith(".md"))
           .map((e) => e.name.replace(/\.md$/, ""));
-        const skills = ls("skills").filter((e) => e.isDirectory()).map((e) => e.name);
+        const skills = ls("skills")
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name);
         const agentMds = ls("agents")
           .filter((e) => e.isFile() && e.name.endsWith(".md"))
           .map((e) => e.name.replace(/\.md$/, ""));
@@ -720,7 +1476,11 @@ async function main() {
       },
       createAgentMd: (name) => {
         // path traversal'a karşı ad temizlenir; yalnızca .claude/agents altına yazılır
-        const safe = String(name).trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/^-+|-+$/g, "");
+        const safe = String(name)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]/g, "-")
+          .replace(/^-+|-+$/g, "");
         if (!safe) return { ok: false, error: "geçersiz persona adı" };
         const rel = `.claude/agents/${safe}.md`;
         const abs = path.join(configRoot, rel);
@@ -811,9 +1571,20 @@ async function main() {
         const required = cfg.provider === "ollama"; // panel "model seçilmedi" uyarısı için
         const effort = cfg.effort ?? "";
         // Bağlam göstergesinin renk eşiği + modeli listede olmayanlar için elle girilen pencere
-        const context = { compactPercent: compactPercent(cfg), fallbackWindow: cfg.limits?.contextTokens ?? null, reserve: cfg.limits?.maxOutputTokens ?? null };
+        const context = {
+          compactPercent: compactPercent(cfg),
+          fallbackWindow: cfg.limits?.contextTokens ?? null,
+          reserve: cfg.limits?.maxOutputTokens ?? null,
+        };
         if (!cfg.modelsUrl) {
-          return { current, required, effort, context, models: [], error: "model listesi adresi tanımlı değil — ⚙ Ayarlar sayfasındaki Bağlantı bölümünden ekle" };
+          return {
+            current,
+            required,
+            effort,
+            context,
+            models: [],
+            error: "model listesi adresi tanımlı değil — ⚙ Ayarlar sayfasındaki Bağlantı bölümünden ekle",
+          };
         }
         try {
           const models = await fetchModels(cfg.modelsUrl, cfg.apiKey);
@@ -931,8 +1702,12 @@ async function main() {
         const list = session ? sessions.all().filter((s) => s.id === session) : sessions.all();
         // Bellekteki oturumda panelin oynattığı geçmişin kendisi aranır (olay sırası birebir aynı)
         const sources = list.map((s) => ({
-          id: s.id, name: s.name, updatedAt: s.updatedAt, targetDir: s.targetDir,
-          runLogs: s.runLogs ?? [], history: runtimes.peek(s.id)?.bus.history,
+          id: s.id,
+          name: s.name,
+          updatedAt: s.updatedAt,
+          targetDir: s.targetDir,
+          runLogs: s.runLogs ?? [],
+          history: runtimes.peek(s.id)?.bus.history,
         }));
         return searchSessions(runsDir, sources, q, session ? { kind, perSession: 300 } : { kind });
       },
@@ -947,6 +1722,8 @@ async function main() {
             cancelAudit: (id: string) => audits.cancel(id),
           }),
       getSecurityReport: (id) => securityReports.get(id),
+      // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
+      tfs: tfsApi,
       setToggle,
       getMcpStatus: mcpView,
       getMcpTools: async (name) => {
@@ -965,7 +1742,7 @@ async function main() {
       },
       onTask: task
         ? undefined // CLI görevli modda panelden görev alınmaz
-        : (t, sessionId, runAt, files, targetDir) => {
+        : async (t, sessionId, runAt, files, targetDir, workItemId, prId, prMode) => {
             const existing = sessionId ? sessions.get(sessionId) : undefined;
             if (modelMissing({ ...cfg, model: existing?.model || cfg.model })) {
               return { ok: false, error: "Model seçilmedi — üst çubuktaki model listesinden bir model seç" };
@@ -975,26 +1752,106 @@ async function main() {
             // Görevle seçilen dizin > oturumun dizini > genel dizin (yeni oturum)
             const chosen = targetDir ? path.resolve(targetDir) : undefined;
             const dir = chosen ?? entry?.targetDir ?? cwd;
-            if (!dirOk(dir)) {
-              return {
-                ok: false,
-                error: chosen
+            /** Başlatma koşulları — TFS'ten okuma sürerken başka görev başlamış olabilir, sonra yine bakılır */
+            const blocked = (): string | undefined => {
+              if (!dirOk(dir)) {
+                return chosen
                   ? `Seçilen dizin bulunamadı: ${dir} — görev kutusundaki 📁 ile başka bir dizin seç`
-                  : `Hedef dizin bulunamadı: ${dir} — sağdaki hedef dizine tıklayıp geçerli bir dizin seç`,
+                  : `Hedef dizin bulunamadı: ${dir} — sağdaki hedef dizine tıklayıp geçerli bir dizin seç`;
+              }
+              if (entry && runtimes.get(entry.id, entry.runLogs).busy) {
+                return "Bu oturumda zaten bir görev çalışıyor — bitmesini bekle ya da yeni oturum aç";
+              }
+              if (runtimes.busy().length + audits.running() >= maxParallel()) {
+                return (
+                  `Aynı anda en fazla ${maxParallel()} görev çalışabilir` +
+                  `${audits.running() ? " (bağımsız güvenlik denetimleri dahil)" : ""} — biri bitince tekrar dene ya da Ayarlar sayfasından artır`
+                );
+              }
+              return undefined;
+            };
+            const why = blocked();
+            if (why) return { ok: false, error: why };
+
+            // TFS: iş öğesi seçildiyse görev ondan kurulur (okuma + eklerin indirilmesi birkaç saniye
+            // sürebilir); seçilmediyse ve oturum bir iş öğesine bağlıysa görev onun devamıdır
+            let agentTask = t;
+            let tfsFiles: FileInput[] = [];
+            let tfs: Parameters<typeof launch>[5];
+            if (workItemId !== undefined) {
+              let conn;
+              try {
+                conn = tfsConn();
+              } catch (e) {
+                return { ok: false, error: e instanceof Error ? e.message : String(e) };
+              }
+              let prepared;
+              try {
+                prepared = await prepareWorkItemTask(conn, workItemId, t);
+              } catch (e) {
+                return { ok: false, error: `TFS: ${e instanceof Error ? e.message : String(e)}` };
+              }
+              const again = blocked();
+              if (again) return { ok: false, error: again };
+              agentTask = prepared.text;
+              tfsFiles = prepared.files;
+              const label = workItemLabel(prepared.meta);
+              tfs = {
+                display: t.trim() ? `${label}\n${t.trim()}` : label,
+                workItem: {
+                  ...prepared.meta,
+                  // Ekranda ve aramada yalnızca iş öğesinin içeriği; ajan talimatı ajana gider
+                  text: prepared.display,
+                  ...(t.trim() ? { note: t.trim() } : {}),
+                  ...(prepared.skipped.length ? { skipped: prepared.skipped } : {}),
+                },
+                attachmentIntro:
+                  `TFS iş öğesindeki ekler ve metindeki görseller (${prepared.files.length} dosya)` +
+                  `${files?.length ? `, ayrıca kullanıcının verdiği ${files.length} dosya` : ""}.`,
               };
-            }
-            if (entry && runtimes.get(entry.id, entry.runLogs).busy) {
-              return { ok: false, error: "Bu oturumda zaten bir görev çalışıyor — bitmesini bekle ya da yeni oturum aç" };
+              console.log(`📌 TFS #${prepared.meta.id} alındı: ${prepared.meta.title} (${prepared.files.length} ek)`);
+            } else if (prId !== undefined) {
+              let conn;
+              try {
+                conn = tfsConn();
+              } catch (e) {
+                return { ok: false, error: e instanceof Error ? e.message : String(e) };
+              }
+              let prepared;
+              try {
+                prepared = await preparePrTask(conn, prId, prMode ?? "yorum", dir, t);
+              } catch (e) {
+                return { ok: false, error: `TFS: ${e instanceof Error ? e.message : String(e)}` };
+              }
+              const again = blocked();
+              if (again) return { ok: false, error: again };
+              agentTask = prepared.text;
+              tfs = {
+                display: t.trim() ? `${prepared.label}\n${t.trim()}` : prepared.label,
+                name: prepared.label,
+                pr: { ...prepared.meta, text: prepared.display, ...(t.trim() ? { note: t.trim() } : {}) },
+              };
+              console.log(
+                `🔀 TFS !${prepared.meta.id} alındı (${prepared.meta.mode === "incele" ? "inceleme" : `${prepared.meta.threads?.length ?? 0} açık yorum`})`,
+              );
+            } else if (entry?.pr && tfsReady(cfg.tfs, configRoot)) {
+              // Oturumun PR'ının devamı: aynı dalda çalışılır, sonuç aynı PR'a yazılır
+              let prepared;
+              try {
+                prepared = await preparePrFollowUp(tfsConn(), entry.pr.id, dir, t);
+              } catch (e) {
+                return { ok: false, error: `TFS: ${e instanceof Error ? e.message : String(e)}` };
+              }
+              const again = blocked();
+              if (again) return { ok: false, error: again };
+              agentTask = prepared.text;
+              tfs = { display: t, pr: { ...prepared.meta, inherited: true } };
+            } else if (entry?.workItem && tfsReady(cfg.tfs, configRoot)) {
+              const w = entry.workItem;
+              agentTask = `Bu görev, bu oturumda üzerinde çalışılan TFS #${w.id} — "${w.title}" iş öğesinin devamıdır.\n\n${t}`;
+              tfs = { display: t, workItem: { ...w, inherited: true } };
             }
             const busy = runtimes.busy();
-            if (busy.length + audits.running() >= maxParallel()) {
-              return {
-                ok: false,
-                error:
-                  `Aynı anda en fazla ${maxParallel()} görev çalışabilir` +
-                  `${audits.running() ? " (bağımsız güvenlik denetimleri dahil)" : ""} — biri bitince tekrar dene ya da Ayarlar sayfasından artır`,
-              };
-            }
             // Aynı dizine iki akış aynı anda yazarsa birbirini ezer — engellemiyoruz
             // (salt okunur bilgi soruları zararsız) ama açıkça uyarıyoruz
             const clash = busy.find((r) => r.cwd === dir);
@@ -1006,11 +1863,12 @@ async function main() {
               resetResume = sessions.setTargetDir(entry.id, chosen).resetResume;
               runtimes.notify();
             }
-            const { entry: e, run } = launch(t, entry, runAt, files, chosen);
+            const { entry: e, run } = launch(agentTask, entry, runAt, [...tfsFiles, ...(files ?? [])], chosen, tfs);
             run.catch((err) => console.error(`💥 [${e.name}] Koşu hatası:`, err instanceof Error ? err.message : err));
             return {
               ok: true,
               session: e.id,
+              ...(tfs ? { display: tfs.display } : {}),
               ...(dirChanged ? { dirChanged: dir, resetResume } : {}),
               ...(clash
                 ? { warning: `Aynı hedef dizinde (${dir}) çalışan başka bir oturum var — dosyaları birbirini ezebilir` }
@@ -1025,12 +1883,16 @@ async function main() {
     if (Object.values(cfg.mcpServers ?? {}).some((s) => !s.disabled)) {
       void probeMcp(cfg, mcpProbeDir()).then(() => {
         const list = mcpStatus.snapshot(cfg).filter((s) => s.status !== "disabled");
-        console.log(`🔌 Eklentiler: ${list.map((s) => `${s.name} ${s.status === "connected" ? "✓" : `✗ (${s.error ?? s.status})`}`).join(" · ")}`);
+        console.log(
+          `🔌 Eklentiler: ${list.map((s) => `${s.name} ${s.status === "connected" ? "✓" : `✗ (${s.error ?? s.status})`}`).join(" · ")}`,
+        );
       });
     }
   }
 
-  console.log(`🔌 Sağlayıcı: ${cfg.provider}${cfg.baseUrl ? ` (${cfg.baseUrl})` : ""}${cfg.model ? ` | model: ${cfg.model}` : ""}`);
+  console.log(
+    `🔌 Sağlayıcı: ${cfg.provider}${cfg.baseUrl ? ` (${cfg.baseUrl})` : ""}${cfg.model ? ` | model: ${cfg.model}` : ""}`,
+  );
   console.log(`📁 Hedef proje dizini: ${cwd}`);
   console.log(`🗺  Akış: ${[...agents.keys()].join(" → ")} (entry: ${cfg.workflow.entry})`);
 

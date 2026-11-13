@@ -72,11 +72,7 @@ export function parseRunAt(input: string): number | undefined {
   return Number.isNaN(abs) ? undefined : abs;
 }
 
-async function askTerminal(
-  agentName: string,
-  signal: AbortSignal,
-  endsFlow = false,
-): Promise<ApprovalResult> {
+async function askTerminal(agentName: string, signal: AbortSignal, endsFlow = false): Promise<ApprovalResult> {
   const rl = readline.createInterface({ input: stdin, output: stdout });
   try {
     const soru = endsFlow
@@ -87,10 +83,9 @@ async function askTerminal(
     if (answer === "e" || answer === "evet" || answer === "y" || answer === "yes") {
       // Akış zaten bitiyorsa ileri tarih sormanın anlamı yok
       if (endsFlow) return { approved: true };
-      const when = await rl.question(
-        "Ne zaman çalışsın? (boş=hemen, örn 2026-07-10 14:00 veya +30m/+2h/+1d): ",
-        { signal },
-      );
+      const when = await rl.question("Ne zaman çalışsın? (boş=hemen, örn 2026-07-10 14:00 veya +30m/+2h/+1d): ", {
+        signal,
+      });
       const runAt = parseRunAt(when);
       if (when.trim() && runAt === undefined) {
         console.warn("⚠ Zaman anlaşılamadı — hemen çalıştırılacak.");
@@ -188,9 +183,7 @@ async function askTerminalSchedule(runAt: number, signal: AbortSignal): Promise<
   try {
     console.log(`\n⏰ ${fmtDate(runAt)} için zamanlandı.`);
     while (true) {
-      const ans = (
-        await rl.question("[c]=şimdi çalıştır, [i]=iptal (yoksa zamanı bekle): ", { signal })
-      )
+      const ans = (await rl.question("[c]=şimdi çalıştır, [i]=iptal (yoksa zamanı bekle): ", { signal }))
         .trim()
         .toLowerCase();
       if (ans === "c" || ans === "calistir") return "run_now";

@@ -41,7 +41,14 @@ export function findBrowser(): string | undefined {
       "/Applications/Chromium.app/Contents/MacOS/Chromium",
     );
   } else {
-    const names = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable"];
+    const names = [
+      "google-chrome",
+      "google-chrome-stable",
+      "chromium",
+      "chromium-browser",
+      "microsoft-edge",
+      "microsoft-edge-stable",
+    ];
     for (const dir of (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
       for (const n of names) candidates.push(path.join(dir, n));
     }
@@ -89,7 +96,12 @@ export async function printPdf(browser: string, url: string, timeoutMs = 90_000)
       p.on("exit", (code) => {
         clearTimeout(timer);
         if (fs.existsSync(out) && fs.statSync(out).size > 0) resolve();
-        else reject(new Error(`tarayıcı PDF üretemedi (çıkış kodu ${code})${stderr ? ` — ${stderr.trim().split("\n").pop()}` : ""}`));
+        else
+          reject(
+            new Error(
+              `tarayıcı PDF üretemedi (çıkış kodu ${code})${stderr ? ` — ${stderr.trim().split("\n").pop()}` : ""}`,
+            ),
+          );
       });
     });
     return fs.readFileSync(out);
@@ -111,7 +123,23 @@ export function pdfFileName(r: { targetDir?: string; createdAt?: string }): stri
 
 /** Content-Disposition: eski istemciler için ASCII ad + UTF-8 ad (RFC 6266) */
 export function attachmentHeader(name: string): string {
-  const tr: Record<string, string> = { ç: "c", Ç: "C", ğ: "g", Ğ: "G", ı: "i", İ: "I", ö: "o", Ö: "O", ş: "s", Ş: "S", ü: "u", Ü: "U" };
-  const ascii = name.replace(/[çÇğĞıİöÖşŞüÜ]/g, (c) => tr[c]).replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const tr: Record<string, string> = {
+    ç: "c",
+    Ç: "C",
+    ğ: "g",
+    Ğ: "G",
+    ı: "i",
+    İ: "I",
+    ö: "o",
+    Ö: "O",
+    ş: "s",
+    Ş: "S",
+    ü: "u",
+    Ü: "U",
+  };
+  const ascii = name
+    .replace(/[çÇğĞıİöÖşŞüÜ]/g, (c) => tr[c])
+    .replace(/[^\x20-\x7e]/g, "_")
+    .replace(/["\\]/g, "_");
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }

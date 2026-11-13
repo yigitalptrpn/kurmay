@@ -28,7 +28,8 @@
 .dp-cur { flex:1 1 100%; min-width:0; font:12.5px var(--font-mono); color:var(--muted); overflow-wrap:anywhere; }
 `;
   let dlg, state, done;
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const esc = (s) =>
+    String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
   function build() {
     const st = document.createElement("style");
@@ -63,14 +64,20 @@
       if (b.dataset.act === "pick" && state) return close(state.dir);
     });
     el("addr").addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") { ev.preventDefault(); go(el("addr").value); }
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        go(el("addr").value);
+      }
     });
-    dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); close(null); }); // Esc
+    dlg.addEventListener("cancel", (ev) => {
+      ev.preventDefault();
+      close(null);
+    }); // Esc
     dlg.el = el;
   }
 
   function join(dir, name) {
-    const sep = state && state.sep || "/";
+    const sep = (state && state.sep) || "/";
     return dir.endsWith(sep) ? dir + name : dir + sep + name;
   }
 
@@ -93,7 +100,12 @@
     if (data.home) roots.push(`<button type="button" data-go="${esc(data.home)}">🏠 Kullanıcı klasörü</button>`);
     el("roots").innerHTML = roots.join("");
     el("list").innerHTML = data.dirs.length
-      ? data.dirs.map((n) => `<button type="button" class="dp-item" role="option" data-go="${esc(join(data.dir, n))}"><span>📁</span><span class="nm">${esc(n)}</span></button>`).join("")
+      ? data.dirs
+          .map(
+            (n) =>
+              `<button type="button" class="dp-item" role="option" data-go="${esc(join(data.dir, n))}"><span>📁</span><span class="nm">${esc(n)}</span></button>`,
+          )
+          .join("")
       : `<div class="dp-empty">Bu klasörde alt klasör yok.</div>`;
     el("list").scrollTop = 0;
   }

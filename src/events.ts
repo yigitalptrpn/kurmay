@@ -17,6 +17,42 @@ export type OrchestratorEvent =
       resumed?: boolean;
       /** Görevle verilen dosyalar: diskteki ad (runs/ekler/<oturum>/, GET /ekler/…) + kullanıcının verdiği ad */
       attachments?: Array<{ name: string; original: string }>;
+      /** TFS modu: görev bir iş öğesinden geldi (src/tfsTask.ts). text = ajanlara giden iş öğesi metni
+       *  (panelde açılır bölüm, aramada görev); note = kullanıcının ek talimatı; inherited = görev
+       *  verilmedi, oturumun bağlı olduğu iş öğesinin devamı (yazma o öğeye) */
+      workItem?: {
+        id: number;
+        type: string;
+        title: string;
+        state: string;
+        url: string;
+        project: string;
+        assignedTo?: string;
+        text?: string;
+        note?: string;
+        inherited?: boolean;
+        /** İndirilemeyen ekler ("video.mp4 — 48 MB, sınır 20 MB") */
+        skipped?: string[];
+      };
+      /** TFS modu: görev bir çekme isteğinden (src/tfsPrTask.ts). mode: yorum = açık yorumları ele al,
+       *  incele = PR'ı incele (kod değiştirme). text/note/inherited iş öğesindeki gibi */
+      pr?: {
+        id: number;
+        title: string;
+        url: string;
+        project: string;
+        repositoryId: string;
+        repository: string;
+        source: string;
+        target: string;
+        mode: "yorum" | "incele";
+        repoRel?: string;
+        repoDir?: string;
+        threads?: Array<{ id: number; firstCommentId: number; file?: string; line?: number; quote: string }>;
+        text?: string;
+        note?: string;
+        inherited?: boolean;
+      };
       /** Devre dışı düğümler — panel hatta soluk/üstü çizili gösterir */
       disabled?: string[];
       /** Fanout düğümü → çoğalttığı ajan. Kopyalar fanout_started'da belli olur */
@@ -222,6 +258,72 @@ export type OrchestratorEvent =
       risk?: string;
       counts: Record<"critical" | "high" | "medium" | "low" | "info", number>;
       structured: boolean;
+    }
+  /** TFS modu: iş bitti, sonucu iş öğesine yazmak için taslak hazır — panel kartla sorar
+   *  (Ayarlar'da "sorarak"). text = düzenlenebilir not (gönderirken HTML'e çevrilir) */
+  | {
+      type: "tfs_writeback";
+      id: number;
+      title: string;
+      workItemType: string;
+      state: string;
+      url: string;
+      text: string;
+      /** Koşuda değişen dosyalar — kartta "çekme isteği aç" seçeneği bunlar varsa çıkar */
+      files?: string[];
+    }
+  /** İş öğesine yazıldı (ya da yazılamadı / bu sefer yazılmadı). auto: Ayarlar'da "kendiliğinden" */
+  | {
+      type: "tfs_written";
+      id: number;
+      ok: boolean;
+      url?: string;
+      /** Değiştirildiyse yeni durum */
+      state?: string;
+      error?: string;
+      auto?: boolean;
+      /** Kullanıcı "şimdilik yazma" dedi */
+      skipped?: boolean;
+      /** Yazmadan önce açılan çekme istekleri (depo başına) */
+      prs?: Array<{ repo: string; id?: number; url?: string; existed?: boolean; branch?: string; error?: string }>;
+    }
+  /** TFS modu: PR görevi bitti — PR'a yazılacakların taslağı (yorumlara cevap, "düzeltildi", yeni
+   *  yorumlar, genel yorum, gönderilecek commit). Panel kartla sorar (Ayarlar'da "sorarak") */
+  | {
+      type: "tfs_pr_writeback";
+      id: number;
+      title: string;
+      url: string;
+      mode: "yorum" | "incele";
+      source: string;
+      repository: string;
+      replies: Array<{
+        threadId: number;
+        firstCommentId: number;
+        file?: string;
+        line?: number;
+        quote: string;
+        text: string;
+        resolve: boolean;
+      }>;
+      comments: Array<{ file?: string; line?: number; text: string }>;
+      general: string;
+      commit?: { files: string[]; message: string };
+    }
+  /** PR'a yazıldı: gönderilen commit, cevaplanan/çözülen dizi, açılan yorum sayıları; hatalar */
+  | {
+      type: "tfs_pr_written";
+      id: number;
+      ok: boolean;
+      url?: string;
+      pushed?: { branch: string; commit: string };
+      replied?: number;
+      resolved?: number;
+      created?: number;
+      general?: boolean;
+      errors?: string[];
+      auto?: boolean;
+      skipped?: boolean;
     }
   | { type: "run_scheduled"; agent: string; runAt: number }
   | { type: "run_resumed"; agent: string; source: "timer" | "terminal" | "web" }

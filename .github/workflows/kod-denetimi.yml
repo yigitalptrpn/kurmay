@@ -1,0 +1,29 @@
+# Her gönderimde ve çekme isteğinde kodun temizliğini denetler: tür denetimi, ESLint, Prettier biçimi.
+# npm yayınından (npm-yayin.yml) bağımsız — yayını durdurmaz, çekme isteğinde kırmızı/yeşil gösterir.
+# Biçim hatası çıkarsa yerelde `npm run format`, kural hatası çıkarsa `npm run lint` ile bak.
+name: kod denetimi
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  denetle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run format:check

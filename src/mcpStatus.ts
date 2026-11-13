@@ -97,6 +97,8 @@ export function probeMcp(cfg: ProviderConfig, cwd: string): Promise<void> {
   clearMcpToolCache(); // araç ayrıntıları da tazelensin
   mcpStatus.probing = (async () => {
     const ac = new AbortController();
+    // Bilinçli olarak hiçbir şey üretmeyen girdi: istem gitmez, model çağrılmaz (yalnızca eklentiler bağlanır)
+    // eslint-disable-next-line require-yield
     async function* bosGirdi(): AsyncGenerator<never> {
       await new Promise((r) => ac.signal.addEventListener("abort", r, { once: true }));
     }
@@ -115,8 +117,12 @@ export function probeMcp(cfg: ProviderConfig, cwd: string): Promise<void> {
     // Mesajlar okunmazsa süreç tıkanabilir — arka planda boşalt
     void (async () => {
       try {
-        for await (const _ of q) { /* yoklamada mesaj beklenmez */ }
-      } catch { /* kapatınca "aborted" atar */ }
+        for await (const _ of q) {
+          /* yoklamada mesaj beklenmez */
+        }
+      } catch {
+        /* kapatınca "aborted" atar */
+      }
     })();
     try {
       let list: McpServerStatus[] = [];
@@ -174,7 +180,10 @@ export async function listMcpTools(name: string, server: McpServerJson, cwd: str
     do {
       const page = await client.listTools(cursor ? { cursor } : {});
       for (const t of page.tools) {
-        const schema = (t.inputSchema ?? {}) as { properties?: Record<string, { type?: unknown; description?: unknown }>; required?: string[] };
+        const schema = (t.inputSchema ?? {}) as {
+          properties?: Record<string, { type?: unknown; description?: unknown }>;
+          required?: string[];
+        };
         const params = Object.entries(schema.properties ?? {}).map(([pname, p]) => ({
           name: pname,
           ...(typeof p?.type === "string" ? { type: p.type } : {}),

@@ -10,6 +10,8 @@ services:
       # config.json'da baseUrl doluysa (ör. Ollama) kullanılan alanlar
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      # TFS modu: erişim anahtarı (boşsa panelden girilen kullanılır — .gizli/tfs.json)
+      - KURMAY_TFS_TOKEN=${KURMAY_TFS_TOKEN:-}
     volumes:
       # Orkestratör kaynağı + config.json + .claude/ — konteyner içinden canlı okunur,
       # persona/kural/config düzenlemeleri için yeniden build gerekmez

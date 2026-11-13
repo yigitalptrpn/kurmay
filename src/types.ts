@@ -356,8 +356,36 @@ export interface ProviderConfig {
   userPrompt?: string;
 }
 
+/** İş bitince sonucu TFS iş öğesine yazma: ask = panelde kartla sor (varsayılan),
+ *  auto = kendiliğinden yaz, off = yazma */
+export const TFS_WRITE_BACK = ["ask", "auto", "off"] as const;
+export type TfsWriteBack = (typeof TFS_WRITE_BACK)[number];
+
+/**
+ * TFS (Azure DevOps Server) bağlantısı — Ayarlar'daki "TFS modu" kartı (src/tfs.ts).
+ * Erişim anahtarı (PAT) BURADA DEĞİL: config.json depoda izlenebildiği ve /config-data
+ * onu tarayıcıya verdiği için anahtar `.gizli/tfs.json`'da (kendi .gitignore'u var) ya da
+ * KURMAY_TFS_TOKEN ortam değişkeninde durur (src/tfsSettings.ts).
+ */
+export interface TfsConfig {
+  /** TFS modu açık mı: panelde görev kutusunda iş öğesi seçici çıkar */
+  enabled?: boolean;
+  /** Koleksiyon adresi: http://sunucu:8080/tfs/DefaultCollection (bulut: https://dev.azure.com/kurum) */
+  url?: string;
+  /** Takım projesi (sorgular, bana atananlar) */
+  project?: string;
+  /** İş bitince sonucu iş öğesine yazma (varsayılan "ask") */
+  writeBack?: TfsWriteBack;
+  /** Sertifika doğrulamasını atla — kendinden imzalı iç ağ sunucusu (güvensiz, yalnızca iç ağ) */
+  insecureTls?: boolean;
+  /** Ek güvenilen kök sertifika (PEM) — kurumun sertifika otoritesi */
+  caFile?: string;
+}
+
 /** Tek config dosyasının tamamı: bağlantı bilgileri + iş akışı grafı */
 export interface AppConfig extends ProviderConfig {
+  /** TFS modu (Ayarlar): iş öğesini TFS'ten alıp görev yapar, sonucu iş öğesine yazar */
+  tfs?: TfsConfig;
   workflow: WorkflowConfig;
   /** İzleme paneli portu (varsayılan 4141; CLI --port bayrağı bunu ezer) */
   uiPort?: number;
