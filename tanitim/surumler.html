@@ -314,8 +314,10 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
               <li data-tur="yeni">Çekme istekleri (!45): açık inceleme yorumlarını ele alır — kodu isteğin dalında düzeltir, her yoruma ne yapıldığını yazar, “düzeltildi” olarak işaretler, değişikliği dala gönderir. Ya da isteği inceler, bulduklarını ilgili satıra yorum olarak yazar.</li>
               <li data-tur="yeni">Bilgisayardaki kopya isteğin dalında değilse kart bunu söyler; “Dala geç” ile tek tıkla geçilir. Kaydedilmemiş değişiklik varsa dala dokunulmaz.</li>
               <li data-tur="yeni">Kurmay'ın TFS'e yazdığı her mesaj “KURMAY POSTA KOMUTANI” başlığıyla başlar; rapor kısa, askerî düzende ve sade Türkçeyle yazılır.</li>
-              <li data-tur="iyi">Erişim anahtarı ayar dosyasına yazılmaz, tarayıcıya gönderilmez. TFS'in 2017 ve sonraki bütün sürümleriyle çalışır, sunucunun sürümünü kendisi anlar. Kurumun kök sertifikası Windows sertifika deposundan da okunur.</li>
+              <li data-tur="iyi">Erişim anahtarı ayar dosyasına yazılmaz, tarayıcıya gönderilmez. TFS 2017 ve sonraki sürümler için yazıldı; sunucunun sürümünü kendisi anlar. Kurumun kök sertifikası Windows sertifika deposundan da okunur.</li>
               <li data-tur="iyi">Oturum araması, görevin geldiği iş öğesinin ve çekme isteğinin içeriğinde de arar.</li>
+              <li data-tur="yeni">Sürüm notları: her sürümde neyin değiştiği, yeni / iyileştirme / düzeltme süzgeciyle. Panelde sol üstteki sürüm etiketine ya da Ayarlar başlığındaki sürüme tıklayınca açılır; kurulu paketle gelir, internet gerekmez.</li>
+              <li data-tur="duz">Ekranda ve uyarılarda kalan İngilizce kelimeler Türkçeleşti: jeton, mıntıka, derleme, ayar dosyası.</li>
             </ul>
           </div>
         </article>
@@ -323,10 +325,10 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
         <article class="surum" id="v0.1.24">
           <div class="sol"><a class="no" href="#v0.1.24">0.1.24</a><time datetime="2026-11-13">13 Kasım 2026</time></div>
           <div class="sag">
-            <h2>Sürüm notları panelde</h2>
+            <h2>Plan onayı ayarı hemen geçerli</h2>
             <ul class="maddeler">
-              <li data-tur="yeni">Sürüm notları: her sürümde neyin değiştiği, yeni / iyileştirme / düzeltme süzgeciyle. Tanıtım sitesinde ve panelin içinde aynı sayfa.</li>
-              <li data-tur="yeni">Panelde sol üstteki sürüm etiketine (“Kurmay v0.1.24”) ya da Ayarlar başlığındaki sürüme tıklayınca açılır. Kurulu paketle birlikte gelir, internet gerekmez.</li>
+              <li data-tur="iyi">Oturumdaki “Plan onayı” ayarı artık çalışan görevde de geçerli. Analist çalışırken “onaysız ilet”i seçersen plan bitince onay beklemeden Saha Timi'ne geçer.</li>
+              <li data-tur="iyi">Onay kartı açıkken “onaysız ilet”i seçersen bekleyen plan hemen iletilir. Bilgi cevabı ve boş plan yine onayını bekler.</li>
             </ul>
           </div>
         </article>
