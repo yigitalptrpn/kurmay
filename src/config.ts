@@ -142,6 +142,33 @@ export function loadAppConfig(configPath: string): AppConfig {
     }
   }
 
+  if (cfg.speech !== undefined) {
+    const sp = cfg.speech as unknown as Record<string, unknown> | null;
+    if (!sp || typeof sp !== "object" || Array.isArray(sp) || typeof sp.url !== "string") {
+      throw new Error(
+        `ayar dosyası: "speech" {"url": "http://…", "model"?: "…", "language"?: "tr"} biçiminde olmalı (verilen: ${JSON.stringify(sp)})`,
+      );
+    }
+    for (const k of ["model", "language", "prompt"]) {
+      if (sp[k] !== undefined && typeof sp[k] !== "string") throw new Error(`ayar dosyası: "speech.${k}" metin olmalı`);
+    }
+    if (sp.token !== undefined) {
+      throw new Error(
+        `ayar dosyası: "speech.token" burada durmaz — anahtarı Ayarlar'dan gir (.gizli/ses.json'a yazılır)`,
+      );
+    }
+    if (!sp.url.trim()) delete cfg.speech;
+    else if (!/^https?:\/\/[^\s]+$/i.test(sp.url.trim())) {
+      throw new Error(
+        `ayar dosyası: "speech.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(sp.url)})`,
+      );
+    } else if (typeof sp.language === "string" && sp.language && !/^(auto|[a-z]{2,3})$/i.test(sp.language)) {
+      throw new Error(
+        `ayar dosyası: "speech.language" iki harfli dil kodu (tr, en…) ya da "auto" olmalı (verilen: ${JSON.stringify(sp.language)})`,
+      );
+    }
+  }
+
   if (cfg.tfs !== undefined) {
     const t = cfg.tfs as Record<string, unknown> | null;
     if (!t || typeof t !== "object" || Array.isArray(t)) {

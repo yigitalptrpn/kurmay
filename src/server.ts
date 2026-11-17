@@ -10,6 +10,7 @@ import { buildEml, renderReportEmail } from "./reportEmail.js";
 import type { SecurityReport } from "./securityReport.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import { SEARCH_KINDS, type SearchKind } from "./search.js";
+import { SPEECH_MAX_BYTES } from "./speech.js";
 import { parseWorkItemRef } from "./tfs.js";
 import { parsePrRef } from "./tfsPr.js";
 import type { ModelInfo } from "./models.js";
@@ -248,6 +249,16 @@ export interface UiServerOptions {
   cancelAudit?: (id: string) => boolean;
   /** TFS modu: ayarlar, iş öğesi önizleme/arama, eklerin önizlemesi, sonucu yazma */
   tfs?: TfsApi;
+  /** Sesle görev yazma (src/speech.ts): ayarlar, bağlantı denemesi, kaydı metne çevirme */
+  speech?: SpeechApi;
+}
+
+/** Sesle görev yazma uçları (src/index.ts kurar) */
+export interface SpeechApi {
+  view(): unknown;
+  save(input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown };
+  probe(input: Record<string, unknown>): Promise<{ ok: boolean; models?: string[]; error?: string }>;
+  transcribe(audio: Buffer, mime: string): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
 }
 
 /**
@@ -283,6 +294,10 @@ export interface UiServerOptions {
  *   GET  /plan-export?session=&format=md|json  oturumun son onay planını dosya olarak indirir (başka ajana vermek için)
  *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
  *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
+ *   GET  /speech        sesle görev yazma ayarları (anahtarın kendisi yok: hasToken, tokenHint) — panel + Ayarlar
+ *   POST /speech        { url, model?, language?, prompt?, token? (""/null = sil) } — kaydeder (canlı; boş adres = kapat)
+ *   POST /speech/test   { url?, token? } — sunucuya bağlanır, yüklü modelleri döner
+ *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
  *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
@@ -815,6 +830,51 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
           ...(r.error ? { error: r.error } : {}),
         });
         json(res, r.ok ? 200 : 502, { ...r, host });
+      });
+      return;
+    }
+
+    if (req.url === "/speech" && req.method === "GET") {
+      if (!options.speech) return json(res, 404, { ok: false, error: "kapalı" });
+      return json(res, 200, options.speech.view());
+    }
+    if (req.url === "/speech" && req.method === "POST") {
+      readJson(req, (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = options.speech.save(parsed);
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+    if (req.url === "/speech/test" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        json(res, 200, await options.speech.probe(parsed));
+      });
+      return;
+    }
+    if (req.url === "/speech/transcribe" && req.method === "POST") {
+      const api = options.speech;
+      if (!api) return json(res, 404, { ok: false, error: "kapalı" });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      let tooBig = false;
+      req.on("data", (c: Buffer) => {
+        size += c.length;
+        if (size > SPEECH_MAX_BYTES) tooBig = true;
+        else chunks.push(c);
+      });
+      req.on("end", async () => {
+        if (tooBig) {
+          return json(res, 413, {
+            ok: false,
+            error: `Kayıt çok uzun (en fazla ${SPEECH_MAX_BYTES / 1024 / 1024} MB).`,
+          });
+        }
+        if (!size) return json(res, 400, { ok: false, error: "Kayıt boş geldi." });
+        const mime = String(req.headers["content-type"] ?? "audio/wav").split(";")[0];
+        const r = await api.transcribe(Buffer.concat(chunks), mime);
+        json(res, r.ok ? 200 : 502, r);
       });
       return;
     }

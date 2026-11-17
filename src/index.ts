@@ -35,6 +35,7 @@ import {
 } from "./tfs.js";
 import { textToTfsHtml } from "./tfsHtml.js";
 import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
+import { probeSpeech, readSpeechToken, speechView, transcribe, writeSpeechToken } from "./speech.js";
 import {
   prepareWorkItemTask,
   previewWorkItem,
@@ -1138,6 +1139,53 @@ async function main() {
     }
   };
 
+  /** Sesle görev yazma (Ayarlar): adres/model/dil/ipucu config.json'a (speech), anahtar .gizli/ses.json'a.
+   *  Hemen geçerli. Boş adres = kapat. token: undefined = dokunma, "" ya da null = sil */
+  const speechApi = {
+    view: () => speechView(cfg.speech, configRoot),
+    save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
+      const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
+      if (input.token !== undefined && input.token !== null && typeof input.token !== "string") {
+        return { ok: false, error: "geçersiz istek" };
+      }
+      const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+      try {
+        const parsed = JSON.parse(prev) as AppConfig;
+        const url = str("url");
+        if (url) {
+          parsed.speech = {
+            url,
+            ...(str("model") ? { model: str("model") } : {}),
+            ...(str("language") && str("language") !== "tr" ? { language: str("language") } : {}),
+            ...(str("prompt") ? { prompt: str("prompt") } : {}),
+          };
+        } else delete parsed.speech;
+        fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+        loadAppConfig(resolvedConfigPath); // adres, dil kodu
+        if (parsed.speech) cfg.speech = parsed.speech;
+        else delete cfg.speech;
+      } catch (e) {
+        fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+      if (typeof input.token === "string" && input.token.trim()) writeSpeechToken(configRoot, input.token.trim());
+      else if (input.token === null || input.token === "") writeSpeechToken(configRoot, null);
+      return { ok: true, view: speechView(cfg.speech, configRoot) };
+    },
+    /** Henüz kaydedilmemiş adres/anahtarla da denenebilir */
+    probe: (input: Record<string, unknown>) => {
+      const url = typeof input.url === "string" && input.url.trim() ? input.url : (cfg.speech?.url ?? "");
+      const token =
+        typeof input.token === "string" && input.token.trim() ? input.token.trim() : readSpeechToken(configRoot).token;
+      if (!url) return Promise.resolve({ ok: false, error: "Önce sunucu adresini yaz." });
+      return probeSpeech(url, token);
+    },
+    transcribe: (audio: Buffer, mime: string) =>
+      cfg.speech
+        ? transcribe(cfg.speech, readSpeechToken(configRoot).token, audio, mime)
+        : Promise.resolve({ ok: false, error: "Ses tanıma ayarlı değil (Ayarlar → Sesle görev yazma)." }),
+  };
+
   /** Kullanıcı talimatı (Ayarlar): config.json'a yazar, sıradaki görevde her ajanın prompt'una eklenir */
   const setUserPrompt = (text: string): { ok: boolean; error?: string; text?: string } => {
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
@@ -1724,6 +1772,7 @@ async function main() {
       getSecurityReport: (id) => securityReports.get(id),
       // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
       tfs: tfsApi,
+      speech: speechApi,
       setToggle,
       getMcpStatus: mcpView,
       getMcpTools: async (name) => {
