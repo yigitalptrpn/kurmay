@@ -597,7 +597,126 @@ export interface TfsPrStatus {
   newComments: number;
   newAuthors: string[];
   conflicts: boolean;
+  /** Derleme durumu (derleme kuralları + dış durum bildirimleri); okunamazsa yok */
+  builds?: TfsBuildState[];
   error?: string;
+}
+
+export interface TfsBuildState {
+  name: string;
+  /** gecti | kirildi | suruyor | bekliyor | eskidi (yeni gönderimden sonra yeniden derlenmeli) */
+  state: "gecti" | "kirildi" | "suruyor" | "bekliyor" | "eskidi";
+  blocking?: boolean;
+}
+
+/** Derleme kuralının türü (TFS'in sabit kimliği) */
+const BUILD_POLICY = "0609b952-1397-4640-95ec-e00a01b2c241";
+
+/**
+ * Çekme isteğinin derleme durumu. İki kaynak:
+ *  1) Derleme kuralları ("build validation" — policy evaluations, 5.0+ / TFS 2019): kural başına durum.
+ *  2) Dış sistemlerin bildirdiği durumlar (pullRequests/{id}/statuses, 4.1+): ad başına en son.
+ * İkisi de yoksa ya da sunucu desteklemiyorsa boş liste; hata akışı bozmaz.
+ */
+export async function prBuildStatus(
+  c: TfsConnection,
+  pr: TfsPullRequest,
+  signal?: AbortSignal,
+): Promise<TfsBuildState[]> {
+  const v = await ver(c, signal);
+  const out: TfsBuildState[] = [];
+  if (Number(v) >= 5) {
+    try {
+      let projectId = pr.repository.projectId;
+      if (!projectId) {
+        const p = await tfsCall<{ id?: string }>(c, "GET", `/_apis/projects/${enc(pr.repository.project)}`, {
+          query: { "api-version": v },
+          what: "proje",
+          signal,
+        });
+        projectId = p?.id;
+      }
+      if (projectId) {
+        const r = await tfsCall<{
+          value?: Array<{
+            status?: string;
+            configuration?: {
+              isEnabled?: boolean;
+              isBlocking?: boolean;
+              type?: { id?: string; displayName?: string };
+              settings?: { displayName?: string; buildDefinitionId?: number };
+            };
+            context?: { isExpired?: boolean; buildDefinitionName?: string };
+          }>;
+        }>(c, "GET", `/${enc(pr.repository.project)}/_apis/policy/evaluations`, {
+          query: {
+            "api-version": `${v}-preview.1`,
+            artifactId: `vstfs:///CodeReview/CodeReviewId/${projectId}/${pr.id}`,
+          },
+          what: "derleme kuralları",
+          signal,
+        });
+        for (const e of r?.value ?? []) {
+          const cf = e.configuration ?? {};
+          if (cf.isEnabled === false) continue;
+          if (cf.type?.id !== BUILD_POLICY && cf.settings?.buildDefinitionId === undefined) continue;
+          const st = String(e.status ?? "").toLowerCase();
+          if (st === "notapplicable") continue;
+          const state: TfsBuildState["state"] = e.context?.isExpired
+            ? "eskidi"
+            : st === "approved"
+              ? "gecti"
+              : st === "rejected" || st === "broken"
+                ? "kirildi"
+                : st === "running"
+                  ? "suruyor"
+                  : "bekliyor";
+          out.push({
+            name: cf.settings?.displayName || e.context?.buildDefinitionName || cf.type?.displayName || "derleme",
+            state,
+            ...(cf.isBlocking ? { blocking: true } : {}),
+          });
+        }
+      }
+    } catch {
+      /* eski sunucu ya da yetki yok — derleme bilgisi yok */
+    }
+  }
+  if (Number(v) >= 4.1) {
+    try {
+      const r = await tfsCall<{
+        value?: Array<{
+          state?: unknown;
+          context?: { name?: string; genre?: string };
+          creationDate?: string;
+          id?: number;
+        }>;
+      }>(c, "GET", `${prBase(pr)}/statuses`, { query: { "api-version": `${v}-preview.1` }, what: "durumlar", signal });
+      const son = new Map<string, { state: string; t: number }>();
+      for (const x of r?.value ?? []) {
+        const ad = [x.context?.genre, x.context?.name].filter(Boolean).join("/");
+        if (!ad) continue;
+        const t = Date.parse(x.creationDate ?? "") || x.id || 0;
+        const st =
+          typeof x.state === "number"
+            ? ["notSet", "pending", "succeeded", "failed", "error", "notApplicable"][x.state]
+            : String(x.state ?? "");
+        if ((son.get(ad)?.t ?? -1) <= t) son.set(ad, { state: st.toLowerCase(), t });
+      }
+      for (const [name, x] of son) {
+        if (x.state === "notapplicable" || x.state === "notset") continue;
+        if (out.some((o) => o.name === name)) continue;
+        out.push({
+          name,
+          state:
+            x.state === "succeeded" ? "gecti" : x.state === "failed" || x.state === "error" ? "kirildi" : "suruyor",
+        });
+      }
+    } catch {
+      /* desteklenmiyor */
+    }
+  }
+  return out;
 }
 
 /**
@@ -631,7 +750,10 @@ export async function prStatusSummary(
       };
       try {
         const pr = await getPullRequest(c, it.id, signal);
-        const threads = await getThreads(c, pr, signal);
+        const [threads, builds] = await Promise.all([
+          getThreads(c, pr, signal),
+          prBuildStatus(c, pr, signal).catch(() => [] as TfsBuildState[]),
+        ]);
         const sinr = Date.parse(since[String(it.id)] || fallbackSince) || 0;
         const yeni = threads
           .filter((t) => !t.system)
@@ -651,6 +773,7 @@ export async function prStatusSummary(
           newComments: yeni.length,
           newAuthors: [...new Set(yeni.map((cm) => cm.author))],
           conflicts: ms === "conflicts",
+          ...(builds.length ? { builds } : {}),
         };
       } catch (e) {
         return { ...base, error: e instanceof Error ? e.message : String(e) };
