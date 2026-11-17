@@ -3911,16 +3911,29 @@ async function micBitti() {
   mic.rec = null;
   if (cancelled || !chunks.length) { mic = null; micState(""); return; }
   micState("wait", "çevriliyor…");
+  // Ses tanıma modeli sesi 30 saniyelik pencerelerle işler; bazı sunucular daha uzun kaydı reddeder.
+  // Kayıt sessiz anlardan ≤28 sn parçalara bölünür, sırayla gönderilir, metinler birleştirilir.
+  // Bir parça hata verirse o ana kadar çevrilen metin yine yazılır.
+  const metinler = [];
   try {
-    const wav = await toWav16k(new Blob(chunks, { type: rec.mimeType }));
-    const res = await fetch("/speech/transcribe", { method: "POST", headers: { "content-type": "audio/wav" }, body: wav });
-    const r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
-    if (!r.ok) throw new Error(r.error || "metne çevrilemedi");
-    if (!r.text) throw new Error("Kayıtta konuşma duyulmadı.");
-    metniYaz(r.text);
+    const pcm = await toPcm16k(new Blob(chunks, { type: rec.mimeType }));
+    const parcalar = sesParcala(pcm);
+    let basla = 0; // parçanın kayıttaki başlangıcı (örnek)
+    for (let i = 0; i < parcalar.length; i++, basla += parcalar[i - 1].length) {
+      if (sessizMi(parcalar[i])) continue; // sessiz parçada model uydurma metin yazabiliyor
+      if (parcalar.length > 1) micState("wait", `çevriliyor ${i + 1}/${parcalar.length}`);
+      const onceki = metinler.join(" ").slice(-300);
+      const res = await fetch("/speech/transcribe", { method: "POST", body: wavYap(parcalar[i]),
+        headers: { "content-type": "audio/wav", ...(onceki ? { "x-onceki-metin": encodeURIComponent(onceki) } : {}) } });
+      const r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
+      if (!r.ok) throw new Error((parcalar.length > 1 ? `${i + 1}. parça (${micSure(basla / SES_HZ)} sonrası) çevrilemedi: ` : "") + (r.error || "metne çevrilemedi"));
+      if (r.text) metinler.push(r.text);
+    }
+    if (!metinler.length) throw new Error("Kayıtta konuşma duyulmadı.");
   } catch (e) {
-    $("taskError").textContent = "Sesle yazma: " + (e?.message || e);
+    $("taskError").textContent = "Sesle yazma: " + (e?.message || e) + (metinler.length ? " — o ana kadar çevrilen kısım yazıldı." : "");
   } finally {
+    if (metinler.length) metniYaz(metinler.join(" "));
     mic = null; micState(""); loadSpeech();
   }
 }
@@ -3936,15 +3949,55 @@ function metniYaz(text) {
   box.setSelectionRange(imlec, imlec);
   box.dispatchEvent(new Event("input")); // autoGrow, zaman satırı vb.
 }
-/** Tarayıcının kaydı (webm/ogg) → 16 kHz tek kanal WAV: sunucunun her biçimi çözememe ihtimaline karşı, küçük de */
-async function toWav16k(blob) {
+const SES_HZ = 16000;
+/** Tarayıcının kaydı (webm/ogg) → 16 kHz tek kanal ses örnekleri */
+async function toPcm16k(blob) {
   const ac = new (window.AudioContext || window.webkitAudioContext)();
   const dec = await ac.decodeAudioData(await blob.arrayBuffer());
   ac.close();
-  const sr = 16000, len = Math.max(1, Math.ceil(dec.duration * sr));
-  const off = new OfflineAudioContext(1, len, sr);
+  const len = Math.max(1, Math.ceil(dec.duration * SES_HZ));
+  const off = new OfflineAudioContext(1, len, SES_HZ);
   const src = off.createBufferSource(); src.buffer = dec; src.connect(off.destination); src.start();
-  const pcm = (await off.startRendering()).getChannelData(0);
+  return (await off.startRendering()).getChannelData(0);
+}
+/** Ses düzeyi (kök ortalama kare) */
+function sesDuzeyi(pcm, a = 0, b = pcm.length) {
+  let t = 0;
+  for (let i = a; i < b; i++) t += pcm[i] * pcm[i];
+  return Math.sqrt(t / Math.max(1, b - a));
+}
+/** Neredeyse hiç ses yoksa (yalnızca uğultu) — model sessizlikte uydurma metin yazabiliyor */
+function sessizMi(pcm) {
+  const pen = SES_HZ / 10; // 0,1 sn
+  for (let a = 0; a < pcm.length; a += pen) if (sesDuzeyi(pcm, a, Math.min(pcm.length, a + pen)) > 0.01) return false;
+  return true;
+}
+/** Kaydı en fazla 28 sn'lik parçalara böler; kesim yeri parçanın son 8 sn'sindeki en sessiz an (kelime bölünmesin).
+ *  1,5 sn'den kısa artık parça bir öncekine katılır (o da en fazla 29,5 sn olur — yine 30'un altında) */
+function sesParcala(pcm) {
+  const enFazla = 28 * SES_HZ, ara = 8 * SES_HZ, pen = Math.round(0.2 * SES_HZ), adim = Math.round(0.05 * SES_HZ);
+  const out = [];
+  let bas = 0;
+  while (pcm.length - bas > enFazla) {
+    let kes = bas + enFazla, enAz = Infinity;
+    for (let a = bas + enFazla - ara; a + pen <= bas + enFazla; a += adim) {
+      const d = sesDuzeyi(pcm, a, a + pen);
+      if (d <= enAz) { enAz = d; kes = a + Math.round(pen / 2); } // eşitlikte sonraki: parça 28 sn'ye yakın olsun
+    }
+    out.push(pcm.subarray(bas, kes));
+    bas = kes;
+  }
+  const kalan = pcm.subarray(bas);
+  if (out.length && kalan.length < 1.5 * SES_HZ) {
+    const son = out.pop(), birlesik = new Float32Array(son.length + kalan.length);
+    birlesik.set(son); birlesik.set(kalan, son.length);
+    out.push(birlesik);
+  } else out.push(kalan);
+  return out;
+}
+/** 16 kHz tek kanal örnekler → WAV dosyası: sunucunun her biçimi çözememe ihtimaline karşı, küçük de */
+function wavYap(pcm) {
+  const sr = SES_HZ;
   const dv = new DataView(new ArrayBuffer(44 + pcm.length * 2));
   const w = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
   w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");

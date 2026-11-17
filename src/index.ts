@@ -1191,9 +1191,9 @@ async function main() {
       if (!url) return Promise.resolve({ ok: false, error: "Önce sunucu adresini yaz." });
       return probeSpeech(url, token);
     },
-    transcribe: (audio: Buffer, mime: string) =>
+    transcribe: (audio: Buffer, mime: string, previous?: string) =>
       cfg.speech
-        ? transcribe(cfg.speech, readSpeechToken(configRoot).token, audio, mime)
+        ? transcribe(cfg.speech, readSpeechToken(configRoot).token, audio, mime, previous)
         : Promise.resolve({ ok: false, error: "Ses tanıma ayarlı değil (Ayarlar → Sesle görev yazma)." }),
   };
 

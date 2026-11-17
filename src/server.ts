@@ -258,7 +258,11 @@ export interface SpeechApi {
   view(): unknown;
   save(input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown };
   probe(input: Record<string, unknown>): Promise<{ ok: boolean; models?: string[]; error?: string }>;
-  transcribe(audio: Buffer, mime: string): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
+  transcribe(
+    audio: Buffer,
+    mime: string,
+    previous?: string,
+  ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
 }
 
 /**
@@ -297,7 +301,8 @@ export interface SpeechApi {
  *   GET  /speech        sesle görev yazma ayarları (anahtarın kendisi yok: hasToken, tokenHint) — panel + Ayarlar
  *   POST /speech        { url, model?, language?, prompt?, token? (""/null = sil) } — kaydeder (canlı; boş adres = kapat)
  *   POST /speech/test   { url?, token? } — sunucuya bağlanır, yüklü modelleri döner
- *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi
+ *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
+ *                   panel uzun kaydı ≤28 sn parçalara böler, önceki parçanın metni x-onceki-metin başlığında
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
  *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
@@ -873,7 +878,14 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         if (!size) return json(res, 400, { ok: false, error: "Kayıt boş geldi." });
         const mime = String(req.headers["content-type"] ?? "audio/wav").split(";")[0];
-        const r = await api.transcribe(Buffer.concat(chunks), mime);
+        // Uzun kayıt parça parça gelir; önceki parçanın metni başlıkta (URI kodlu)
+        let previous: string | undefined;
+        try {
+          previous = decodeURIComponent(String(req.headers["x-onceki-metin"] ?? "")) || undefined;
+        } catch {
+          previous = undefined;
+        }
+        const r = await api.transcribe(Buffer.concat(chunks), mime, previous);
         json(res, r.ok ? 200 : 502, r);
       });
       return;
