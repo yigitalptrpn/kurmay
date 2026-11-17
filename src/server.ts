@@ -269,6 +269,10 @@ export interface SpeechApi {
     mime: string,
     previous?: string,
   ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
+  understand(
+    text: string,
+    patterns: string[],
+  ): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }>;
 }
 
 /**
@@ -310,6 +314,7 @@ export interface SpeechApi {
  *   POST /session-group-rename { from, to } — grubu yeniden adlandırır ya da dağıtır (to = "")
  *   POST /speech        { enabled?, model?, language?, prompt? } — kaydeder (canlı)
  *   POST /speech/test   genel sunucuya bağlanır, yüklü modelleri döner
+ *   POST /speech/intent { text, patterns[] } → { ok, command } — sabit listede olmayan sesli komutu modelle anlar
  *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
  *                   panel uzun kaydı ≤28 sn parçalara böler, önceki parçanın metni x-onceki-metin başlığında
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
@@ -864,6 +869,19 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       readJson(req, async (parsed) => {
         if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
         json(res, 200, await options.speech.probe());
+      });
+      return;
+    }
+    if (req.url === "/speech/intent" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const patterns = Array.isArray(parsed?.patterns)
+          ? (parsed.patterns as unknown[]).filter((p): p is string => typeof p === "string")
+          : [];
+        if (!options.speech || !text.trim() || !patterns.length)
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.understand(text, patterns);
+        json(res, r.ok ? 200 : 502, r);
       });
       return;
     }

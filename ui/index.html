@@ -4098,9 +4098,10 @@ for (const id of ["taskInput", "rejectComment"]) {
 // yeniden tıkla: kayıt 16 kHz tek kanal WAV'a çevrilip sunucuya (POST /speech/transcribe) gider, sunucu
 // model sunucusundaki ses tanıma modeline iletir, gelen metin imlecin olduğu yere yazılır. Esc kaydı atar.
 const MIC_MAX_SN = 600; // 10 dk — 16 kHz WAV ≈ 19 MB, sunucu sınırı 25 MB
+let komutModeli = ""; // Ayarlar → Sesle görev yazma → Komutları anlayan model (boş = kapalı)
 let speechOn = false, mic = null; // mic: { rec, stream, chunks, t0, timer, cancelled }
 async function loadSpeech() {
-  try { speechOn = !!(await (await fetch("/speech")).json()).ready; } catch { speechOn = false; }
+  try { const v = await (await fetch("/speech")).json(); speechOn = !!v.ready; komutModeli = speechOn ? v.commandModel || "" : ""; } catch { speechOn = false; komutModeli = ""; }
   if (!mic) $("btnMic").classList.toggle("hidden", !speechOn);
   $("btnVoiceCmd").classList.toggle("hidden", !speechOn);
 }
@@ -4275,7 +4276,10 @@ const KOMUT_EN_KISA_MS = 350;
 function sesNot(html, tur = "bilgi", kalici = false, soz) {
   const k = $("sesNot");
   k.className = "ses-not " + tur;
-  k.innerHTML = html;
+  // Komut modelle anlaşıldıysa notta izi kalsın (yanlış anladıysa kullanıcı görsün) — ipucu satırı, söylenmez
+  const iz = sonAnlama && Date.now() - sonAnlama.t < 30000 && tur !== "dinliyor"
+    ? `<small>🧠 “${esc(sonAnlama.ham)}” → “${esc(sonAnlama.komut)}” olarak anlaşıldı</small>` : "";
+  k.innerHTML = html + iz;
   k.hidden = false;
   clearTimeout(sesNot.zaman);
   const sure = tur === "hata" ? 7000 : 4000;
@@ -4693,9 +4697,10 @@ const KOMUTLAR = [
   } },
   { ornek: "… oturumunu aç", re: /^((.+?)\s+(oturumunu|oturumuna|oturumu)\s*(ac|gec|git)?|oturumu ac\s+(.+))$/d, yap: (m, ham) => oturumSesle(serbest(ham, m, m.indices[2] ? 2 : 5)) },
 ];
-function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
+function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {}) {
   ham = ham.trim();
   sonSesKomutu = Date.now();
+  if (!modelden) sonAnlama = null;
   // Sade dizge özgünle AYNI uzunlukta: "kurmay", "hey kurmay", "lütfen" boşluğa çevrilir, kırpma
   // iki tarafta aynı yapılır — böylece yakalanan serbest metin (gerekçe, ad) özgün cümleden kesilir
   const f = komutSade(ham).replace(/\b(hey\s+)?kurmay\b|\blutfen\b/g, (x) => " ".repeat(x.length));
@@ -4728,8 +4733,43 @@ function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
       return;
     }
   }
+  // Sabit listede yok: Ayarlar'da komut modeli seçiliyse ona sor (model kalıplardan birini seçer)
+  if (modelden) return sesNot(`Anlaşılmadı. <small>Model “${esc(ham)}” dedi, ama bu bir komut değil · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
+  if (komutModeli) return modelleAnla(ham, dinlemede);
   // Komut değil: hiçbir şey yapılmaz (görev yazdırmak için "görev …")
-  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`);
+  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
+}
+// ── Komut modeli: sabit liste yetmeyince cümle modele gider, model aşağıdaki kalıplardan birini döner ──
+// Dönen cümle yine sabit listeyle eşlenir (model kendisi iş yapmaz); tutmazsa hiçbir şey olmaz.
+// Görev yazımı ("görev …") listede YOK: odadaki konuşma modelle göreve dönüşmesin.
+let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
+const KALIPLAR = [
+  "yardım", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
+  "<numara> numaralı maddeyi çek", "<numara> numaralı çekme isteğini aç", "bana atananları göster",
+  "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
+  "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
+  "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
+  "ayarları aç", "aç kapat sayfasını aç", "güvenlik raporlarını aç", "sürüm notlarını aç",
+  "kenar çubuğunu aç", "kenar çubuğunu kapat", "temayı <evrak|radar|harita|karargah|sade|gece> yap",
+  "akıl yürütmeyi <kapalı|düşük|orta|yüksek|çok yüksek|en yüksek> yap", "akıl yürütmeyi yükselt", "akıl yürütmeyi düşür",
+  "modeli <model adı> yap", "analisti kapat", "analisti aç", "saha timini kapat", "saha timini aç", "teftişi kapat", "teftişi aç",
+  "güvenlik denetçisini kapat", "güvenlik denetçisini aç", "oturumu <ad> olarak adlandır", "oturumu <grup> grubuna taşı",
+  "oturumu gruptan çıkar", "<aranacak metin> ara", "sonraki oturum", "önceki oturum", "onay bekleyen oturumu aç",
+  "çalışan oturumları göster", "<oturum adı> oturumunu aç", "<oturum adı> oturumunu durdur", "bu oturumu durdur",
+  "oku", "tekrarla", "sus", "sesli yanıtı kapat", "sesli yanıtı aç", "panele dön",
+];
+async function modelleAnla(ham, dinlemede) {
+  sesNot(`⏳ Anlamaya çalışıyorum… <small>“${esc(ham)}”</small>`, "bilgi", true);
+  const patterns = [...KALIPLAR, ...(komutOnay ? ["evet", "hayır"] : [])];
+  let r;
+  try {
+    const res = await fetch("/speech/intent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: ham, patterns }) });
+    r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
+  } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  if (!r.ok) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Komutları anlayan model yanıt vermedi: ${esc(r.error || "bilinmeyen hata")}</small>`, "hata", false, "Anlaşılmadı, model yanıt vermedi.");
+  if (!r.command) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Bir komuta benzemiyor · görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
+  sonAnlama = { ham, komut: r.command, t: Date.now() };
+  komutUygula(r.command, { dinleme: dinlemede, modelden: true });
 }
 // ── Görev yazımı: "görev …" ile başlar, sonraki cümleler kutuya eklenir ──
 // Bitiş: "başlat"/"gönder" (gönderir), "tamam"/"bitti" (kutuda bırakır), "iptal"/"vazgeç" (siler),
@@ -4977,7 +5017,7 @@ function oturumSesle(ad) {
 function komutYardim() {
   const satir = KOMUTLAR.filter((k) => k.ornek).map((k) => `<li>${esc(k.ornek)}</li>`).join("");
   sesNot(`<b>Sesli komutlar</b> <small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın</small><ul class="ses-yardim">${satir}</ul>` +
-    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / iş öğesini okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”.</small>` +
+    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / iş öğesini okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, "Komut listesi ekranda.");
 }
 // Basılı tut = tek komut (bas-konuş); kısa bas = dinleme modunu aç / kapat.

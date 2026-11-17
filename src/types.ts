@@ -414,6 +414,8 @@ export interface SpeechConfig {
   language?: string;
   /** Eski sürümlerin ipucu alanı — artık kullanılmaz */
   prompt?: string;
+  /** Sesli komutta sabit liste yetmeyince cümleyi anlayan model (aynı sunucuda, ör. küçük bir Gemma); boş = kapalı */
+  commandModel?: string;
 }
 
 export interface AgentDefinition {

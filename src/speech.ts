@@ -37,6 +37,7 @@ export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
     generalUrl: conn.url,
     model: s?.model ?? "",
     language: s?.language ?? "tr",
+    commandModel: s?.commandModel ?? "",
   };
 }
 
@@ -159,6 +160,114 @@ export async function transcribe(
       /* düz metin yanıt */
     }
     return { ok: true, text: text.trim(), seconds };
+  } catch (e) {
+    return { ok: false, error: netError(e, base) };
+  }
+}
+
+/** Komut anlamada yanıt beklenmez gibi kısa olmalı — sesli kullanımda uzun bekleme işe yaramaz */
+const UNDERSTAND_TIMEOUT_MS = 20_000;
+
+/**
+ * Sesli komut: sabit listede bulunamayan cümleyi modele verir, model cümleyi verilen komut
+ * kalıplarından BİRİNE çevirir ("bugün bana ne iş var" → "bana atananları göster"), uymuyorsa "yok".
+ * Model kendisi iş YAPMAZ: dönen cümle panelde yine sabit listeyle eşlenir, tutmazsa hiçbir şey olmaz;
+ * geri alınamayan işler panelde yine sorulur. Küçük, hızlı model yeter (ör. Gemma 4B).
+ * OpenAI uyumlu /v1/chat/completions; yanıt biçimi şemayla zorlanır (vLLM yapılandırılmış çıktı),
+ * sunucu şemayı kabul etmezse şemasız bir kez daha denenir ve metindeki JSON okunur.
+ */
+export async function understandCommand(
+  url: string,
+  token: string | undefined,
+  model: string,
+  text: string,
+  patterns: string[],
+): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }> {
+  const base = speechBase(url);
+  const sentence = text.replace(/\s+/g, " ").trim().slice(0, 500);
+  const list = patterns
+    .map((p) => p.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 120);
+  if (!sentence || !list.length) return { ok: false, error: "geçersiz istek" };
+  const system =
+    "Sen bir yazılım panelinin sesli komut çözücüsüsün. Kullanıcının Türkçe cümlesini aşağıdaki komut " +
+    "kalıplarından tam olarak BİRİNE çevir. Kalıptaki <...> yerlerine cümledeki değeri yaz (sayıları rakamla). " +
+    "Kalıbın kelimelerini değiştirme. Cümle hiçbir kalıba açıkça uymuyorsa, sohbet ya da başka bir konuşmaysa " +
+    'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\nKomut kalıpları:\n' +
+    list.map((p) => `- ${p}`).join("\n") +
+    '\n\nYalnızca şu biçimde JSON yaz: {"komut": "..."}';
+  const body = (schema: boolean) => ({
+    model,
+    temperature: 0,
+    max_tokens: 120,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: sentence },
+    ],
+    ...(schema
+      ? {
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "komut",
+              schema: {
+                type: "object",
+                properties: { komut: { type: "string" } },
+                required: ["komut"],
+                additionalProperties: false,
+              },
+            },
+          },
+        }
+      : {}),
+  });
+  const t0 = Date.now();
+  const ask = async (schema: boolean) => {
+    const r = await fetch(`${base}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(body(schema)),
+      signal: AbortSignal.timeout(UNDERSTAND_TIMEOUT_MS),
+    });
+    return { status: r.status, ok: r.ok, text: await r.text() };
+  };
+  try {
+    let r = await ask(true);
+    // Şemayı tanımayan sunucu: şemasız bir kez daha
+    if (!r.ok && r.status === 400 && /response_format|json_schema|guided/i.test(r.text)) r = await ask(false);
+    const seconds = (Date.now() - t0) / 1000;
+    if (!r.ok) {
+      const e = httpError(r.status, r.text);
+      return {
+        ok: false,
+        error: r.status === 404 ? `Model ya da sohbet ucu bulunamadı (404): "${model}".` : e,
+        seconds,
+      };
+    }
+    let content = "";
+    try {
+      const j = JSON.parse(r.text) as { choices?: Array<{ message?: { content?: unknown } }> };
+      const c = j.choices?.[0]?.message?.content;
+      if (typeof c === "string") content = c;
+    } catch {
+      /* aşağıda boş içerik */
+    }
+    // İçerik JSON değilse (şemasız yanıt) metindeki ilk {...} denenir
+    let command = "";
+    const m = /\{[\s\S]*\}/.exec(content);
+    try {
+      const j = JSON.parse(m ? m[0] : content) as { komut?: unknown };
+      if (typeof j.komut === "string") command = j.komut;
+    } catch {
+      command = content;
+    }
+    command = command
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^["“]|["”]$/g, "");
+    if (!command) return { ok: false, error: "Model boş yanıt verdi.", seconds };
+    return { ok: true, command: /^yok\.?$/i.test(command) ? "" : command, seconds };
   } catch (e) {
     return { ok: false, error: netError(e, base) };
   }
