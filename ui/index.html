@@ -322,6 +322,9 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .ses-not .ses-dugmeler { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .ses-not button { min-height:32px; padding:4px 14px; text-transform:none; }
 .ses-not button[data-oturum] { margin:6px 6px 0 0; }
+.ses-not .ses-liste { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.ses-not .ses-liste button[data-oturum] { margin:0; display:flex; align-items:center; gap:8px; text-align:left; justify-content:flex-start; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ses-not .st { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, currentColor 13%, transparent); flex:none; }
 .ses-dinleme { position:fixed; z-index:71; top:14px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; padding:6px 8px 6px 14px;
   border-radius:999px; background:var(--md-surface-container-lowest, var(--card)); color:var(--text); border:1px solid var(--red); box-shadow:var(--md-elev-2); font-size:13px; white-space:nowrap; max-width:calc(100vw - 32px); }
 .ses-dinleme[hidden] { display:none; }
@@ -4357,11 +4360,11 @@ function onayCevap(evet) {
   if (evet) o.yap(); else sesNot("Vazgeçildi, bir şey yapılmadı.");
 }
 $("sesNot").addEventListener("click", (ev) => {
-  const b = ev.target.closest("[data-ses]");
+  const b = ev.target.closest("[data-ses], [data-oturum]");
   if (b?.dataset.ses === "evet") onayCevap(true);
   else if (b?.dataset.ses === "hayir") onayCevap(false);
   else if (b?.dataset.ses === "kapat") sesNotKapat();
-  else if (b?.dataset.oturum) { openSession(b.dataset.oturum); sesNot(`✓ <b>${esc(sessionsById[b.dataset.oturum]?.name || "")}</b> açıldı`, "tamam"); }
+  else if (b?.dataset.oturum) { oturumGit(b.dataset.oturum); sesNot(`✓ <b>${esc(sessionsById[b.dataset.oturum]?.name || "")}</b> açıldı`, "tamam"); }
 });
 const tamam = (html) => sesNot("✓ " + html, "tamam");
 const olmaz = (html) => sesNot(html, "hata");
@@ -4373,6 +4376,17 @@ const ADIM = { analist: "Analist", analisti: "Analist", "saha timi": "Saha Timi"
 const KOMUTLAR = [
   { ornek: "yardım · komutlar", re: /^(yardim|komutlar|komut listesi|ne(ler)? (diyebilirim|soyleyebilirim))$/, yap: () => komutYardim() },
   { ornek: "yeni oturum aç", re: /^yeni (bir )?(oturum|gorev)( ac| baslat)?$/, yap: () => { openSession(""); tamam("Yeni oturum taslağı açıldı — görevi yaz ya da söyle"); } },
+  // ── TFS ──
+  { ornek: "TFS ayarlarını aç", re: /^(tfs|tefes) (ayarlari(ni)?|ayari(ni)?|ayarlarina git|kartini ac)( ac)?$/, yap: () => sayfaAc("/config#tfsCard", "TFS ayarları") },
+  { ornek: "TFS modunu aç / kapat", re: /^(tfs|tefes)( modu(nu)?)? (?<is>ac|kapat|etkinlestir|devre disi birak)$/, yap: (m) => tfsModSesle(/ac|etkin/.test(m.groups.is)) },
+  { ornek: "1201 numaralı maddeyi çek", re: /^(?<no>.+?) (numarali )?(is ogesini|is ogesi|maddeyi|maddesini|kaydi|kaydini|isi) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), false) },
+  { re: /^(is ogesi|madde|kayit) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), false) },
+  { ornek: "45 numaralı çekme isteğini aç", re: /^(?<no>.+?) (numarali )?(cekme istegini|cekme istegi|pr yi|pr i|pri) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), true) },
+  { re: /^(cekme istegi|pr) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), true) },
+  { ornek: "bana atananları göster", re: /^(bana atananlar(i)?|atananlar(i)?|benim islerim(i)?|bana atanan isler(i)?)( (goster|getir|ac|listele))?$/, yap: () => tfsAtananlar() },
+  { ornek: "ikinciyi seç (listeden)", re: /^(?<sira>ilk(i|ini)?|son(uncu)?(yu|u|unu)?|birinci(yi|si)?|ikinci(yi|si)?|ucuncu(yu|su)?|dorduncu(yu|su)?|besinci(yi|si)?|altinci(yi|si)?|yedinci(yi|si)?|sekizinci(yi|si)?|dokuzuncu(yu|su)?|onuncu(yu|su)?|\d+)( (siradakini|sirayi|olani|maddeyi|numarayi))?( (sec|ac|cek|al))?$/, yap: (m) => tfsListedenSec(m.groups.sira) },
+  { ornek: "seçimi kaldır (iş öğesi)", re: /^(secimi|is ogesini|maddeyi|cekme istegini) (kaldir|temizle|birak)$/, yap: () => { if (!wiSel && !prSel) return sesNot("Seçili iş öğesi ya da çekme isteği yok."); clearWi(); tamam("Seçim kaldırıldı"); } },
+  { ornek: "yorumları ele al · incele (çekme isteği)", re: /^((acik )?yorumlari ele al|yorumlari duzelt|incele|incelemeye al|sadece incele)$/, yap: (m) => tfsPrKipi(/incele/.test(m[0]) ? "incele" : "yorum") },
   { ornek: "onay beklemeden devam et · onay beklesin", re: /^((plan )?onay beklesin|(plan )?onayi bekle|(onaysiz|otomatik) iletmeyi kapat|onay beklemeden (devam etmeyi|ilerlemeyi|gecmeyi) kapat)$/, yap: () => fwdSesle(false) },
   { re: /^(plan )?(onay beklemeden (devam et|ilerle|gec|ilet|gonder)|onaysiz (ilet|gec|devam et)|otomatik ilet(meyi ac)?)$/, yap: () => fwdSesle(true) },
   { ornek: "onayla", re: /^(onayla|onayliyorum|plani onayla|onay ver|devam et)$/, yap: () => akisOnay(false) },
@@ -4405,6 +4419,14 @@ const KOMUTLAR = [
   { ornek: "oturumu … grubuna taşı", re: /^(bu )?oturumu\s+(.+?)\s+grubuna\s+(tasi|koy|ekle|al)$/d, yap: (m, ham) => grupSesle(serbest(ham, m, 2)) },
   { re: /^(bu )?oturumu gruptan (cikar|al)$/, yap: () => grupSesle("") },
   { ornek: "… ara", re: /^(ara\s+(.+)|(.+?)\s+(diye ara|ara|aramasi yap))$/d, yap: (m, ham) => aramaSesle(serbest(ham, m, m.indices[2] ? 2 : 3)) },
+  { ornek: "sonraki oturum · önceki oturum", re: /^((bir )?(sonraki|siradaki|ileri)|(bir )?(onceki|geri))\s+oturum(a gec|a don|u ac|a git)?$/, yap: (m) => oturumSirala(/onceki|geri/.test(m[1]) ? -1 : 1) },
+  { ornek: "onay bekleyen oturumu aç", re: /^(siradaki )?onay bekleyen(ler(i)?| oturum(u|a|lari)?)?(\s+(ac|gec|git|goster))?$/, yap: () => onayBekleyeneGec() },
+  { ornek: "çalışan oturumları göster", re: /^((calisan|aktif|mesgul) oturumlar(i)?|calisanlar(i)?|neler calisiyor|hangi oturumlar calisiyor|ne calisiyor)(\s+(goster|listele|ac))?$/, yap: () => calisanlariGoster() },
+  { ornek: "… oturumunu durdur", re: /^(?<ad>.+?)\s+(oturumunu|oturumu|oturumundaki (isi|gorevi)|oturumdaki (isi|gorevi))\s+(durdur|iptal et)$/d, yap: (m, ham) => {
+    const ad = serbest(ham, m, 1);
+    if (/^bu$/i.test(ad.trim())) return akisDur();
+    oturumuDurdur(ad);
+  } },
   { ornek: "… oturumunu aç", re: /^((.+?)\s+(oturumunu|oturumuna|oturumu)\s*(ac|gec|git)?|oturumu ac\s+(.+))$/d, yap: (m, ham) => oturumSesle(serbest(ham, m, m.indices[2] ? 2 : 5)) },
 ];
 function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
@@ -4549,9 +4571,135 @@ function aramaSesle(q) {
   $("srchQ").value = q; $("srchQ").dispatchEvent(new Event("input")); runSearch();
   tamam(`“${esc(q)}” aranıyor`);
 }
+// ── TFS sesli komut yardımcıları — paneldeki seçicinin kendi işlevlerini çağırır (elle seçimle aynı yol) ──
+const SAYI = { sifir: 0, bir: 1, iki: 2, uc: 3, dort: 4, bes: 5, alti: 6, yedi: 7, sekiz: 8, dokuz: 9, on: 10, yirmi: 20, otuz: 30,
+  kirk: 40, elli: 50, altmis: 60, yetmis: 70, seksen: 80, doksan: 90 };
+/** "1201", "1.201", "12 01", "#1201" ya da "bin iki yüz bir" → 1201; anlaşılmazsa null */
+function sayiOku(t) {
+  const d = String(t).replace(/[#!\s.,]/g, "");
+  if (/^\d{1,9}$/.test(d)) return Number(d);
+  const w = komutSade(t).replace(/(\d)\s+(\d)/g, "$1$2").trim().split(/\s+/).filter((x) => x && !/^(numara(li)?|no)$/.test(x));
+  if (!w.length) return null;
+  let top = 0, cur = 0;
+  for (const x of w) {
+    if (/^\d+$/.test(x)) cur += Number(x);
+    else if (x in SAYI) cur += SAYI[x];
+    else if (x === "yuz") cur = (cur || 1) * 100;
+    else if (x === "bin") { top += (cur || 1) * 1000; cur = 0; }
+    else if (x === "milyon") { top += (cur || 1) * 1e6; cur = 0; }
+    else return null;
+  }
+  return top + cur || null;
+}
+function tfsHazir() {
+  if (!tfsOn()) { olmaz("TFS modu kapalı ya da ayarları eksik. “TFS modunu aç” de ya da “TFS ayarlarını aç” deyip adresi, projeyi ve erişim anahtarını gir."); return false; }
+  if ($("taskCard").classList.contains("hidden")) { olmaz("Şu an görev verilemiyor — bu oturumda iş sürüyor. “Yeni oturum aç” deyip yeniden dene."); return false; }
+  return true;
+}
+async function tfsModSesle(ac) {
+  let r;
+  try { r = await (await fetch("/tfs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: ac }) })).json(); }
+  catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  if (!r.ok) return olmaz("TFS modu değiştirilemedi: " + esc(r.error || "bilinmeyen hata"));
+  await loadTfs();
+  tamam(ac ? "TFS modu açık <small>“1201 numaralı maddeyi çek” ya da “bana atananları göster” diyebilirsin</small>" : "TFS modu kapalı");
+}
+async function tfsSecSesle(no, pr) {
+  const id = sayiOku(no);
+  const isaret = pr ? "!" : "#";
+  if (!id) return olmaz(`“${esc(no)}” numara olarak anlaşılmadı.`);
+  if (!tfsHazir()) return;
+  sesNot(`⏳ ${isaret}${id} TFS'ten getiriliyor…`, "bilgi", true);
+  await (pr ? selectPr(id) : selectWi(id));
+  const sec = pr ? prSel?.pr : wiSel;
+  if (sec && Number(sec.id) === id) {
+    tamam(`${isaret}${id} · <b>${esc(sec.title || "")}</b> seçildi <small>Göndermek için “başlat” · ek talimat için “görev …”${pr ? " · kip: “yorumları ele al” ya da “incele”" : ""}</small>`);
+  } else olmaz(`${isaret}${id} getirilemedi: ${esc($("wiInfo").textContent || "TFS'ten cevap gelmedi")}`);
+}
+async function tfsAtananlar() {
+  if (!tfsHazir()) return;
+  sesNot("⏳ Sana atananlar getiriliyor…", "bilgi", true);
+  await mineWi(false);
+  const n = wiItems.length;
+  if ($("wiMenu").classList.contains("hidden")) return olmaz(`Liste alınamadı: ${esc($("wiInfo").textContent || "TFS'ten cevap gelmedi")}`);
+  tamam(n ? `${n} kayıt listelendi <small>Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”</small>` : "Sana atanmış açık iş öğesi ya da çekme isteği yok.");
+}
+const SIRA = { ilk: 1, birinci: 1, ikinci: 2, ucuncu: 3, dorduncu: 4, besinci: 5, altinci: 6, yedinci: 7, sekizinci: 8, dokuzuncu: 9, onuncu: 10 };
+function tfsListedenSec(sira) {
+  if ($("wiMenu").classList.contains("hidden") || !wiItems.length) return olmaz("Açık bir liste yok — önce “bana atananları göster” de.");
+  const kok = sira.replace(/(yi|si|yu|su|unu|ini|i|u)$/, "");
+  const n = /^\d+$/.test(sira) ? Number(sira) : /^son/.test(sira) ? wiItems.length : SIRA[kok] ?? SIRA[sira];
+  const it = n && wiItems[n - 1];
+  if (!it) return olmaz(`Listede ${n || "o"}. sırada kayıt yok (${wiItems.length} kayıt var).`);
+  tfsSecSesle(String(it.id), it.kind === "pr");
+}
+function tfsPrKipi(kip) {
+  if (!prSel) return olmaz("Seçili çekme isteği yok — önce “45 numaralı çekme isteğini aç” gibi söyle.");
+  prMode = kip;
+  renderWi();
+  const r = document.querySelector(`input[name="prKip"][value="${kip}"]`);
+  if (r) r.checked = true;
+  tamam(kip === "incele" ? "Kip: incele — kod değişmez, bulgular çekme isteğine yorum olarak yazılır" : "Kip: açık yorumları ele al — kod düzeltilir, yorumlara cevap yazılır");
+}
+/** Oturumu açar; kapalı bir gruptaysa grubu da açar (görünsün) */
+function oturumGit(id) {
+  const g = sessionsById[id]?.group;
+  if (g && kapaliGruplar.has(g)) { kapaliGruplar.delete(g); grupKaydet(); renderSessions(); }
+  if (id !== viewSessionId) openSession(id);
+}
+const durumAdi = (s) => sessionStatusLabels[s.status] || s.status || "";
+/** Sol listedeki görünen sırayla (gruplar dahil) bir sonraki / önceki oturum; uçta başa / sona döner */
+function oturumSirala(yon) {
+  const sira = [...document.querySelectorAll("#sessionList .sess")].map((e) => e.dataset.id).filter((id) => sessionsById[id]);
+  if (!sira.length) return olmaz("Listede oturum yok.");
+  const i = sira.indexOf(viewSessionId);
+  let j = i < 0 ? (yon > 0 ? 0 : sira.length - 1) : i + yon, dondu = false;
+  if (j >= sira.length) { j = 0; dondu = true; }
+  if (j < 0) { j = sira.length - 1; dondu = true; }
+  oturumGit(sira[j]);
+  const s = sessionsById[sira[j]];
+  tamam(`<b>${esc(s.name)}</b> açıldı <small>${j + 1} / ${sira.length} · ${esc(durumAdi(s))}${dondu ? (yon > 0 ? " · listenin başına dönüldü" : " · listenin sonuna geçildi") : ""}</small>`);
+}
+/** Onay bekleyen oturumlar arasında sırayla gezinir (en eski bekleyen önce) */
+function onayBekleyeneGec() {
+  const liste = Object.values(sessionsById).filter((s) => s.status === "approval").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  if (!liste.length) return sesNot("Onay bekleyen oturum yok.");
+  const i = liste.findIndex((s) => s.id === viewSessionId);
+  if (i >= 0 && liste.length === 1) return sesNot("Onay bekleyen tek oturum bu — açık olan.");
+  const s = liste[(i + 1) % liste.length];
+  oturumGit(s.id);
+  tamam(`<b>${esc(s.name)}</b> açıldı <small>Onay bekleyen ${liste.indexOf(s) + 1} / ${liste.length}${liste.length > 1 ? " · sıradakine geçmek için yine “onay bekleyen oturumu aç” de" : ""}</small>`);
+}
+/** Çalışan, onay bekleyen ve zamanlanmış oturumlar — tıklanınca açılır */
+function calisanlariGoster() {
+  const sira = { approval: 0, running: 1, scheduled: 2 };
+  const liste = Object.values(sessionsById).filter((s) => s.busy || s.status in sira)
+    .sort((a, b) => (sira[a.status] ?? 3) - (sira[b.status] ?? 3) || b.updatedAt.localeCompare(a.updatedAt));
+  if (!liste.length) return sesNot("Şu an çalışan oturum yok.");
+  sesNot(`<b>Çalışan oturumlar (${liste.length})</b><span class="ses-liste">` +
+    liste.map((s) => `<button type="button" data-oturum="${esc(s.id)}"><span class="st ${esc(s.status)}">${esc(durumAdi(s))}</span> ${esc(s.name)}</button>`).join("") +
+    `</span><small>Tıkla ya da “… oturumunu aç” de · durdurmak için “… oturumunu durdur”</small>` +
+    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true);
+}
+/** Oturumu açmadan, adıyla durdurur (önce sorar) */
+function oturumuDurdur(ad) {
+  const r = oturumBul(ad);
+  if (r.adaylar) return sesNot(`Hangisi durdurulsun? Önce aç, sonra “durdur” de: ${r.adaylar.map((s) => `<button type="button" data-oturum="${esc(s.id)}">${esc(s.name)}</button>`).join(" ")}` +
+    `<button type="button" data-ses="kapat">Vazgeç</button>`, "soru", true);
+  if (!r.s) return olmaz(`“${esc(ad)}” adında oturum bulunamadı.`);
+  const s = r.s;
+  if (!s.busy) return sesNot(`<b>${esc(s.name)}</b> oturumunda çalışan bir iş yok (${esc(durumAdi(s))}).`);
+  onayIste(`<b>${esc(s.name)}</b> oturumundaki iş durdurulsun mu? <small>${esc(durumAdi(s))}</small>`, async () => {
+    try {
+      const res = await fetch("/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: s.id }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `sunucu ${res.status} döndü`);
+      tamam(`<b>${esc(s.name)}</b> durduruluyor…`);
+    } catch (e) { olmaz("Durdurulamadı: " + esc(e.message)); }
+  });
+}
 function oturumSesle(ad) {
   const r = oturumBul(ad);
-  if (r.s) { openSession(r.s.id); return tamam(`<b>${esc(r.s.name)}</b> açıldı`); }
+  if (r.s) { oturumGit(r.s.id); return tamam(`<b>${esc(r.s.name)}</b> açıldı`); }
   if (r.adaylar) return sesNot(`Hangisi? ${r.adaylar.map((s) => `<button type="button" data-oturum="${esc(s.id)}">${esc(s.name)}</button>`).join(" ")}` +
     `<button type="button" data-ses="kapat">Vazgeç</button>`, "soru", true);
   olmaz(`“${esc(ad)}” adında oturum bulunamadı.`);
