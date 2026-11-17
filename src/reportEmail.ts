@@ -14,10 +14,18 @@ import { countBySeverity } from "./securityReport.js";
  * rengini atan istemci/posta süzgeci açık yazıyı beyaz sayfada bıraktı. Kural: her yazı
  * açık zeminde okunur renkte, zeminler yalnızca süs (atılsa da okunur). Neon renkler
  * (NEON) yalnızca şerit/kenar gibi süslerde, yazıda koyu tonları (R.cyan, R.yesil) kullan.
+ *
+ * OUTLOOK MASAÜSTÜ (Word motoru) KURALLARI — kullanıcı Outlook 2019'da yapıştırınca şablon
+ * bozuluyordu: iç boşluk/kenarlık/kenar boşluğu yalnızca hücrede (<td>) güvenilir, div'de ve
+ * tablo kenar boşluğunda yok sayılır → `kutu()` / `bosluk()`; yazı tipi listesinde YALNIZCA ilki
+ * dikkate alınır (kurulu değilse Times New Roman) → Windows'ta hep olan yazı tipi başta;
+ * "font:" kısaltması ve birimsiz satır yüksekliği güvenilmez → `fontAc()` çıktıda uzun hâle
+ * açar; font-size:0 geçersiz (en küçük 1px) → ince şeritler 1px yazı + sabit satır yüksekliği.
  */
 
-const SANS = "'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const MONO = "'Cascadia Mono',Consolas,'Courier New',monospace";
+// İlk yazı tipi Windows'ta hep kurulu olmalı: Outlook masaüstü listenin yalnızca ilkine bakar
+const SANS = "'Segoe UI',Arial,Helvetica,sans-serif";
+const MONO = "Consolas,'Cascadia Mono','Courier New',monospace";
 
 /** Renkler — yazılar beyazda okunur (≥ 4,5:1), zeminler açık */
 const R = {
@@ -91,8 +99,15 @@ const tarih = (iso: string) =>
   });
 const yer = (f: SecurityFinding) => (f.file ? `${f.file}${f.line ? ":" + f.line : ""}` : "");
 const buyuk = (s: string) => s.toLocaleUpperCase("tr-TR");
-// Uzun yol: kelime ortasından değil, / ve \ sonrasından satır kırılsın (<wbr> desteklenmezse sarılır)
-const yolHtml = (p: string) => esc(p).replace(/([/\\])/g, "$1<wbr>");
+// Uzun yol: kelime ortasından değil, / ve \ sonrasından satır kırılsın. Outlook <wbr>'yi tanımaz,
+// kırılamayan uzun yol tabloyu 600 px'in dışına iter → uzun yolda sıfır genişlikli boşluk
+const yolHtml = (p: string) => esc(p).replace(/([/\\])/g, p.length > 40 ? "$1&#8203;" : "$1");
+/** Dikey aralık — Outlook tablo/div kenar boşluğunu yok sayar, aralık boş hücreyle verilir */
+const bosluk = (px: number) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="${px}" style="height:${px}px;font-size:1px;line-height:${px}px;mso-line-height-rule:exactly">&nbsp;</td></tr></table>`;
+/** Tek hücreli tam genişlik kutu — iç boşluk ve kenarlık Outlook'ta yalnızca hücrede çalışır */
+const kutu = (stil: string, icerik: string, zemin?: string) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td${zemin ? ` bgcolor="${zemin}"` : ""} style="${stil}">${icerik}</td></tr></table>`;
 
 export interface ReportEmail {
   subject: string;
@@ -129,19 +144,20 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
   // — Terminal komut satırı: hangi hedefin, hangi kapsamda tarandığı —
   const komut = `kurmay denetim --hedef ${proje.replace(/\s+/g, "-")} --kapsam ${r.standalone ? "tum-kod" : "degisen-dosyalar"}`;
   const terminal = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px"><tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-left:3px solid ${NEON.cyan};border-radius:8px;padding:10px 14px;font:12.5px/1.7 ${MONO};color:${R.ikincil};overflow-wrap:anywhere">
         <span style="color:${R.yesil}">kurmay@denetim</span><span style="color:${R.soluk}">:~$</span> <span style="color:${R.yazi}">${esc(komut)}</span><br>
         <span style="color:${R.soluk}">[${esc(tarih(r.createdAt))}]</span> <span style="color:${R.yesil}">■ tarama tamamlandı</span> <span style="color:${R.soluk}">·</span>
         ${r.files.length} dosya ${r.standalone ? "incelendi" : "denetlendi"} <span style="color:${R.soluk}">·</span> ${hamMetin ? "yapılandırılmış rapor yok" : `${toplam} bulgu`}
-      </td></tr></table>`;
+      </td></tr></table>${bosluk(18)}`;
 
   // — Risk düzeyi bandı ve ölçek —
   const renk = rk ? rk.renk : R.ikincil;
   const olcek = RISK_ORDER.map((k, i) => {
     const dolu = rk && i <= rk.n;
-    return `<td width="20%" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td height="1" style="height:1px;font-size:0;line-height:0;border-top:8px solid ${dolu ? renk : R.cizgi}">&nbsp;</td></tr></table>
-      <div style="font:${r.risk === k ? "700" : "400"} 9.5px/1.6 ${MONO};letter-spacing:.5px;color:${r.risk === k ? renk : R.soluk};padding-top:4px">${buyuk(RISK[k].ad)}</div></td>`;
+    return `<td width="20%" valign="top" style="padding:0 2px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td height="1" style="height:1px;font-size:1px;line-height:1px;mso-line-height-rule:exactly;border-top:8px solid ${dolu ? renk : R.cizgi}">&nbsp;</td></tr>
+      <tr><td style="padding-top:4px;font:${r.risk === k ? "700" : "400"} 9.5px/1.6 ${MONO};letter-spacing:.5px;color:${r.risk === k ? renk : R.soluk}">${buyuk(RISK[k].ad)}</td></tr></table></td>`;
   }).join("");
   const riskBandi = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate"><tr>
@@ -151,9 +167,9 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
           <td align="right" valign="middle">
             <table role="presentation" cellpadding="0" cellspacing="0" align="right"><tr><td style="border:1px solid ${renk};border-radius:4px;padding:4px 10px;font:700 12px/1.3 ${MONO};letter-spacing:2px;color:${renk}">[ ${buyuk(rk ? rk.ad : "Belirlenemedi")} ]</td></tr></table>
           </td></tr></table>
-        <div style="font:700 30px/1.25 ${MONO};letter-spacing:1px;color:${renk};padding:8px 0 12px">${buyuk(rk ? rk.ad : "Belirlenemedi")}</div>
+        ${kutu(`padding:8px 0 12px;font:700 30px/1.25 ${MONO};letter-spacing:1px;color:${renk}`, buyuk(rk ? rk.ad : "Belirlenemedi"))}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${olcek}</tr></table>
-        <div style="font:13.5px/1.55 ${SANS};color:${R.yazi};padding-top:12px"><span style="font-family:${MONO};color:${renk}">&gt;</span> ${esc(rk ? rk.aciklama : "Denetçi yapılandırılmış rapor üretmediği için risk düzeyi belirlenemedi.")}</div>
+        ${kutu(`padding-top:12px;font:13.5px/1.55 ${SANS};color:${R.yazi}`, `<span style="font-family:${MONO};color:${renk}">&gt;</span> ${esc(rk ? rk.aciklama : "Denetçi yapılandırılmış rapor üretmediği için risk düzeyi belirlenemedi.")}`)}
       </td></tr></table>`;
 
   // — Bulgu matrisi: 5 kutu —
@@ -174,7 +190,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
     ? `${baslik("Durum raporu")}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td bgcolor="${R.terminal}" style="background:${R.terminal};border:1px solid ${R.cizgi};border-left:3px solid ${NEON.cyan};border-radius:8px;padding:12px 14px">
-          <div style="font:12px/1.6 ${MONO};color:${R.yesil};padding-bottom:4px">$ cat ozet.txt</div>
+          ${kutu(`padding-bottom:4px;font:12px/1.6 ${MONO};color:${R.yesil}`, "$ cat ozet.txt")}
           <div style="font:14px/1.65 ${SANS};color:${R.govde};overflow-wrap:anywhere">${esc(r.summary)}</div>
         </td></tr></table>`
     : "";
@@ -186,7 +202,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
       o.pdfAttached ? "ekteki PDF raporda" : "raporda"
     } yer alıyor.</div>`;
   } else if (!toplam) {
-    bulgular = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px"><tr>
+    bulgular = `${bosluk(22)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td bgcolor="${RISK.none.zemin}" style="background:${RISK.none.zemin};border:1px solid ${RISK.none.kenar};border-radius:8px;padding:14px 16px;font:14px/1.5 ${SANS};color:${R.yazi}">
         <span style="font:700 12px ${MONO};letter-spacing:1px;color:${RISK.none.renk}">[ TEMİZ ]</span>&nbsp; Güvenlik açığı bulunmadı — ${r.standalone ? "denetlenen kod tabanında" : "denetlenen değişikliklerde"} bildirilecek bir sorun yok.</td></tr></table>`;
   } else {
@@ -200,7 +216,7 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
       ust
         .map((f, i) => {
           const s = SEV[f.severity] ?? SEV.info;
-          return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;border-collapse:separate"><tr>
+          return `${i ? bosluk(10) : ""}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate"><tr>
           <td bgcolor="${R.panel}" style="background:${R.panel};border:1px solid ${R.cizgi};border-left:3px solid ${s.renk};border-radius:6px;padding:12px 14px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
               <td valign="middle">
@@ -211,15 +227,15 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
               </td>
               <td align="right" valign="middle" style="font:11.5px/1.5 ${MONO};color:${R.ikincil}">${esc(f.cwe ?? "")}</td>
             </tr></table>
-            <div style="font:600 14.5px/1.4 ${SANS};color:${R.yazi};padding-top:7px;overflow-wrap:anywhere">${esc(f.title)}</div>
+            ${kutu(`padding-top:7px;font:600 14.5px/1.4 ${SANS};color:${R.yazi};overflow-wrap:anywhere`, esc(f.title))}
             ${yer(f) ? `<div style="font:12px/1.6 ${MONO};color:${R.cyan};overflow-wrap:anywhere"><span style="color:${R.soluk}">└─</span> ${yolHtml(yer(f))}</div>` : ""}
             ${f.category ? `<div style="font:12px/1.5 ${SANS};color:${R.ikincil}">${esc(f.category)}</div>` : ""}
-            ${f.recommendation ? `<div style="font:13px/1.55 ${SANS};color:${R.govde};padding-top:6px;overflow-wrap:anywhere;word-break:break-word"><span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.yesil}">» DÜZELTME</span>&nbsp; ${esc(kisalt(f.recommendation, 260))}</div>` : ""}
+            ${f.recommendation ? kutu(`padding-top:6px;font:13px/1.55 ${SANS};color:${R.govde};overflow-wrap:anywhere;word-break:break-word`, `<span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.yesil}">»&nbsp;DÜZELTME</span>&nbsp; ${esc(kisalt(f.recommendation, 260))}`) : ""}
           </td></tr></table>`;
         })
         .join("") +
       (toplam > TOP_FINDINGS
-        ? `<div style="font:12.5px/1.5 ${MONO};color:${R.ikincil};padding-top:2px">+ ${toplam - TOP_FINDINGS} bulgu daha — tamamı ${o.pdfAttached ? "ekteki PDF raporda" : "raporda"}</div>`
+        ? bosluk(8) + kutu(`font:12.5px/1.5 ${MONO};color:${R.ikincil}`, `+ ${toplam - TOP_FINDINGS} bulgu daha — tamamı ${o.pdfAttached ? "ekteki PDF raporda" : "raporda"}`)
         : "");
   }
 
@@ -243,19 +259,19 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
     .join("");
 
   const ekNotu = o.pdfAttached
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>
+    ? `${bosluk(20)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td bgcolor="#ecfeff" style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:12px 14px;font:13.5px/1.5 ${SANS};color:#155e75">
         <span style="font:700 11px ${MONO};letter-spacing:1px;color:${R.cyan}">[ EK ]</span>&nbsp; Raporun tamamı PDF olarak ekte: tüm bulgular, kanıt satırları ve düzeltme önerileri.</td></tr></table>`
     : "";
   const dugme = o.link
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>
-        <td bgcolor="${NEON.cyan}" style="background:${NEON.cyan};border:1px solid ${R.cyan};border-radius:6px">
-          <a href="${esc(o.link)}" target="_blank" style="display:inline-block;padding:12px 22px;font:700 13px/1 ${MONO};letter-spacing:1.5px;color:#083344;text-decoration:none;border-radius:6px">RAPORU AÇ &rarr;</a>
+    ? `${bosluk(20)}<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td bgcolor="${NEON.cyan}" style="background:${NEON.cyan};border:1px solid ${R.cyan};border-radius:6px;padding:12px 22px;font:700 13px/1.2 ${MONO};letter-spacing:1.5px">
+          <a href="${esc(o.link)}" target="_blank" style="font:700 13px/1.2 ${MONO};letter-spacing:1.5px;color:#083344;text-decoration:none">RAPORU AÇ&nbsp;&rarr;</a>
         </td></tr></table>`
     : "";
 
-  const html = `<!doctype html>
-<html lang="tr" xmlns="http://www.w3.org/1999/xhtml">
+  const html = fontAc(`<!doctype html>
+<html lang="tr" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -263,6 +279,8 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
 <title>${esc(subject)}</title>
+<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+<style>table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}</style><![endif]-->
 <style>
   :root { color-scheme:light; supported-color-schemes:light; }
   @media (max-width:620px) {
@@ -272,11 +290,11 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 </style>
 </head>
 <body bgcolor="${R.dis}" style="margin:0;padding:0;background:${R.dis};-webkit-text-size-adjust:100%">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${esc(onIzleme)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${esc(onIzleme)}${"&zwnj;&nbsp;".repeat(40)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${R.dis}" style="background:${R.dis};background-image:linear-gradient(rgba(14,116,144,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(14,116,144,.06) 1px,transparent 1px);background-size:28px 28px">
 <tr><td align="center" style="padding:24px 12px">
   <table role="presentation" class="kap" width="600" cellpadding="0" cellspacing="0" bgcolor="${R.kart}" style="width:600px;max-width:600px;background:${R.kart};border:1px solid ${R.cizgi};border-radius:12px;border-collapse:separate;overflow:hidden">
-    <tr><td height="4" bgcolor="${NEON.cyan}" style="height:4px;font-size:0;line-height:0;background:${NEON.cyan};background-image:linear-gradient(90deg,${NEON.cyan},${NEON.yesil} 60%,${renk})">&nbsp;</td></tr>
+    <tr><td height="4" bgcolor="${NEON.cyan}" style="height:4px;font-size:1px;line-height:4px;mso-line-height-rule:exactly;background:${NEON.cyan};background-image:linear-gradient(90deg,${NEON.cyan},${NEON.yesil} 60%,${renk})">&nbsp;</td></tr>
     <tr><td class="ic" bgcolor="${R.kart}" style="background:${R.kart};padding:18px 28px;border-bottom:1px solid ${R.cizgi}">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td valign="middle">
@@ -288,14 +306,14 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
         </td>
         <td align="right" valign="middle">
           <table role="presentation" cellpadding="0" cellspacing="0" align="right"><tr>
-            <td style="border:1px solid #a7f3d0;border-radius:999px;padding:4px 11px;font:600 10.5px/1.4 ${MONO};letter-spacing:1px;color:${R.yesil};white-space:nowrap">● TARAMA TAMAMLANDI</td>
+            <td style="border:1px solid #a7f3d0;border-radius:999px;padding:4px 11px;font:600 10.5px/1.4 ${MONO};letter-spacing:1px;color:${R.yesil};white-space:nowrap">●&nbsp;TARAMA&nbsp;TAMAMLANDI</td>
           </tr></table>
         </td>
       </tr></table>
     </td></tr>
     <tr><td class="ic" style="padding:24px 28px 8px">
       <div style="font:600 11px/1.4 ${MONO};letter-spacing:2px;color:${R.cyan}">${r.standalone ? "// KOD TABANI DENETİMİ" : "// GÖREV DENETİMİ"}</div>
-      <div style="font:700 22px/1.3 ${SANS};color:${R.yazi};padding:6px 0 16px;overflow-wrap:anywhere">${esc(r.task)}</div>
+      ${kutu(`padding:6px 0 16px;font:700 22px/1.3 ${SANS};color:${R.yazi};overflow-wrap:anywhere`, esc(r.task))}
       ${terminal}
       ${riskBandi}
       ${matris}
@@ -307,16 +325,17 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${kunye}</table>
     </td></tr>
     <tr><td class="ic" style="padding:18px 28px 24px">
-      <div style="font:11.5px/1.7 ${MONO};color:${R.soluk};border-top:1px solid ${R.cizgi};padding-top:14px">
-        // Kurmay Güvenlik Denetçisi tarafından otomatik üretildi${o.version ? ` · v${esc(o.version)}` : ""}<br>
-        // Denetçi kodu yalnızca okur; bulgular otomatik analiz sonucudur ve uygulanmadan önce bir geliştirici tarafından doğrulanmalıdır.
-      </div>
+      ${kutu(
+        `border-top:1px solid ${R.cizgi};padding-top:14px;font:11.5px/1.7 ${MONO};color:${R.soluk}`,
+        `// Kurmay Güvenlik Denetçisi tarafından otomatik üretildi${o.version ? ` · v${esc(o.version)}` : ""}<br>
+        // Denetçi kodu yalnızca okur; bulgular otomatik analiz sonucudur ve uygulanmadan önce bir geliştirici tarafından doğrulanmalıdır.`,
+      )}
     </td></tr>
   </table>
 </td></tr>
 </table>
 </body>
-</html>`;
+</html>`);
 
   // Düz metin hâli: HTML göstermeyen istemciler ve önizleme için
   const satirlar = [
@@ -358,7 +377,31 @@ export function renderReportEmail(r: SecurityReport, o: ReportEmailOptions = {})
 
 /** Bölüm başlığı (e-posta içi): eş aralıklı, "//" önekli, ince camgöbeği çizgi */
 function baslik(ad: string): string {
-  return `<div style="font:700 11.5px/1.4 ${MONO};letter-spacing:2px;color:${R.yazi};padding:26px 0 8px;border-bottom:1px solid ${R.cizgi};margin-bottom:12px"><span style="color:${R.cyan}">//</span> ${esc(buyuk(ad))}</div>`;
+  return (
+    kutu(
+      `padding:26px 0 8px;border-bottom:1px solid ${R.cizgi};font:700 11.5px/1.4 ${MONO};letter-spacing:2px;color:${R.yazi}`,
+      `<span style="color:${R.cyan}">//</span> ${esc(buyuk(ad))}`,
+    ) + bosluk(12)
+  );
+}
+
+/**
+ * "font:" kısaltmasını uzun hâllere açar, birimsiz satır yüksekliğini piksele çevirir — Outlook
+ * masaüstü kısaltmayı güvenilir işlemez (yazı Times New Roman'a, varsayılan boyuta düşer). Şablon
+ * kısa ve okunur kalsın diye kısaltmayla yazılır, açma burada, çıktının tamamında yapılır.
+ */
+function fontAc(html: string): string {
+  return html.replace(
+    /font:\s*(?:(\d{3})\s+)?([\d.]+)px(?:\/([\d.]+)(px)?)?\s+([^;"]+)/g,
+    (_m, kalinlik: string | undefined, boyut: string, satir: string | undefined, pikselSatir: string | undefined, aile: string) => {
+      const parcalar = [`font-family:${aile.trim()}`, `font-size:${boyut}px`, `font-weight:${kalinlik ?? 400}`];
+      if (satir) {
+        const px = pikselSatir ? Number(satir) : Math.round(Number(boyut) * Number(satir));
+        parcalar.push(`line-height:${px}px`, "mso-line-height-rule:exactly");
+      }
+      return parcalar.join(";");
+    },
+  );
 }
 
 /**
@@ -370,7 +413,21 @@ export function buildEml(mail: ReportEmail, attachment?: { name: string; data: B
   const CRLF = "\r\n";
   const b64 = (buf: Buffer | string) =>
     (Buffer.isBuffer(buf) ? buf : Buffer.from(buf, "utf8")).toString("base64").replace(/.{1,76}/g, "$&" + CRLF);
-  const word = (s: string) => `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+  // RFC 2047: kodlanmış sözcük en fazla 75 karakter — uzun konu birden çok sözcüğe bölünüp katlanır
+  // (≤ 42 bayt → 56 karakter base64, "Subject: " ile 78'i aşmaz; harf ortasından bölünmez)
+  const word = (s: string) => {
+    const parcalar: string[] = [];
+    let cur = "";
+    for (const ch of s) {
+      if (cur && Buffer.byteLength(cur + ch, "utf8") > 42) {
+        parcalar.push(cur);
+        cur = "";
+      }
+      cur += ch;
+    }
+    if (cur) parcalar.push(cur);
+    return parcalar.map((p) => `=?UTF-8?B?${Buffer.from(p, "utf8").toString("base64")}?=`).join(CRLF + " ");
+  };
   const sinir = `kurmay-${Math.random().toString(36).slice(2, 12)}`;
   const alt = `${sinir}-alt`;
   const govde = [
@@ -402,7 +459,8 @@ export function buildEml(mail: ReportEmail, attachment?: { name: string; data: B
     ...govde,
     `--${sinir}`,
     `Content-Type: application/pdf; name="${ascii}"`,
-    `Content-Disposition: attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+    `Content-Disposition: attachment; filename="${ascii}";`,
+    ` filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
     `Content-Transfer-Encoding: base64`,
     ``,
     b64(attachment.data),
