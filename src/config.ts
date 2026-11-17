@@ -152,7 +152,7 @@ export function loadAppConfig(configPath: string): AppConfig {
     if (sp.enabled !== undefined && typeof sp.enabled !== "boolean") {
       throw new Error(`ayar dosyası: "speech.enabled" true/false olmalı`);
     }
-    for (const k of ["model", "language", "prompt"]) {
+    for (const k of ["model", "language", "prompt", "commandModel", "ttsModel", "ttsVoice"]) {
       if (sp[k] !== undefined && typeof sp[k] !== "string") throw new Error(`ayar dosyası: "speech.${k}" metin olmalı`);
     }
     if (typeof sp.language === "string" && sp.language && !/^(auto|[a-z]{2,3})$/i.test(sp.language)) {

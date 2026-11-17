@@ -20,7 +20,7 @@ export interface TfsPullRequest {
   source: string;
   target: string;
   repository: { id: string; name: string; project: string; projectId?: string; remoteUrl?: string; webUrl?: string };
-  reviewers: Array<{ name: string; vote: number; required?: boolean }>;
+  reviewers: Array<{ name: string; vote: number; required?: boolean; id?: string }>;
   mergeStatus?: string;
   lastSourceCommit?: string;
   webUrl: string;
@@ -30,6 +30,8 @@ export interface TfsThreadComment {
   id: number;
   parentId: number;
   author: string;
+  /** Yazarın kimliği (5.0+ nesne; eski sunucuda metin — yok) */
+  authorId?: string;
   date: string;
   content: string;
   /** Sistem yorumu (oy, gönderim, dal güncellemesi…) */
@@ -79,7 +81,7 @@ interface RawPr {
     webUrl?: string;
     project?: { id?: string; name?: string };
   };
-  reviewers?: Array<{ displayName?: string; vote?: number; isRequired?: boolean }>;
+  reviewers?: Array<{ id?: string; displayName?: string; vote?: number; isRequired?: boolean }>;
   _links?: { web?: { href?: string } };
 }
 
@@ -116,6 +118,7 @@ function normalizePr(c: TfsConnection, r: RawPr): TfsPullRequest {
       name: x.displayName ?? "?",
       vote: x.vote ?? 0,
       ...(x.isRequired ? { required: true } : {}),
+      ...(x.id ? { id: x.id } : {}),
     })),
     ...(r.mergeStatus !== undefined ? { mergeStatus: String(r.mergeStatus) } : {}),
     ...(r.lastMergeSourceCommit?.commitId ? { lastSourceCommit: r.lastMergeSourceCommit.commitId } : {}),
@@ -203,6 +206,9 @@ export async function getThreads(
         id: cm.id!,
         parentId: cm.parentCommentId ?? 0,
         author: identityName(cm.author) ?? "?",
+        ...(typeof (cm.author as { id?: unknown } | undefined)?.id === "string"
+          ? { authorId: (cm.author as { id: string }).id }
+          : {}),
         date: cm.publishedDate ?? "",
         content: cm.content ?? "",
         system: cm.commentType === "system" || cm.commentType === 3,
@@ -296,17 +302,25 @@ export async function getPrWorkItems(c: TfsConnection, pr: TfsPullRequest, signa
   }
 }
 
-let meCache: { url: string; id: string } | undefined;
+let meCache: { url: string; id: string; name?: string } | undefined;
 /** Anahtarın sahibinin kimliği (PR listelerinde "benim" süzgeci için) */
 export async function myId(c: TfsConnection, signal?: AbortSignal): Promise<string | undefined> {
-  if (meCache?.url === c.url) return meCache.id;
-  const r = await tfsCall<{ authenticatedUser?: { id?: string } }>(c, "GET", "/_apis/connectionData", {
+  return (await me(c, signal))?.id;
+}
+/** Kimlik + görünen ad (eski sunucularda yorum yazarı yalnızca adla gelir) */
+export async function me(c: TfsConnection, signal?: AbortSignal): Promise<{ id: string; name?: string } | undefined> {
+  if (meCache?.url === c.url) return meCache;
+  const r = await tfsCall<{
+    authenticatedUser?: { id?: string; providerDisplayName?: string; customDisplayName?: string };
+  }>(c, "GET", "/_apis/connectionData", {
     what: "kimlik",
     signal,
   }).catch(() => undefined);
-  const id = r?.authenticatedUser?.id;
-  if (id) meCache = { url: c.url, id };
-  return id;
+  const u = r?.authenticatedUser;
+  if (!u?.id) return undefined;
+  const name = u.customDisplayName || u.providerDisplayName;
+  meCache = { url: c.url, id: u.id, ...(name ? { name } : {}) };
+  return meCache;
 }
 
 export interface TfsPrListItem {
@@ -562,4 +576,86 @@ export async function repoInfoFromRemote(
   return repo?.id && repo.name && repo.project?.name
     ? { id: repo.id, name: repo.name, project: repo.project.name }
     : undefined;
+}
+
+const MERGE_STATUS = ["notSet", "queued", "conflicts", "succeeded", "rejectedByPolicy", "failure"];
+export interface TfsPrStatus {
+  id: number;
+  title: string;
+  repository: string;
+  role: "acan" | "inceleyen";
+  createdBy?: string;
+  isDraft: boolean;
+  webUrl?: string;
+  /** Benim dışımdaki inceleyenler ve oyları (10 onay, 5 önerili onay, 0 yok, -5 bekliyor, -10 ret) */
+  reviewers: Array<{ name: string; vote: number; required?: boolean }>;
+  /** İnceleyeniysem benim oyum */
+  myVote?: number;
+  /** Açık (etkin / beklemede) kullanıcı yorum dizisi sayısı */
+  activeThreads: number;
+  /** `since`ten sonra başkalarının yazdığı yorumlar (sistem kayıtları hariç) */
+  newComments: number;
+  newAuthors: string[];
+  conflicts: boolean;
+  error?: string;
+}
+
+/**
+ * Açık çekme isteklerimin durumu (sesli "çekme isteklerimin durumu"): oylar, açık yorumlar,
+ * `since`ten (PR başına son bakış; yoksa `fallbackSince`) sonra başkalarından gelen yorumlar, çakışma.
+ * En fazla 15 PR; her biri için PR + yorum dizileri okunur (paralel). Biri okunamazsa yalnızca o hatalı.
+ */
+export async function prStatusSummary(
+  c: TfsConnection,
+  since: Record<string, string>,
+  fallbackSince: string,
+  signal?: AbortSignal,
+): Promise<{ items: TfsPrStatus[]; me?: string }> {
+  const ben = await me(c, signal);
+  const list = (await myPullRequests(c, signal)).slice(0, 15);
+  const benim = (id?: string, ad?: string) => (!!id && id === ben?.id) || (!!ad && !!ben?.name && ad === ben.name);
+  const items = await Promise.all(
+    list.map(async (it): Promise<TfsPrStatus> => {
+      const base: TfsPrStatus = {
+        id: it.id,
+        title: it.title,
+        repository: it.repository,
+        role: it.role,
+        ...(it.createdBy ? { createdBy: it.createdBy } : {}),
+        isDraft: it.isDraft,
+        reviewers: [],
+        activeThreads: 0,
+        newComments: 0,
+        newAuthors: [],
+        conflicts: false,
+      };
+      try {
+        const pr = await getPullRequest(c, it.id, signal);
+        const threads = await getThreads(c, pr, signal);
+        const sinr = Date.parse(since[String(it.id)] || fallbackSince) || 0;
+        const yeni = threads
+          .filter((t) => !t.system)
+          .flatMap((t) => t.comments)
+          .filter((cm) => !cm.system && !benim(cm.authorId, cm.author) && Date.parse(cm.date) > sinr);
+        const mine = pr.reviewers.find((r) => benim(r.id, r.name));
+        const ms =
+          pr.mergeStatus && /^\d+$/.test(pr.mergeStatus) ? MERGE_STATUS[Number(pr.mergeStatus)] : pr.mergeStatus;
+        return {
+          ...base,
+          webUrl: pr.webUrl,
+          reviewers: pr.reviewers
+            .filter((r) => r !== mine)
+            .map((r) => ({ name: r.name, vote: r.vote, ...(r.required ? { required: true } : {}) })),
+          ...(mine ? { myVote: mine.vote } : {}),
+          activeThreads: threads.filter((t) => !t.system && (t.status === "active" || t.status === "pending")).length,
+          newComments: yeni.length,
+          newAuthors: [...new Set(yeni.map((cm) => cm.author))],
+          conflicts: ms === "conflicts",
+        };
+      } catch (e) {
+        return { ...base, error: e instanceof Error ? e.message : String(e) };
+      }
+    }),
+  );
+  return { items, ...(ben?.name ? { me: ben.name } : {}) };
 }
