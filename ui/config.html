@@ -294,10 +294,6 @@ input.sw:disabled { opacity:.5; cursor:default; }
       </select>
     </div>
   </div>
-  <div style="margin-top:10px">
-    <label class="minl" for="spPrompt">İpucu — ses tanımanın doğru yazması için özel adlar ve terimler (isteğe bağlı)</label>
-    <input type="text" id="spPrompt" spellcheck="false" placeholder="Örnek: Kurmay, Analist, Saha Timi, sipariş servisi, Kafka, endpoint" style="width:100%">
-  </div>
   <div class="fhint" id="spConn" style="margin-top:8px"></div>
   <div class="rfoot" style="margin-top:8px">
     <button class="primary" id="spSave" type="button" disabled>Kaydet</button>
@@ -971,10 +967,9 @@ function fillSpeech(){
   $("spModel").value = t.model || "";
   $("spLang").value = t.language || "tr";
   if (!$("spLang").value) $("spLang").value = "tr";
-  $("spPrompt").value = t.prompt || "";
   renderSpeechCard();
 }
-const spForm = ()=> ({ model: $("spModel").value.trim(), language: $("spLang").value, prompt: $("spPrompt").value.trim() });
+const spForm = ()=> ({ model: $("spModel").value.trim(), language: $("spLang").value });
 function renderSpeechCard(){
   const t = spSaved || {}, f = spForm();
   $("spState").textContent = t.enabled ? (t.ready ? "açık" : "açık · adres yok") : "kapalı";
@@ -982,10 +977,10 @@ function renderSpeechCard(){
   $("spConn").innerHTML = t.generalUrl
     ? `Sunucu: <code>${esc(t.generalUrl)}</code> (Bağlantı bölümündeki adres ve anahtar)`
     : `<span style="color:var(--red)">Bağlantı bölümünde sunucu adresi yok — önce onu gir.</span>`;
-  $("spSave").disabled = f.model === (t.model || "") && f.language === (t.language || "tr") && f.prompt === (t.prompt || "");
+  $("spSave").disabled = f.model === (t.model || "") && f.language === (t.language || "tr");
 }
 const spMsg = (html, renk)=> { $("spMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
-for (const id of ["spModel","spPrompt"]){
+for (const id of ["spModel"]){
   $(id).addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
   $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("spSave").disabled){ e.preventDefault(); $("spSave").click(); } });
 }
@@ -998,8 +993,8 @@ async function spPost(url, body){
 function spCfgEsitle(){
   if (!cfg || !spSaved) return;
   const t = spSaved, dil = t.language && t.language !== "tr";
-  if (t.enabled || t.model || t.prompt || dil)
-    cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}), ...(t.prompt ? { prompt: t.prompt } : {}) };
+  if (t.enabled || t.model || dil)
+    cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}) };
   else delete cfg.speech;
 }
 $("spSw").addEventListener("change", async ()=>{
