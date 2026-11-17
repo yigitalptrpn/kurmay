@@ -5117,11 +5117,6 @@ function prDurumParcalari(it) {
   if (bek.length) p.push(`${veIle(bek)} düzeltme bekliyor`);
   if (ret.length) p.push(`${veIle(ret)} reddetti`);
   if (!onay.length && !bek.length && !ret.length) p.push(it.reviewers.length ? "henüz kimse oy vermedi" : "inceleyen yok");
-  const b = it.builds || [], kir = b.filter((x) => x.state === "kirildi").map((x) => x.name);
-  if (kir.length) p.push(b.length === 1 ? "derleme kırıldı" : `derleme kırıldı: ${veIle(kir)}`);
-  else if (b.some((x) => x.state === "eskidi")) p.push("yeniden derlenmesi gerekiyor");
-  else if (b.some((x) => x.state === "suruyor" || x.state === "bekliyor")) p.push("derleme sürüyor");
-  else if (b.length) p.push("derleme geçti");
   if (it.newComments) p.push(`${veIle(it.newAuthors)} ${it.newComments} yeni yorum yazdı`);
   p.push(it.activeThreads ? `${it.activeThreads} açık yorum var` : "açık yorum yok");
   if (it.conflicts) p.push("birleştirmede çakışma var");
