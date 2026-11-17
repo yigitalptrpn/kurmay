@@ -306,8 +306,12 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
         <article class="surum" id="v0.1.27">
           <div class="sol"><a class="no" href="#v0.1.27">0.1.27</a><time datetime="2026-11-17">17 Kasım 2026</time></div>
           <div class="sag">
-            <h2>Oturumlara elle ad ve gruplar</h2>
+            <h2>Sesli komut, oturumlara elle ad ve gruplar</h2>
             <ul class="maddeler">
+              <li data-tur="yeni">Paneli sesle kullan: Ctrl+Boşluk'u (ya da sağ üstteki mikrofon simgesini) basılı tut, komutu söyle, bırak. Örnekler: “yeni oturum aç”, “ödeme hatası oturumunu aç”, “onay beklemeden devam et”, “onayla”, “reddet, çünkü testleri de ekle”, “durdur”, “ayarları aç”, “akıl yürütmeyi yükselt”, “analisti kapat”, “temayı radar yap”, “görev: …”, “başlat”. Tam liste için “yardım” de.</li>
+              <li data-tur="yeni">Dinleme modu: Ctrl+Boşluk'a kısa bas ya da mikrofon simgesine tıkla; sen kapatana kadar her cümle ayrı komut olarak uygulanır. Ekranın üstünde “Dinleme açık” göstergesi durur. Kısa bas, Esc ya da Kapat ile kapanır; 5 dakika konuşma olmazsa kendiliğinden kapanır.</li>
+              <li data-tur="iyi">Geri alınamayan işler (onayla, bitir, reddet, durdur) önce sorulur; sesle “evet” ya da “hayır” denir. Komutlar model çağırmadan, sabit listeyle tanınır; her sonuç ekranın üstünde kısa bir notla bildirilir.</li>
+              <li data-tur="iyi">Basılı tutarken söylenen cümle komut değilse görev kutusuna yazılır. Dinleme modunda yazılmaz (odadaki konuşmalar kutuya dolmasın); görev yazdırmak için “görev …” de. Ses tanıma modelinin sessizlikte uydurduğu bilinen cümleler yok sayılır.</li>
               <li data-tur="yeni">Oturumun adını elle değiştir: ada çift tıkla ya da satırdaki ⋯ menüsünden “Yeniden adlandır”ı seç. Enter kaydeder, Esc vazgeçer. Elle verdiğin ad bir daha kendiliğinden değişmez.</li>
               <li data-tur="yeni">Oturumları gruplara ayır: ⋯ menüsünden “Yeni grup…” ile grup aç ya da var olan bir gruba taşı. Gruplar listenin üstünde, açılıp kapanan başlıklar olarak durur; kapattığın grup sayfa yenilense de kapalı kalır. Kapalı grupta onay bekleyen oturum varsa başlıkta görünür.</li>
               <li data-tur="yeni">Grubun ⋯ menüsünden grubu yeniden adlandırabilir ya da dağıtabilirsin. Grup dağıtılınca içindeki oturumlar silinmez, grupsuz kısma geçer.</li>
