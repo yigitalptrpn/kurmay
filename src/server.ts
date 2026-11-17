@@ -110,6 +110,9 @@ export interface TfsApi {
   prPreview(id: number, dir?: string): Promise<unknown>;
   prMine(): Promise<unknown>;
   prStatus(since: Record<string, string>, fallbackSince: string): Promise<unknown>;
+  batchPlan(ids: number[], titles: Record<string, string>, startAt?: number): unknown;
+  batchStatus(): unknown;
+  batchCancel(): unknown;
   prCheckout(id: number, dir?: string): Promise<unknown>;
   prWrite(
     session: string,
@@ -349,6 +352,7 @@ export interface SpeechApi {
  *   POST /tfs/yazma     { session } — bu sonucu yazma (kart kapanır)
  *   GET  /tfs/pr?id=&dizin=     çekme isteği kartı: PR, açık yorum dizileri, değişen dosyalar, yerel deponun durumu
  *   GET  /tfs/pr-benim          açık PR'larım (açtıklarım + inceleyeni olduklarım)
+ *   GET  /tfs/toplu-plan        toplu plan kuyruğu; POST { ids, titles?, startAt? } başlatır; POST /tfs/toplu-plan/iptal
  *   POST /tfs/pr-durum          { since: {no: tarih}, fallback } → açık PR'larımın oyları, açık / yeni yorumları
  *   POST /tfs/pr-dal    { id, dizin? } — yerel depoyu PR'ın dalına geçirir (çalışma ağacı temizse)
  *   POST /tfs/pr-yaz    { session, push, message?, replies[], comments[], general? } — PR'a yazar (tfs_pr_written)
@@ -1372,6 +1376,29 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       if (req.method === "GET" && p === "/tfs/pr-benim") {
         tfs.prMine().then((items) => json(res, 200, { ok: true, items }), fail);
+        return;
+      }
+      if (req.method === "GET" && p === "/tfs/toplu-plan")
+        return json(res, 200, { ok: true, ...(tfs.batchStatus() as object) });
+      if (req.method === "POST" && p === "/tfs/toplu-plan/iptal")
+        return json(res, 200, { ok: true, ...(tfs.batchCancel() as object) });
+      if (req.method === "POST" && p === "/tfs/toplu-plan") {
+        readJson(req, (b) => {
+          const ids = Array.isArray(b?.ids)
+            ? (b.ids as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n > 0)
+            : [];
+          if (!ids.length) return json(res, 400, { ok: false, error: "iş öğesi seçilmedi" });
+          const titles: Record<string, string> = {};
+          if (b?.titles && typeof b.titles === "object")
+            for (const [k, v] of Object.entries(b.titles as Record<string, unknown>))
+              if (typeof v === "string") titles[k] = v.slice(0, 200);
+          const startAt = typeof b?.startAt === "number" && Number.isFinite(b.startAt) ? b.startAt : undefined;
+          try {
+            json(res, 200, { ok: true, ...(tfs.batchPlan(ids, titles, startAt) as object) });
+          } catch (e) {
+            fail(e);
+          }
+        });
         return;
       }
       if (req.method === "POST" && p === "/tfs/pr-durum") {
