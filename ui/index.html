@@ -4708,11 +4708,6 @@ const KOMUTLAR = [
   // ── TFS ──
   { ornek: "TFS ayarlarını aç", re: /^(tfs|tefes) (ayarlari(ni)?|ayari(ni)?|ayarlarina git|kartini ac)( ac)?$/, yap: () => sayfaAc("/config#tfsCard", "TFS ayarları") },
   { ornek: "çekme isteklerimin durumu · çekme isteklerime yorum gelmiş mi", re: /^((benim )?(acik )?cekme isteklerim(in|e|i|de)?|(acik )?pr\s*(lar)?(im|imin|ima|imi|imda)?)(\s+(durumu|durumlari|ne durumda|ne alemde|nasil|neler var|yeni ne var|yorum (gelmis|geldi|var)( mi)?|yorumlari))?(\s+(goster|soyle|getir|oku|nedir))?$/, yap: () => prDurumSesle() },
-  { ornek: "bana atanan hataların planını hazırla [saat 22'de] · toplu plan ne durumda · toplu planı iptal et",
-    re: /^(?<on>.*?)\b(?<ne>hatalarin|hatalarimin|hatalari|islerin|islerimin|isleri|is ogelerinin|is ogelerimin|maddelerin|maddelerimin|hepsinin)( hepsinin| tumunun)?\s+(planini|planlarini|plani|planlari)\s+(hazirla|cikar|yap|hazirlat|cikart)(?<son>.*)$/,
-    yap: (m) => topluPlanSesle(/hata/.test(m.groups.ne), saatAyikla(m[0])) },
-  { re: /^toplu plan(in|lar|larin)?\s+(ne durumda|durumu|nasil|nerede)$/, yap: () => topluPlanDurum() },
-  { re: /^toplu plan(i|lari)?\s+(iptal et|durdur|kapat|sil)$/, yap: () => topluPlanIptal() },
   { ornek: "TFS modunu aç / kapat", re: /^(tfs|tefes)( modu(nu)?)? (?<is>ac|kapat|etkinlestir|devre disi birak)$/, yap: (m) => tfsModSesle(/ac|etkin/.test(m.groups.is)) },
   { ornek: "1201 numaralı maddeyi çek", re: /^(?<no>.+?) (numarali )?(is ogesini|is ogesi|maddeyi|maddesini|kaydi|kaydini|isi) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), false) },
   { re: /^(is ogesi|madde|kayit) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), false) },
@@ -4818,7 +4813,7 @@ const KALIPLAR = [
   "yardım", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
   "<numara> numaralı maddeyi çek", "<numara> numaralı çekme isteğini aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
-  "çekme isteklerimin durumu", "bana atanan hataların planını hazırla", "bana atanan işlerin planını hazırla saat <saat> de", "toplu plan ne durumda", "toplu planı iptal et", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
+  "çekme isteklerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
   "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "tekrar plan yap", "yorum yap <yorum>", "not ekle <not>", "<dosya adı> için yorum <yorum>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
   "ayarları aç", "aç kapat sayfasını aç", "güvenlik raporlarını aç", "sürüm notlarını aç",
   "kenar çubuğunu aç", "kenar çubuğunu kapat", "temayı <evrak|radar|harita|karargah|sade|gece> yap",
@@ -5162,83 +5157,6 @@ async function prDurumSesle() {
   sesNot(`<b>Çekme isteklerin</b><span class="ses-liste pr-durum">${satir.join("")}</span>` +
     `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı çekme isteğini aç” de.</small>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz.join(" "));
-}
-// ── Toplu plan (gece hazırlığı): sana atanan iş öğelerinin her biri ayrı oturumda planlanır, plan onayını bekler ──
-// Sunucuda kuyruk: aynı anda görev sınırına uyar, onay bekleyen plan da yer tutar — fazlası sen onayladıkça başlar.
-/** "saat 22'de", "saat on buçukta", "akşam 10'da", "gece yarısı" → zaman (ms); yoksa undefined, anlaşılmazsa null */
-function saatAyikla(cumle) {
-  const t = komutSade(cumle).replace(/\s+/g, " ");
-  const sonraki = (h, dk) => { const d = new Date(); d.setHours(h, dk, 0, 0); if (d.getTime() <= Date.now() + 30000) d.setDate(d.getDate() + 1); return d.getTime(); };
-  if (/gece yarisi/.test(t)) return sonraki(0, 0);
-  const m = /\bsaat\s+([a-z0-9]+(?:\s+(?:bucuk|[0-9]{1,2}))?)/.exec(t);
-  if (!m) return undefined;
-  const [hs, ds] = m[1].split(" ");
-  let h = sayiOku(hs), dk = 0;
-  if (ds === "bucuk") dk = 30; else if (ds) dk = Number(ds);
-  if (/bucuk/.test(hs)) { h = sayiOku(hs.replace(/bucuk.*$/, "")); dk = 30; }
-  if (h == null || h > 23 || !(dk >= 0 && dk < 60)) return null;
-  if (/\b(aksam|gece)\b/.test(t) && h >= 5 && h < 12) h += 12;
-  return sonraki(h, dk);
-}
-function zamanYazi(ms) {
-  const d = new Date(ms), bugun = new Date();
-  const gun = d.toDateString() === bugun.toDateString() ? "bugün" : "yarın";
-  return `${gun} saat ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
-}
-async function topluPlanSesle(hataMi, startAt) {
-  if (!tfsOn()) return olmaz("TFS modu kapalı ya da ayarları eksik. “TFS modunu aç” de ya da “TFS ayarlarını aç” deyip bağlantıyı gir.");
-  if (startAt === null) return olmaz("Saati anlayamadım — örneğin “saat 22'de” ya da “saat on buçukta” de.");
-  sesNot("⏳ Sana atanan işler okunuyor…", "bilgi", true);
-  let r;
-  try { r = await (await fetch("/tfs/benimkiler")).json(); } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return olmaz("Sana atananlar okunamadı: " + esc(r.error || "bilinmeyen hata"));
-  const items = r.items.filter((it) => !hataMi || /bug|hata/i.test(it.type)).slice(0, 20);
-  if (!items.length) return sesNot(hataMi ? "Sana atanmış açık hata yok." : "Sana atanmış açık iş öğesi yok.");
-  let limit = 3;
-  try { limit = (await (await fetch("/tfs/toplu-plan")).json()).limit || limit; } catch {}
-  const ne = hataMi ? "hata" : "iş öğesi";
-  const zaman = startAt ? zamanYazi(startAt) : "hemen";
-  onayIste(`<b>${items.length} ${ne}</b> için plan hazırlansın mı? Başlangıç: <b>${zaman}</b>` +
-    `<span class="ses-liste">${items.slice(0, 8).map((it) => `<span>#${Number(it.id)} · ${esc(it.title)}</span>`).join("")}${items.length > 8 ? `<span>… ve ${items.length - 8} tane daha</span>` : ""}</span>` +
-    `<small>Her biri ayrı oturumda açılır; Analist planı çıkarır, plan senin onayını bekler — kod değişmez. Aynı anda en fazla ${limit} görev çalışır ve onay bekleyen plan da yer tutar; fazlası sen planları onayladıkça ya da reddettikçe başlar.</small>`,
-  async () => {
-    let s2;
-    try {
-      const res = await fetch("/tfs/toplu-plan", { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ids: items.map((it) => it.id), titles: Object.fromEntries(items.map((it) => [it.id, it.title])), ...(startAt ? { startAt } : {}) }) });
-      s2 = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
-    } catch { s2 = { ok: false, error: "sunucuya ulaşılamadı" }; }
-    if (!s2.ok) return olmaz("Toplu plan başlatılamadı: " + esc(s2.error || "bilinmeyen hata"));
-    const basladi = s2.jobs.filter((j) => j.status === "basladi").length;
-    tamam(startAt ? `${items.length} plan sıraya alındı — ${zaman} başlayacak <small>Servis açık kalmalı. Durum: “toplu plan ne durumda”</small>`
-      : `${items.length} plan sıraya alındı, ${basladi} tanesi başladı <small>${s2.waiting ? `${s2.waiting} tanesi yer açılınca başlayacak. ` : ""}Durum: “toplu plan ne durumda”</small>`,
-      startAt ? `${items.length} plan sıraya alındı. ${zaman} başlayacak. Servis açık kalmalı.` : `${items.length} plan sıraya alındı, ${basladi} tanesi başladı.`);
-  }, { soz: `${items.length} ${ne} için plan hazırlansın mı? Başlangıç: ${zaman}. Planlar senin onayını bekleyecek.` });
-}
-const JOB_ST = { bekliyor: "sırada", basladi: "başladı", hata: "başlatılamadı", atlandi: "atlandı" };
-async function topluPlanDurum() {
-  let r;
-  try { r = await (await fetch("/tfs/toplu-plan")).json(); } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return olmaz("Toplu plan durumu okunamadı: " + esc(r.error || ""));
-  if (!r.jobs.length) return sesNot("Toplu plan kuyruğu boş.");
-  const say = (st) => r.jobs.filter((j) => j.status === st).length;
-  const onay = r.jobs.filter((j) => j.session && sessionsById[j.session]?.status === "approval").length;
-  const soz = [`${r.jobs.length} iş: ${say("basladi")} başladı`, onay && `${onay} tanesinin planı onayını bekliyor`, say("bekliyor") && `${say("bekliyor")} sırada`,
-    say("hata") && `${say("hata")} başlatılamadı`, r.startAt && `başlangıç ${zamanYazi(r.startAt)}`].filter(Boolean).join(", ") + ".";
-  sesNot(`<b>Toplu plan</b><span class="ses-liste">` + r.jobs.map((j) => {
-    const s = j.session && sessionsById[j.session];
-    const st = s ? durumAdi(s) : JOB_ST[j.status];
-    return j.session ? `<button type="button" data-oturum="${esc(j.session)}"><b>#${j.id}</b> ${esc(j.title || "")} <small>${esc(st)}</small></button>`
-      : `<span>#${j.id} ${esc(j.title || "")} — ${esc(st)}${j.error ? `: ${esc(j.error)}` : ""}</span>`;
-  }).join("") + `</span><small>${r.startAt ? `Başlangıç: ${zamanYazi(r.startAt)} · ` : ""}Durdurmak için “toplu planı iptal et”</small>` +
-    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz);
-}
-async function topluPlanIptal() {
-  let r;
-  try { r = await (await fetch("/tfs/toplu-plan/iptal", { method: "POST" })).json(); } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return olmaz("İptal edilemedi: " + esc(r.error || ""));
-  const sururen = r.jobs.some((j) => j.status === "basladi");
-  tamam(r.cancelled ? `Sıradaki ${r.cancelled} plan iptal edildi${sururen ? " <small>Başlamış olanlar sürüyor; onları oturumlarından durdurabilirsin</small>" : ""}` : "Sırada bekleyen plan yoktu");
 }
 const SIRA = { ilk: 1, birinci: 1, ikinci: 2, ucuncu: 3, dorduncu: 4, besinci: 5, altinci: 6, yedinci: 7, sekizinci: 8, dokuzuncu: 9, onuncu: 10 };
 function tfsListedenSec(sira) {

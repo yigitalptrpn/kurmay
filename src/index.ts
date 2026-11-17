@@ -13,7 +13,7 @@ import { fetchModels, refreshModelContext } from "./models.js";
 import { RESILIENCE_LIMIT_KEYS, RESILIENCE_RETRY_KEYS, setLiveResilience } from "./resilience.js";
 import { runWorkflow } from "./orchestrator.js";
 import { RuntimeRegistry, type SessionRuntime } from "./runtime.js";
-import { startUiServer, type ToggleKind, type UiServer, type UiServerOptions } from "./server.js";
+import { startUiServer, type ToggleKind, type UiServer } from "./server.js";
 import { SecurityReportStore, watchSecurityReports } from "./securityReport.js";
 import { SecurityAuditRunner } from "./securityAudit.js";
 import { searchSessions } from "./search.js";
@@ -765,100 +765,8 @@ async function main() {
       off();
     }
   };
-  // ── Toplu plan ("gece hazırlığı"): seçilen iş öğelerinin her biri için yeni oturum açıp Analist'e
-  // plan hazırlatır; plan onay bekler (oturumun "plan onayı" = onay bekle). Aynı anda görev sınırına
-  // uyar: yer açıldıkça sıradakini başlatır — onay bekleyen oturum da yer tutar, sınır dolarsa kuyruk
-  // sabah onaylandıkça sürer. Kuyruk bellekte (servis yeniden başlarsa bekleyenler kaybolur).
-  let onTaskRef: NonNullable<UiServerOptions["onTask"]> | undefined;
-  interface PlanJob {
-    id: number;
-    title?: string;
-    status: "bekliyor" | "basladi" | "hata" | "atlandi";
-    session?: string;
-    error?: string;
-  }
-  const batch: { jobs: PlanJob[]; startAt?: number; pumping: boolean; timer?: NodeJS.Timeout } = {
-    jobs: [],
-    pumping: false,
-  };
-  const batchView = () => ({
-    jobs: batch.jobs,
-    ...(batch.startAt ? { startAt: batch.startAt } : {}),
-    waiting: batch.jobs.filter((j) => j.status === "bekliyor").length,
-    limit: maxParallel(),
-  });
-  const pumpBatch = async () => {
-    if (batch.pumping || !onTaskRef) return;
-    if (batch.startAt && Date.now() < batch.startAt) return;
-    batch.pumping = true;
-    try {
-      for (const job of batch.jobs) {
-        if (job.status !== "bekliyor") continue;
-        if (runtimes.busy().length + audits.running() >= maxParallel()) break; // yer açılınca devam
-        // Bu iş öğesi zaten başka bir oturumda çalışıyorsa ikinci kez açma
-        const dup = sessions.all().find((e) => e.workItem?.id === job.id && runtimes.get(e.id, e.runLogs).busy);
-        if (dup) {
-          job.status = "atlandi";
-          job.session = dup.id;
-          job.error = "başka bir oturumda zaten çalışıyor";
-          continue;
-        }
-        const r = await onTaskRef("", undefined, undefined, [], undefined, job.id);
-        if (r.ok && r.session) {
-          job.status = "basladi";
-          job.session = r.session;
-          // Plan onay beklesin (sabah gözden geçirilecek) — genel ayar "onaysız ilet" olsa da
-          sessions.setAutoForward(r.session, false);
-          job.title = sessions.get(r.session)?.name ?? job.title;
-          console.log(`🌙 Toplu plan: #${job.id} başladı`);
-        } else if (/Aynı anda en fazla/.test(r.error ?? "")) {
-          break; // yarış: bu arada başka görev başladı
-        } else {
-          job.status = "hata";
-          job.error = r.error;
-          console.log(`🌙 Toplu plan: #${job.id} başlatılamadı — ${r.error}`);
-        }
-      }
-    } finally {
-      batch.pumping = false;
-      runtimes.notify();
-    }
-    if (!batch.jobs.some((j) => j.status === "bekliyor") && batch.timer) {
-      clearInterval(batch.timer);
-      batch.timer = undefined;
-    }
-  };
-  const startBatch = (ids: number[], titles: Record<string, string>, startAt?: number) => {
-    const known = new Set(batch.jobs.filter((j) => j.status === "bekliyor").map((j) => j.id));
-    const add = [...new Set(ids)].filter((id) => !known.has(id)).slice(0, 20);
-    batch.jobs = [
-      ...batch.jobs.filter((j) => j.status === "bekliyor"),
-      ...add.map((id): PlanJob => ({ id, status: "bekliyor", ...(titles[id] ? { title: titles[id] } : {}) })),
-    ];
-    batch.startAt = startAt && startAt > Date.now() ? startAt : undefined;
-    if (!batch.timer) batch.timer = setInterval(() => void pumpBatch(), 15_000);
-    void pumpBatch();
-    return batchView();
-  };
-  const cancelBatch = () => {
-    const n = batch.jobs.filter((j) => j.status === "bekliyor").length;
-    batch.jobs = batch.jobs.filter((j) => j.status !== "bekliyor");
-    batch.startAt = undefined;
-    if (batch.timer) clearInterval(batch.timer);
-    batch.timer = undefined;
-    return { ...batchView(), cancelled: n };
-  };
-
   const tfsApi = {
     view: () => tfsView(cfg.tfs, configRoot),
-    /** Toplu plan kuyruğu (gece hazırlığı) */
-    batchPlan: (ids: number[], titles: Record<string, string>, startAt?: number) => {
-      if (!onTaskRef) throw new TfsError("bu kipte panelden görev başlatılamıyor");
-      tfsConn(); // TFS hazır mı
-      return startBatch(ids, titles, startAt);
-    },
-    batchStatus: () => batchView(),
-    batchCancel: () => cancelBatch(),
     /** Ayarları kaydeder: config.json "tfs" (anahtar hariç) + anahtar .gizli/'ye; canlı */
     save: async (input: Record<string, unknown>) => {
       const prev = fs.readFileSync(resolvedConfigPath, "utf8");
@@ -1962,7 +1870,7 @@ async function main() {
       },
       onTask: task
         ? undefined // CLI görevli modda panelden görev alınmaz
-        : (onTaskRef = async (t, sessionId, runAt, files, targetDir, workItemId, prId, prMode) => {
+        : async (t, sessionId, runAt, files, targetDir, workItemId, prId, prMode) => {
             const existing = sessionId ? sessions.get(sessionId) : undefined;
             if (modelMissing({ ...cfg, model: existing?.model || cfg.model })) {
               return { ok: false, error: "Model seçilmedi — üst çubuktaki model listesinden bir model seç" };
@@ -2094,7 +2002,7 @@ async function main() {
                 ? { warning: `Aynı hedef dizinde (${dir}) çalışan başka bir oturum var — dosyaları birbirini ezebilir` }
                 : {}),
             };
-          }),
+          },
     });
     console.log(`🖥  İzleme paneli: ${server.url}`);
     // Bağlam pencereleri (max_model_len) model listesinden — lobi ilk açılışta da göstersin
