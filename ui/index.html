@@ -64,9 +64,30 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .sess-new { justify-content:center; font-weight:700; color:var(--md-on-primary); background:var(--md-primary); box-shadow:var(--md-elev-2); padding:11px 12px; }
 .sess-new:hover { background:var(--md-primary); filter:brightness(1.08); }
 .sess-new.active { background:var(--md-primary); color:var(--md-on-primary); }
-.sess-del { border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 5px; border-radius:6px; opacity:0; min-height:auto; }
-.sess:hover .sess-del { opacity:1; }
-.sess-del:hover { color:var(--red); background:var(--redBg); }
+/* ⋯ menü düğmesi: adın üstünde belirir, yer kaplamaz (ad tüm genişliği kullanır) */
+.sess-more { position:absolute; top:6px; right:6px; border:none !important; background:var(--md-surface-container-highest, var(--md-surface-container-high)) !important; color:var(--text); cursor:pointer; font-size:15px; line-height:1; min-height:0; width:26px; height:24px; padding:0; border-radius:6px !important; box-shadow:none !important; opacity:0; }
+.sess:hover .sess-more, .sess:focus-within .sess-more, .sess-more[aria-expanded="true"] { opacity:1; }
+.sess .nm-in { width:100%; font:inherit; font-size:13.5px; font-weight:600; padding:2px 6px; min-height:0; }
+/* Gruplar: açılır-kapanır başlık + içindeki oturumlar */
+.sgrp { display:flex; align-items:center; gap:4px; margin:10px 0 4px; position:relative; }
+.sgrp-h { flex:1; min-width:0; display:flex; align-items:center; gap:6px; border:none !important; background:none !important; box-shadow:none !important; min-height:30px; padding:4px 6px; color:var(--text); font-size:12.5px; font-weight:700; text-align:left; cursor:pointer; text-transform:none; }
+.sgrp-h .ok { flex:none; width:12px; color:var(--muted); transition:transform var(--md-motion); }
+.sgrp-h[aria-expanded="false"] .ok { transform:rotate(-90deg); }
+.sgrp-h .ad { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sgrp-h .say { flex:none; font-weight:600; font-size:11px; color:var(--muted); }
+.sgrp-h .bek { flex:none; font-size:11px; font-weight:700; color:var(--red); }
+.sgrp-menu { flex:none; border:none !important; background:none !important; box-shadow:none !important; min-height:0; width:26px; height:26px; padding:0; color:var(--muted); font-size:15px; opacity:0; }
+.sgrp:hover .sgrp-menu, .sgrp-menu:focus-visible, .sgrp-menu[aria-expanded="true"] { opacity:1; }
+.sgrp-in { flex:1; font:inherit; font-size:12.5px; font-weight:700; padding:2px 6px; min-height:0; }
+.sgrp-body { padding-left:8px; border-left:2px solid var(--border); margin-left:9px; }
+.sgrp-body.kapali { display:none; }
+.side-label.diger { margin-top:12px; }
+/* Oturum / grup menüsü (sayfaya sabit, düğmenin yanında) */
+#sessMenu { position:fixed; bottom:auto; z-index:60; width:auto; min-width:200px; max-width:260px; max-height:70vh; overflow:auto; padding:6px; }
+#sessMenu .mbaslik { font-size:11px; color:var(--muted); padding:6px 10px 2px; font-weight:700; }
+#sessMenu button.sil { color:var(--red); }
+#sessMenu .yeni-grup { display:flex; gap:6px; padding:4px; }
+#sessMenu .yeni-grup input { flex:1; min-width:0; min-height:0; padding:4px 8px; font-size:13px; }
 /* Oturum durumu rozeti — lobi akışından canlı gelir */
 .sess .st { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; margin-right:6px; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, currentColor 13%, transparent); }
 .sess .st::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
@@ -747,6 +768,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <div id="sessionList"></div>
   </div>
 </aside>
+<div class="dmenu hidden" id="sessMenu" role="menu"></div>
 
 <main class="main">
   <header class="chat-head">
@@ -2723,29 +2745,184 @@ function resetView() {
   $("provider").textContent = "";
 }
 
+// Oturum listesi gruplarla: gruplar (ada göre) üstte açılır-kapanır başlık, grupsuzlar altta.
+// Kapalı grupların adları tarayıcıda hatırlanır. Ad düzenlenirken lobi güncellemesi listeyi yeniden
+// çizmez (yazılan kaybolmasın); düzenleme bitince çizilir.
+const GRUP_KAPALI_KEY = "kurmay-gruplar-kapali";
+let kapaliGruplar = new Set();
+try { kapaliGruplar = new Set(JSON.parse(localStorage.getItem(GRUP_KAPALI_KEY) || "[]")); } catch {}
+const grupKaydet = () => { try { localStorage.setItem(GRUP_KAPALI_KEY, JSON.stringify([...kapaliGruplar])); } catch {} };
+let sessDuzenleniyor = false;
+function sessRow(s) {
+  const st = s.status || "idle";
+  // Analist'in konuşması sınıra yaklaştıysa oturum listesinde de görünsün
+  let ctx = "";
+  if (s.context && s.context.limit) {
+    const pct = Math.round((s.context.tokens / s.context.limit) * 100);
+    const lv = ctxLevel(pct);
+    if (lv !== "ok") ctx = `<span class="ctxb ${lv}" title="${esc("Analist: " + ctxTitle(s.context))}">◔ %${pct}</span>`;
+  }
+  return `<div class="sess" data-id="${esc(s.id)}"><div class="sess-main"><div class="nm" title="${esc(s.task || s.name)}">${esc(s.name)}</div>` +
+    `<div class="meta"><span class="st ${st}">${sessionStatusLabels[st] || st}</span>${fmt(Date.parse(s.updatedAt))}${ctx}` +
+    `${s.workItem ? `<span class="wib" title="TFS iş öğesi: ${esc(wiType(s.workItem.type))} · ${esc(wiState(s.workItem.state))}">#${s.workItem.id}</span>` : ""}` +
+    `${s.pr ? `<span class="wib" title="TFS çekme isteği: ${esc(s.pr.repository)} · ${s.pr.mode === "incele" ? "inceleme" : "yorumlar"}">!${s.pr.id}</span>` : ""}</div></div>` +
+    `<button type="button" class="sess-more" data-more="${esc(s.id)}" title="Oturum seçenekleri" aria-label="Oturum seçenekleri" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`;
+}
+const grupAdlari = () => [...new Set(Object.values(sessionsById).map((s) => s.group).filter(Boolean))]
+  .sort((a, b) => a.localeCompare(b, "tr", { sensitivity: "base" }));
 function renderSessions() {
   const list = Object.values(sessionsById).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  $("sessionList").innerHTML = list.map((s) => {
-    const st = s.status || "idle";
-    // Analist'in konuşması sınıra yaklaştıysa oturum listesinde de görünsün
-    let ctx = "";
-    if (s.context && s.context.limit) {
-      const pct = Math.round((s.context.tokens / s.context.limit) * 100);
-      const lv = ctxLevel(pct);
-      if (lv !== "ok") ctx = `<span class="ctxb ${lv}" title="${esc("Analist: " + ctxTitle(s.context))}">◔ %${pct}</span>`;
+  if (!sessDuzenleniyor) {
+    const gruplar = grupAdlari();
+    let html = "";
+    for (const g of gruplar) {
+      const icinde = list.filter((s) => s.group === g);
+      const kapali = kapaliGruplar.has(g);
+      const bek = icinde.filter((s) => s.status === "approval").length;
+      html += `<div class="sgrp" data-grp="${esc(g)}"><button type="button" class="sgrp-h" aria-expanded="${!kapali}" title="${esc(g)}">` +
+        `<span class="ok" aria-hidden="true">▾</span><span class="ad">${esc(g)}</span><span class="say">${icinde.length}</span>` +
+        `${bek && kapali ? `<span class="bek" title="Onay bekleyen oturum">● ${bek}</span>` : ""}</button>` +
+        `<button type="button" class="sgrp-menu" data-grpmenu="${esc(g)}" title="Grup seçenekleri" aria-label="Grup seçenekleri" aria-haspopup="menu" aria-expanded="false">⋯</button></div>` +
+        `<div class="sgrp-body${kapali ? " kapali" : ""}">${icinde.map(sessRow).join("")}</div>`;
     }
-    return `<div class="sess" data-id="${esc(s.id)}"><div class="sess-main"><div class="nm" title="${esc(s.task || s.name)}">${esc(s.name)}</div>` +
-      `<div class="meta"><span class="st ${st}">${sessionStatusLabels[st] || st}</span>${fmt(Date.parse(s.updatedAt))}${ctx}` +
-      `${s.workItem ? `<span class="wib" title="TFS iş öğesi: ${esc(wiType(s.workItem.type))} · ${esc(wiState(s.workItem.state))}">#${s.workItem.id}</span>` : ""}` +
-      `${s.pr ? `<span class="wib" title="TFS çekme isteği: ${esc(s.pr.repository)} · ${s.pr.mode === "incele" ? "inceleme" : "yorumlar"}">!${s.pr.id}</span>` : ""}</div></div>` +
-      (s.busy ? "" : `<button class="sess-del" data-del="${esc(s.id)}" title="Oturumu listeden sil">×</button>`) + `</div>`;
-  }).join("");
-  document.querySelectorAll("#sidebarBody .sess").forEach((n) =>
-    n.classList.toggle("active", (n.dataset.id || "") === viewSessionId));
+    const grupsuz = list.filter((s) => !s.group);
+    if (gruplar.length && grupsuz.length) html += `<div class="label side-label diger">Grupsuz</div>`;
+    html += grupsuz.map(sessRow).join("");
+    $("sessionList").innerHTML = html;
+    document.querySelectorAll("#sidebarBody .sess").forEach((n) =>
+      n.classList.toggle("active", (n.dataset.id || "") === viewSessionId));
+  }
   // Sekme başlığında onay bekleyen oturum sayısı — başka sekmedeyken de fark edilsin
   const bekleyen = list.filter((s) => s.status === "approval").length;
   document.title = bekleyen ? `(${bekleyen}) Kurmay — onay bekliyor` : "Kurmay";
 }
+
+// ── Oturum ve grup menüsü ──
+let menuDugme = null;
+function menuKapat(odak) {
+  $("sessMenu").classList.add("hidden");
+  $("sessMenu").innerHTML = "";
+  if (menuDugme) { menuDugme.setAttribute("aria-expanded", "false"); if (odak) menuDugme.focus(); }
+  menuDugme = null;
+}
+function menuAc(btn, html) {
+  menuKapat();
+  const m = $("sessMenu");
+  m.innerHTML = html;
+  m.classList.remove("hidden");
+  menuDugme = btn;
+  btn.setAttribute("aria-expanded", "true");
+  const r = btn.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(innerWidth - mw - 8, r.right - mw)) + "px";
+  m.style.top = (r.bottom + 4 + mh > innerHeight - 8 ? Math.max(8, r.top - mh - 4) : r.bottom + 4) + "px";
+  m.querySelector("button, input")?.focus();
+}
+async function sessPost(url, body) {
+  try {
+    const r = await (await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
+    if (!r.ok) alert(r.error || "Kaydedilemedi.");
+    return !!r.ok;
+  } catch { alert("Sunucuya ulaşılamadı."); return false; }
+}
+function oturumMenusu(btn, id) {
+  const s = sessionsById[id];
+  if (!s) return;
+  const gruplar = grupAdlari().filter((g) => g !== s.group);
+  menuAc(btn,
+    `<button type="button" role="menuitem" data-act="ad">✎ Yeniden adlandır</button>` +
+    `<hr><div class="mbaslik">Gruba taşı</div>` +
+    gruplar.map((g) => `<button type="button" role="menuitem" data-act="grup" data-grup="${esc(g)}"><span aria-hidden="true">📁</span><span class="dt"><b>${esc(g)}</b></span></button>`).join("") +
+    `<button type="button" role="menuitem" data-act="yeni-grup">＋ Yeni grup…</button>` +
+    (s.group ? `<button type="button" role="menuitem" data-act="grup" data-grup="">↩ Gruptan çıkar</button>` : "") +
+    `<hr>` + (s.busy
+      ? `<div class="mbaslik">Çalışan oturum silinemez</div>`
+      : `<button type="button" role="menuitem" class="sil" data-act="sil">✕ Listeden sil</button>`));
+  $("sessMenu").dataset.id = id;
+  delete $("sessMenu").dataset.grp;
+}
+function grupMenusu(btn, g) {
+  menuAc(btn,
+    `<button type="button" role="menuitem" data-act="grup-ad">✎ Grubu yeniden adlandır</button>` +
+    `<button type="button" role="menuitem" data-act="grup-dagit">↩ Grubu dağıt (oturumlar kalır)</button>`);
+  $("sessMenu").dataset.grp = g;
+  delete $("sessMenu").dataset.id;
+}
+/** Yerinde metin düzenleme: Enter/odak kaybı kaydeder, Esc vazgeçer */
+function yerindeDuzenle(el, deger, cls, kaydet) {
+  sessDuzenleniyor = true;
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.className = cls; inp.value = deger; inp.maxLength = cls === "sgrp-in" ? 40 : 80;
+  inp.setAttribute("aria-label", cls === "sgrp-in" ? "Grup adı" : "Oturum adı");
+  el.replaceWith(inp);
+  inp.focus(); inp.select();
+  let bitti = false;
+  const bitir = async (kayit) => {
+    if (bitti) return; bitti = true;
+    document.removeEventListener("pointerdown", disari, true);
+    const v = inp.value.replace(/\s+/g, " ").trim();
+    if (kayit && v && v !== deger) await kaydet(v);
+    sessDuzenleniyor = false;
+    renderSessions();
+  };
+  // Düzenleme Enter / Tab / Esc ya da kutunun dışına tıklamakla biter. Odak başka yolla giderse
+  // (ör. oturum açılınca panel imleci görev kutusuna koyar) imleç ad kutusuna geri döner.
+  let disTik = false;
+  const disari = (ev) => { if (ev.target !== inp) { disTik = true; bitir(true); } };
+  document.addEventListener("pointerdown", disari, true);
+  inp.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === "Tab") { ev.preventDefault(); bitir(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); bitir(false); }
+  });
+  inp.addEventListener("blur", () => setTimeout(() => { if (!bitti && !disTik && inp.isConnected) inp.focus(); }, 0));
+  inp.addEventListener("click", (ev) => ev.stopPropagation());
+}
+function oturumAdDuzenle(id) {
+  const nm = document.querySelector(`#sessionList .sess[data-id="${CSS.escape(id)}"] .nm`);
+  if (!nm || !sessionsById[id]) return;
+  yerindeDuzenle(nm, sessionsById[id].name, "nm-in", (v) => sessPost("/session-rename", { id, name: v }));
+}
+function grupAdDuzenle(g) {
+  const h = document.querySelector(`#sessionList .sgrp[data-grp="${CSS.escape(g)}"] .sgrp-h`);
+  if (!h) return;
+  yerindeDuzenle(h, g, "sgrp-in", async (v) => {
+    if (await sessPost("/session-group-rename", { from: g, to: v }) && kapaliGruplar.delete(g)) { kapaliGruplar.add(v); grupKaydet(); }
+  });
+}
+$("sessMenu").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button[data-act]");
+  if (!b) return;
+  const m = $("sessMenu"), id = m.dataset.id, g = m.dataset.grp, act = b.dataset.act;
+  if (act === "yeni-grup") {
+    // Menü içinde ad kutusu
+    b.outerHTML = `<form class="yeni-grup"><input type="text" maxlength="40" placeholder="Grup adı" aria-label="Yeni grup adı"><button type="submit" class="primary">Taşı</button></form>`;
+    const f = m.querySelector(".yeni-grup");
+    f.querySelector("input").focus();
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const v = f.querySelector("input").value.replace(/\s+/g, " ").trim();
+      if (!v) return;
+      menuKapat();
+      kapaliGruplar.delete(v); grupKaydet();
+      await sessPost("/session-group", { id, group: v });
+    });
+    return;
+  }
+  menuKapat();
+  if (act === "ad") oturumAdDuzenle(id);
+  else if (act === "grup") {
+    if (b.dataset.grup) { kapaliGruplar.delete(b.dataset.grup); grupKaydet(); } // taşınan oturum görünsün
+    await sessPost("/session-group", { id, group: b.dataset.grup });
+  } else if (act === "sil") removeSession(id);
+  else if (act === "grup-ad") grupAdDuzenle(g);
+  else if (act === "grup-dagit") await sessPost("/session-group-rename", { from: g, to: "" });
+});
+document.addEventListener("pointerdown", (ev) => {
+  if (!$("sessMenu").classList.contains("hidden") && !ev.target.closest("#sessMenu, .sess-more, .sgrp-menu")) menuKapat();
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !$("sessMenu").classList.contains("hidden")) { ev.preventDefault(); menuKapat(true); }
+});
+$("sidebarBody").addEventListener("scroll", () => menuKapat(), true);
 
 // ── Arama ────────────────────────────────────────────────────────────────
 // Sunucu (GET /search) oturumların olay geçmişinde arar; sonuçtaki `ei` olayın geçmişteki
@@ -3080,10 +3257,24 @@ async function removeSession(id) {
   if (viewSessionId === id) openSession("");
 }
 $("sidebarBody").addEventListener("click", (ev) => {
-  const delBtn = ev.target.closest(".sess-del");
-  if (delBtn) { removeSession(delBtn.dataset.del); return; }
+  if (ev.target.closest(".nm-in, .sgrp-in")) return;
+  const more = ev.target.closest(".sess-more");
+  if (more) { ev.stopPropagation(); if (menuDugme === more) menuKapat(); else oturumMenusu(more, more.dataset.more); return; }
+  const gm = ev.target.closest(".sgrp-menu");
+  if (gm) { if (menuDugme === gm) menuKapat(); else grupMenusu(gm, gm.dataset.grpmenu); return; }
+  const gh = ev.target.closest(".sgrp-h");
+  if (gh) {
+    const g = gh.closest(".sgrp").dataset.grp;
+    if (kapaliGruplar.has(g)) kapaliGruplar.delete(g); else kapaliGruplar.add(g);
+    grupKaydet(); renderSessions(); return;
+  }
   const el = ev.target.closest(".sess");
   if (el && (el.dataset.id || "") !== viewSessionId) openSession(el.dataset.id || "");
+});
+// Ada çift tıkla → yeniden adlandır
+$("sessionList").addEventListener("dblclick", (ev) => {
+  const nm = ev.target.closest(".sess .nm");
+  if (nm) { ev.preventDefault(); oturumAdDuzenle(nm.closest(".sess").dataset.id); }
 });
 $("btnSidebar").addEventListener("click", () => {
   const collapsed = $("sidebar").classList.toggle("collapsed");
@@ -3674,7 +3865,7 @@ function showTaskCard() {
   loadSpeech();
   updateTaskCtx();
   autoGrow($("taskInput"));
-  $("taskInput").focus();
+  if (!sessDuzenleniyor) $("taskInput").focus(); // oturum adı düzenlenirken imleci kapma
 }
 
 async function startTask() {

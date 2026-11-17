@@ -10,8 +10,10 @@ export interface SessionEntry {
   id: string;
   /** Oturumu açan ilk görevden türetilen isim; Analist ilk görevde kısa başlık verirse o olur */
   name: string;
-  /** Ad Analist'in kısa başlığından konduysa true — sonraki görevler adı değiştirmez */
+  /** Ad Analist'in kısa başlığından ya da elle konduysa true — sonraki görevler adı değiştirmez */
   titled?: boolean;
+  /** Panelde oturumun durduğu grup (klasör gibi; yoksa grupsuz) */
+  group?: string;
   createdAt: string;
   updatedAt: string;
   /** Entry ajanın (analist) SDK oturum kimliği — sonraki görev bunu resume eder */
@@ -50,6 +52,10 @@ function nameFromTask(task: string): string {
   const t = task.trim().replace(/\s+/g, " ");
   return t.length > 60 ? t.slice(0, 60) + "…" : t || "(isimsiz)";
 }
+
+/** Elle verilen oturum ve grup adlarının en fazla uzunluğu */
+export const SESSION_NAME_MAX = 80;
+export const GROUP_NAME_MAX = 40;
 
 /** Modelin verdiği başlığı oturum adına uygun hale getirir: tek satır, tırnak/nokta yok, en fazla
  *  60 karakter (kelime sınırında). Anlamsız (çok kısa ya da JSON'a benzeyen) başlık → "" */
@@ -149,6 +155,42 @@ export class SessionStore {
     s.titled = true;
     this.persist();
     return true;
+  }
+
+  /** Elle yeniden adlandırma (panel). Sonradan Analist'in başlığı adı değiştirmez. Boş ad reddedilir */
+  rename(id: string, name: string): boolean {
+    const s = this.get(id);
+    const n = name.replace(/\s+/g, " ").trim().slice(0, SESSION_NAME_MAX);
+    if (!s || !n) return false;
+    s.name = n;
+    s.titled = true;
+    this.persist();
+    return true;
+  }
+
+  /** Oturumu bir gruba koyar ("" = gruptan çıkar) */
+  setGroup(id: string, group: string): boolean {
+    const s = this.get(id);
+    if (!s) return false;
+    const g = group.replace(/\s+/g, " ").trim().slice(0, GROUP_NAME_MAX);
+    if (g) s.group = g;
+    else delete s.group;
+    this.persist();
+    return true;
+  }
+
+  /** Grubu yeniden adlandırır ya da dağıtır (to = ""): o gruptaki tüm oturumlar. Değişen oturum sayısı */
+  renameGroup(from: string, to: string): number {
+    const t = to.replace(/\s+/g, " ").trim().slice(0, GROUP_NAME_MAX);
+    let n = 0;
+    for (const s of this.list) {
+      if (s.group !== from) continue;
+      if (t) s.group = t;
+      else delete s.group;
+      n++;
+    }
+    if (n) this.persist();
+    return n;
   }
 
   /** Bir koşu bittiğinde: analistin SDK oturumunu sakla (sonraki görev resume eder) */

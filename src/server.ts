@@ -151,6 +151,12 @@ export interface UiServerOptions {
   openSession: (id: string) => SessionRuntime | undefined;
   /** Bir oturumu katalogdan siler (POST /session-delete); silindiyse true */
   deleteSession?: (id: string) => boolean;
+  /** Oturumu elle yeniden adlandırır (POST /session-rename); boş ad ya da bilinmeyen oturum → false */
+  renameSession?: (id: string, name: string) => boolean;
+  /** Oturumu bir gruba koyar, "" = gruptan çıkarır (POST /session-group) */
+  setSessionGroup?: (id: string, group: string) => boolean;
+  /** Grubu yeniden adlandırır ya da dağıtır (to = ""); değişen oturum sayısı (POST /session-group-rename) */
+  renameGroup?: (from: string, to: string) => number;
   /** Config editörü verisi: ham config.json + kullanılabilir kural/beceri/ajan-md adları */
   getConfigData?: () => { raw: string; rules: string[]; skills: string[]; agents: string[] };
   /** Config'i doğrulayıp kaydeder; hata varsa mesaj döner, başarılıysa null */
@@ -299,6 +305,9 @@ export interface SpeechApi {
  *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
  *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
  *   GET  /speech        sesle görev yazma ayarları (anahtarın kendisi yok: hasToken, tokenHint) — panel + Ayarlar
+ *   POST /session-rename       { id, name } — oturumu elle yeniden adlandırır (sonra kendiliğinden değişmez)
+ *   POST /session-group        { id, group } — oturumu gruba koyar ("" = gruptan çıkar)
+ *   POST /session-group-rename { from, to } — grubu yeniden adlandırır ya da dağıtır (to = "")
  *   POST /speech        { url, model?, language?, prompt?, token? (""/null = sil) } — kaydeder (canlı; boş adres = kapat)
  *   POST /speech/test   { url?, token? } — sunucuya bağlanır, yüklü modelleri döner
  *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
@@ -1110,6 +1119,37 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.method === "GET" && req.url === "/sessions") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(options.getSessions()));
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/session-rename") {
+      readJson(req, (p) => {
+        if (!p || typeof p.id !== "string" || typeof p.name !== "string" || !options.renameSession) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        if (!p.name.trim()) return json(res, 400, { ok: false, error: "Ad boş olamaz." });
+        const ok = options.renameSession(p.id, p.name);
+        json(res, ok ? 200 : 404, ok ? { ok } : { ok, error: "Oturum bulunamadı." });
+      });
+      return;
+    }
+    if (req.method === "POST" && req.url === "/session-group") {
+      readJson(req, (p) => {
+        if (!p || typeof p.id !== "string" || typeof p.group !== "string" || !options.setSessionGroup) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        const ok = options.setSessionGroup(p.id, p.group);
+        json(res, ok ? 200 : 404, ok ? { ok } : { ok, error: "Oturum bulunamadı." });
+      });
+      return;
+    }
+    if (req.method === "POST" && req.url === "/session-group-rename") {
+      readJson(req, (p) => {
+        if (!p || typeof p.from !== "string" || typeof p.to !== "string" || !p.from || !options.renameGroup) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        json(res, 200, { ok: true, count: options.renameGroup(p.from, p.to) });
+      });
       return;
     }
 
