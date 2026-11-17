@@ -416,6 +416,10 @@ export interface SpeechConfig {
   prompt?: string;
   /** Sesli komutta sabit liste yetmeyince cümleyi anlayan model (aynı sunucuda, ör. küçük bir Gemma); boş = kapalı */
   commandModel?: string;
+  /** Sesli yanıtı okuyan model (aynı sunucuda, metinden ses: /v1/audio/speech); boş = tarayıcının sesi */
+  ttsModel?: string;
+  /** Okuma modelinin ses adı (modele göre; boş = modelin varsayılanı) */
+  ttsVoice?: string;
 }
 
 export interface AgentDefinition {

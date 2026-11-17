@@ -35,7 +35,15 @@ import {
 } from "./tfs.js";
 import { textToTfsHtml } from "./tfsHtml.js";
 import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
-import { generalConnection, probeSpeech, speechEnabled, speechView, transcribe, understandCommand } from "./speech.js";
+import {
+  generalConnection,
+  probeSpeech,
+  speechEnabled,
+  speechView,
+  synthesize,
+  transcribe,
+  understandCommand,
+} from "./speech.js";
 import {
   prepareWorkItemTask,
   previewWorkItem,
@@ -1166,21 +1174,27 @@ async function main() {
         const parsed = JSON.parse(prev) as AppConfig;
         const old = parsed.speech ?? {};
         const enabled = typeof input.enabled === "boolean" ? input.enabled : speechEnabled(old);
-        const pick = (k: "model" | "language" | "commandModel") => (k in input ? str(k) : (old[k] ?? ""));
+        const pick = (k: "model" | "language" | "commandModel" | "ttsModel" | "ttsVoice") =>
+          k in input ? str(k) : (old[k] ?? "");
         const model = pick("model"),
           language = pick("language"),
-          commandModel = pick("commandModel");
+          commandModel = pick("commandModel"),
+          ttsModel = pick("ttsModel"),
+          ttsVoice = pick("ttsVoice");
         // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
           enabled,
           ...(model ? { model } : {}),
           ...(language && language !== "tr" ? { language } : {}),
           ...(commandModel ? { commandModel } : {}),
+          ...(ttsModel ? { ttsModel } : {}),
+          ...(ttsVoice ? { ttsVoice } : {}),
         };
         if (enabled && !generalConnection(cfg).url) {
           return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || model || commandModel || (language && language !== "tr")) parsed.speech = sp;
+        if (enabled || model || commandModel || ttsModel || ttsVoice || (language && language !== "tr"))
+          parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
         loadAppConfig(resolvedConfigPath); // dil kodu
@@ -1221,6 +1235,14 @@ async function main() {
           error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
         });
       return understandCommand(conn.url, conn.token, m, text, patterns);
+    },
+    /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
+    say: (text: string, model?: string, voice?: string) => {
+      const conn = generalConnection(cfg);
+      const m = model || cfg.speech?.ttsModel;
+      if (!conn.url) return Promise.resolve({ ok: false as const, error: "Sunucu adresi yok: Ayarlar → Bağlantı." });
+      if (!m) return Promise.resolve({ ok: false as const, error: "Okuma modeli seçili değil." });
+      return synthesize(conn.url, conn.token, m, model ? voice : (voice ?? cfg.speech?.ttsVoice), text);
     },
   };
 

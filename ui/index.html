@@ -4101,7 +4101,8 @@ const MIC_MAX_SN = 600; // 10 dk — 16 kHz WAV ≈ 19 MB, sunucu sınırı 25 M
 let komutModeli = ""; // Ayarlar → Sesle görev yazma → Komutları anlayan model (boş = kapalı)
 let speechOn = false, mic = null; // mic: { rec, stream, chunks, t0, timer, cancelled }
 async function loadSpeech() {
-  try { const v = await (await fetch("/speech")).json(); speechOn = !!v.ready; komutModeli = speechOn ? v.commandModel || "" : ""; } catch { speechOn = false; komutModeli = ""; }
+  try { const v = await (await fetch("/speech")).json(); speechOn = !!v.ready; komutModeli = speechOn ? v.commandModel || "" : "";
+    const om = v.generalUrl ? v.ttsModel || "" : ""; if (om !== okumaModeli) { okumaModeli = om; okumaHataGosterildi = false; } } catch { speechOn = false; komutModeli = ""; }
   if (!mic) $("btnMic").classList.toggle("hidden", !speechOn);
   $("btnVoiceCmd").classList.toggle("hidden", !speechOn);
 }
@@ -4310,7 +4311,9 @@ function trSesi() {
   return v.find((x) => x.localService) || v[0] || null;
 }
 window.speechSynthesis?.getVoices(); // bazı tarayıcılar listeyi ilk istekte doldurmaya başlar
-const konusabilir = () => sesliYanit && !!trSesi();
+// Ayarlar'da okuma modeli seçiliyse (sunucudaki metinden ses üreten model) önce o; olmazsa tarayıcının Türkçe sesi
+let okumaModeli = "", okumaHataGosterildi = false;
+const konusabilir = () => sesliYanit && (!!okumaModeli || !!trSesi());
 /** Not HTML'inden söylenecek metin: ipuçları, düğmeler ve simgeler atılır, "#1201" → "1201" */
 function soze(html) {
   const d = document.createElement("div");
@@ -4331,13 +4334,14 @@ function mdSoz(md, sinir = 1500) {
   }
   return t;
 }
-/** Metni söyler (öncekini keser). Uzun metin cümle cümle gider — bazı tarayıcılar uzun tek parçayı yarıda bırakır */
+/** Metni söyler (öncekini keser). Uzun metin cümle cümle gider — bazı tarayıcılar uzun tek parçayı yarıda
+ *  bırakır; sunucu modelinde de ilk parça çabuk gelir, sonrakiler çalarken hazırlanır */
 function konus(metin) {
   metin = String(metin || "").trim();
   if (!metin || !konusabilir()) return Promise.resolve();
   sonSoz = metin;
-  speechSynthesis.cancel();
-  const ses = trSesi(), no = ++sentezNo;
+  sesiKes();
+  const no = ++sentezNo;
   const parcalar = [];
   for (const c of metin.match(/[^.!?…]+[.!?…]*\s*/g) || [metin]) {
     if (parcalar.length && parcalar[parcalar.length - 1].length + c.length < 220) parcalar[parcalar.length - 1] += c;
@@ -4352,28 +4356,79 @@ function konus(metin) {
       if (sentezNo === no) { sentezde = false; sentezBitti = Date.now(); }
       res();
     };
-    // Tarayıcı bitiş olayını hiç vermezse dinleme sonsuza dek kapalı kalmasın
-    const emniyet = setTimeout(bitir, 4000 + metin.length * 110);
-    parcalar.forEach((p, i) => {
-      const u = new SpeechSynthesisUtterance(p);
-      u.voice = ses; u.lang = ses.lang; u.rate = 1.05;
-      if (i === parcalar.length - 1) u.onend = u.onerror = bitir;
-      speechSynthesis.speak(u);
-    });
+    // Bitiş olayı hiç gelmezse dinleme sonsuza dek kapalı kalmasın (sunucu modelinde parça başına bekleme payı)
+    const emniyet = setTimeout(bitir, 4000 + metin.length * 110 + (okumaModeli ? parcalar.length * 20000 : 0));
+    if (okumaModeli) {
+      sunucudanOku(parcalar, no).then((ok) => {
+        if (ok || sentezNo !== no) return bitir();
+        tarayicidanOku(parcalar, bitir); // ilk parça gelmedi: tarayıcının sesi
+      });
+    } else tarayicidanOku(parcalar, bitir);
   });
+}
+function tarayicidanOku(parcalar, bitir) {
+  const ses = trSesi();
+  if (!ses) return bitir();
+  parcalar.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p);
+    u.voice = ses; u.lang = ses.lang; u.rate = 1.05;
+    if (i === parcalar.length - 1) u.onend = u.onerror = bitir;
+    speechSynthesis.speak(u);
+  });
+}
+let sesCalar = null; // sunucudan gelen sesi çalan <audio>
+/** Sunucudaki modelle okur; ilk parça alınamazsa false (tarayıcıya düşülür) */
+async function sunucudanOku(parcalar, no) {
+  let sonraki = sesAl(parcalar[0]);
+  for (let i = 0; i < parcalar.length; i++) {
+    const blob = await sonraki;
+    if (sentezNo !== no) return true;
+    if (!blob) return i > 0;
+    if (i + 1 < parcalar.length) sonraki = sesAl(parcalar[i + 1]);
+    await sesCal(blob);
+    if (sentezNo !== no) return true;
+  }
+  return true;
+}
+async function sesAl(metin) {
+  try {
+    const r = await fetch("/speech/say", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: metin }) });
+    if (r.ok) return await r.blob();
+    const j = await r.json().catch(() => ({}));
+    okumaHatasi(j.error || `sunucu ${r.status} döndü`);
+  } catch { okumaHatasi("sunucuya ulaşılamadı"); }
+  return null;
+}
+function okumaHatasi(m) {
+  if (okumaHataGosterildi) return;
+  okumaHataGosterildi = true; // her cümlede tekrar etmesin
+  sesNot(`Okuma modeli ses üretemedi: ${esc(m)} <small>${trSesi() ? "Tarayıcının sesiyle okunuyor." : "Bilgisayarda Türkçe ses de yok — yalnızca yazı."}</small>`, "hata", false, false);
+}
+function sesCal(blob) {
+  return new Promise((res) => {
+    const u = URL.createObjectURL(blob), a = new Audio(u);
+    sesCalar = a;
+    const son = () => { URL.revokeObjectURL(u); if (sesCalar === a) sesCalar = null; res(); };
+    a.onended = a.onerror = a.onpause = son;
+    a.play().catch(son);
+  });
+}
+function sesiKes() {
+  window.speechSynthesis?.cancel();
+  if (sesCalar) sesCalar.pause();
 }
 function sus() {
   if (!sentezde) return false;
   sentezNo++; sentezde = false; sentezBitti = Date.now();
-  window.speechSynthesis?.cancel();
+  sesiKes();
   return true;
 }
 function sesliYanitAyarla(ac) {
   sesliYanit = ac;
   try { localStorage.setItem("kurmay-sesli-yanit", ac ? "1" : "0"); } catch {}
   if (!ac) { sus(); return sesNot("✓ Sesli yanıt kapalı — sonuçlar yalnızca yazıyla gösterilecek.", "tamam"); }
-  if (!window.speechSynthesis) return olmaz("Bu tarayıcı sesli okuma desteklemiyor.");
-  if (!trSesi()) return olmaz("Bu bilgisayarda Türkçe ses bulunamadı. Windows'ta Ayarlar → Saat ve dil → Konuşma bölümünden Türkçe ses paketini ekle, sonra sayfayı yenile.");
+  if (!okumaModeli && !window.speechSynthesis) return olmaz("Bu tarayıcı sesli okuma desteklemiyor.");
+  if (!okumaModeli && !trSesi()) return olmaz("Bu bilgisayarda Türkçe ses bulunamadı. Windows'ta Ayarlar → Saat ve dil → Konuşma bölümünden Türkçe ses paketini ekle, sonra sayfayı yenile.");
   tamam("Sesli yanıt açık");
 }
 const SIRA_AD = ["Birinci", "İkinci", "Üçüncü", "Dördüncü", "Beşinci", "Altıncı", "Yedinci", "Sekizinci", "Dokuzuncu", "Onuncu"];
@@ -4432,7 +4487,7 @@ function okumaTeklif(soru, metin, ipucu = "") {
 /** "oku": ekranda o an ne varsa (onay kartı, açık liste, seçili iş öğesi / çekme isteği, son cevap) */
 let sonOnayOlay = null, sonCevap = null;
 function baglamOku() {
-  if (!konusabilir()) return olmaz(sesliYanit ? "Bu bilgisayarda Türkçe ses bulunamadı — okuyamıyorum." : "Sesli yanıt kapalı — “sesli yanıtı aç” de.");
+  if (!konusabilir()) return olmaz(sesliYanit ? "Okuma sesi yok: bu bilgisayarda Türkçe ses bulunamadı, Ayarlar'da okuma modeli de seçili değil." : "Sesli yanıt kapalı — “sesli yanıtı aç” de.");
   sesNotKapat();
   if (goruluyor("approval") && sonOnayOlay) return konus(planSoz(sonOnayOlay));
   if (!$("wiMenu").classList.contains("hidden") && wiItems.length) return konus(listeSoz(wiItems));

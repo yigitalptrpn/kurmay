@@ -38,6 +38,8 @@ export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
     model: s?.model ?? "",
     language: s?.language ?? "tr",
     commandModel: s?.commandModel ?? "",
+    ttsModel: s?.ttsModel ?? "",
+    ttsVoice: s?.ttsVoice ?? "",
   };
 }
 
@@ -268,6 +270,55 @@ export async function understandCommand(
       .replace(/^["“]|["”]$/g, "");
     if (!command) return { ok: false, error: "Model boş yanıt verdi.", seconds };
     return { ok: true, command: /^yok\.?$/i.test(command) ? "" : command, seconds };
+  } catch (e) {
+    return { ok: false, error: netError(e, base) };
+  }
+}
+
+/** Okunacak tek parçanın en fazla uzunluğu (panel metni ~220 karakterlik parçalara böler) */
+export const SAY_MAX_CHARS = 1000;
+const SAY_TIMEOUT_MS = 60_000;
+
+/**
+ * Sesli yanıt: metni sunucudaki metinden ses üreten modele okutur (OpenAI uyumlu /v1/audio/speech —
+ * ör. vLLM'de çalışan bir ses modeli). Dönen ses panelde çalınır; alınamazsa panel tarayıcının sesine döner.
+ */
+export async function synthesize(
+  url: string,
+  token: string | undefined,
+  model: string,
+  voice: string | undefined,
+  text: string,
+): Promise<{ ok: true; audio: Buffer; mime: string; seconds: number } | { ok: false; error: string }> {
+  const base = speechBase(url);
+  const input = text.replace(/\s+/g, " ").trim().slice(0, SAY_MAX_CHARS);
+  if (!input) return { ok: false, error: "okunacak metin yok" };
+  const t0 = Date.now();
+  try {
+    const r = await fetch(`${base}/v1/audio/speech`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ model, input, ...(voice ? { voice } : {}), response_format: "wav" }),
+      signal: AbortSignal.timeout(SAY_TIMEOUT_MS),
+    });
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok) {
+      const body = buf.toString("utf8");
+      if (r.status === 404)
+        return { ok: false, error: `Sunucuda metinden ses üretme ucu ya da "${model}" modeli bulunamadı (404).` };
+      return { ok: false, error: httpError(r.status, body) };
+    }
+    const mime = (r.headers.get("content-type") || "audio/wav").split(";")[0].trim();
+    if (!/^audio\//i.test(mime) && !/octet-stream/i.test(mime)) {
+      return { ok: false, error: `Sunucu ses yerine "${mime}" döndü: ${serverText(buf.toString("utf8"))}` };
+    }
+    if (!buf.length) return { ok: false, error: "Sunucu boş ses döndü." };
+    return {
+      ok: true,
+      audio: buf,
+      mime: /octet-stream/i.test(mime) ? "audio/wav" : mime,
+      seconds: (Date.now() - t0) / 1000,
+    };
   } catch (e) {
     return { ok: false, error: netError(e, base) };
   }

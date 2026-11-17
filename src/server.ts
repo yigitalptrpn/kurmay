@@ -273,6 +273,11 @@ export interface SpeechApi {
     text: string,
     patterns: string[],
   ): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }>;
+  say(
+    text: string,
+    model?: string,
+    voice?: string,
+  ): Promise<{ ok: true; audio: Buffer; mime: string; seconds: number } | { ok: false; error: string }>;
 }
 
 /**
@@ -314,6 +319,7 @@ export interface SpeechApi {
  *   POST /session-group-rename { from, to } — grubu yeniden adlandırır ya da dağıtır (to = "")
  *   POST /speech        { enabled?, model?, language?, prompt? } — kaydeder (canlı)
  *   POST /speech/test   genel sunucuya bağlanır, yüklü modelleri döner
+ *   POST /speech/say    { text, model?, voice? } → ses (audio/wav…) — sesli yanıtı sunucudaki okuma modeli okur
  *   POST /speech/intent { text, patterns[] } → { ok, command } — sabit listede olmayan sesli komutu modelle anlar
  *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
  *                   panel uzun kaydı ≤28 sn parçalara böler, önceki parçanın metni x-onceki-metin başlığında
@@ -869,6 +875,18 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       readJson(req, async (parsed) => {
         if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
         json(res, 200, await options.speech.probe());
+      });
+      return;
+    }
+    if (req.url === "/speech/say" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const s = (k: string) => (typeof parsed?.[k] === "string" ? (parsed[k] as string).trim() : undefined);
+        if (!options.speech || !text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.say(text, s("model"), s("voice"));
+        if (!r.ok) return json(res, 502, r);
+        res.writeHead(200, { "content-type": r.mime, "cache-control": "no-store", "x-sure": String(r.seconds) });
+        res.end(r.audio);
       });
       return;
     }
