@@ -127,6 +127,8 @@ export async function transcribe(
   token: string | undefined,
   audio: Buffer,
   mime: string,
+  /** Uzun kayıt parça parça gönderilirken önceki parçanın metni — model cümleyi oradan sürdürür */
+  previous?: string,
 ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }> {
   const base = speechBase(s.url);
   const form = new FormData();
@@ -135,7 +137,11 @@ export async function transcribe(
   if (s.model) form.append("model", s.model);
   const lang = s.language ?? "tr";
   if (lang && lang !== "auto") form.append("language", lang); // "auto": dili model kendisi bulur
-  if (s.prompt?.trim()) form.append("prompt", s.prompt.trim());
+  // İpucu: kullanıcının terimleri + önceki parçanın son kısmı. Model ipucunun yalnızca son
+  // ~224 jetonunu kullanır; önceki metin sona konur, toplam 600 karakterle sınırlı
+  const prev = previous?.replace(/\s+/g, " ").trim().slice(-300) ?? "";
+  const prompt = [s.prompt?.trim(), prev].filter(Boolean).join(" ").slice(-600);
+  if (prompt) form.append("prompt", prompt);
   form.append("response_format", "json");
   form.append("temperature", "0");
   const t0 = Date.now();

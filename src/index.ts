@@ -375,6 +375,8 @@ async function main() {
         // Oturumun hedef dizini (yoksa genel dizin geçerli) ve diskte var mı — panel uyarısı için
         targetDir: e.targetDir,
         dirExists: dirOk(e.targetDir ?? cwd),
+        // Panelde oturumun grubu (klasör gibi)
+        ...(e.group ? { group: e.group } : {}),
         // Analist konuşmasının doluluğu — panelde yaklaşınca uyarı
         ...(e.contextTokens ? { context: { tokens: e.contextTokens, window: ctx?.window, limit: ctx?.limit } } : {}),
         // TFS: oturumun bağlı olduğu iş öğesi (sol listede rozet)
@@ -1191,9 +1193,9 @@ async function main() {
       if (!url) return Promise.resolve({ ok: false, error: "Önce sunucu adresini yaz." });
       return probeSpeech(url, token);
     },
-    transcribe: (audio: Buffer, mime: string) =>
+    transcribe: (audio: Buffer, mime: string, previous?: string) =>
       cfg.speech
-        ? transcribe(cfg.speech, readSpeechToken(configRoot).token, audio, mime)
+        ? transcribe(cfg.speech, readSpeechToken(configRoot).token, audio, mime, previous)
         : Promise.resolve({ ok: false, error: "Ses tanıma ayarlı değil (Ayarlar → Sesle görev yazma)." }),
   };
 
@@ -1512,6 +1514,21 @@ async function main() {
         return e ? runtimes.get(e.id, e.runLogs) : undefined;
       },
       // Çalışan oturum silinmez (koşusu yetim kalırdı)
+      renameSession: (id, name) => {
+        const ok = sessions.rename(id, name);
+        if (ok) runtimes.notify();
+        return ok;
+      },
+      setSessionGroup: (id, group) => {
+        const ok = sessions.setGroup(id, group);
+        if (ok) runtimes.notify();
+        return ok;
+      },
+      renameGroup: (from, to) => {
+        const n = sessions.renameGroup(from, to);
+        if (n) runtimes.notify();
+        return n;
+      },
       deleteSession: (id) => {
         if (runtimes.peek(id)?.busy) return false;
         runtimes.delete(id);
