@@ -1,32 +1,17 @@
-import { readSecret, writeSecret } from "./tfsSettings.js";
 import type { SpeechConfig } from "./types.js";
 
 /**
  * Sesle görev yazma: panelde mikrofonla alınan kayıt model sunucusundaki (vLLM) ses tanıma
  * modeline (OpenAI uyumlu `/v1/audio/transcriptions`) gönderilir, çıkan metin görev kutusuna yazılır.
- * İstek tarayıcıdan değil sunucudan gider (başka adrese istek / http-https sorunu olmaz, anahtar
- * tarayıcıya hiç gitmez). Ek bağımlılık yok: Node'un yerleşik fetch + FormData'sı.
- *
- * Erişim anahtarı config.json'da DURMAZ (TFS anahtarı gibi `.gizli/ses.json`, ya da ortam değişkeni).
+ * Adres ve anahtar genel bağlantıdan (Ayarlar → Bağlantı) gelir — ajanlarla aynı sunucu.
+ * İstek tarayıcıdan değil sunucudan gider (anahtar tarayıcıya hiç gitmez). Ek bağımlılık yok.
  */
 
-export const SPEECH_TOKEN_ENV = "KURMAY_SES_TOKEN";
 /** Kaydın en fazla boyutu: 16 kHz tek kanal WAV ≈ 32 KB/sn → 25 MB ≈ 13 dakika */
 export const SPEECH_MAX_BYTES = 25 * 1024 * 1024;
 /** Uzun kayıtta sunucunun yanıtı uzun sürebilir */
 const TRANSCRIBE_TIMEOUT_MS = 10 * 60_000;
 const PROBE_TIMEOUT_MS = 15_000;
-
-export function readSpeechToken(configRoot: string): { token?: string; source?: "ortam" | "dosya" } {
-  const v = process.env[SPEECH_TOKEN_ENV]?.trim();
-  if (v) return { token: v, source: "ortam" };
-  const token = readSecret(configRoot, "ses");
-  return token ? { token, source: "dosya" } : {};
-}
-
-export function writeSpeechToken(configRoot: string, token: string | null): void {
-  writeSecret(configRoot, "ses", token);
-}
 
 /** Genel bağlantı (Ayarlar → Bağlantı): ajanların da kullandığı sunucu adresi ve anahtarı */
 export interface GeneralConnection {
@@ -39,38 +24,20 @@ export function generalConnection(g: GeneralConnection): { url: string; token?: 
   const token = (g.apiKey || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || "").trim();
   return { url, ...(token ? { token } : {}) };
 }
+/** Eski kayıtlarda `enabled` yok — o zamanlar adres yazılıysa açıktı */
 export const speechEnabled = (s: SpeechConfig | undefined) => !!s && (s.enabled ?? !!s.url);
-/**
- * Kaydın gideceği adres ve anahtar. Ayrı adres girildiyse o ve `.gizli/ses.json`'daki anahtar —
- * genel anahtar BAŞKA bir sunucuya gönderilmez. Girilmediyse genel bağlantının adresi ve anahtarı.
- */
-export function speechConnection(s: SpeechConfig | undefined, g: GeneralConnection, configRoot: string) {
-  const own = s?.url?.trim();
-  if (own) return { url: own, token: readSpeechToken(configRoot).token, shared: false };
-  const gen = generalConnection(g);
-  return { url: gen.url, token: gen.token, shared: true };
-}
 
-/** Panel ve Ayarlar için durum — anahtarların kendisi yok */
-export function speechView(s: SpeechConfig | undefined, g: GeneralConnection, configRoot: string) {
-  const tok = readSpeechToken(configRoot);
-  const conn = speechConnection(s, g, configRoot);
+/** Panel ve Ayarlar için durum — anahtarın kendisi yok */
+export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
+  const conn = generalConnection(g);
   const enabled = speechEnabled(s);
   return {
     enabled,
     ready: enabled && !!conn.url,
-    /** Kaydın gideceği adres (genel ya da ayrı) ve genel bağlantının adresi (Ayarlar'da bilgi olarak) */
-    activeUrl: conn.url,
-    shared: conn.shared,
-    generalUrl: generalConnection(g).url,
-    url: s?.url ?? "",
+    generalUrl: conn.url,
     model: s?.model ?? "",
     language: s?.language ?? "tr",
     prompt: s?.prompt ?? "",
-    hasToken: !!tok.token,
-    tokenSource: tok.source ?? "",
-    tokenEnv: tok.source === "ortam" ? SPEECH_TOKEN_ENV : "",
-    tokenHint: tok.token ? tok.token.slice(-4) : "",
   };
 }
 

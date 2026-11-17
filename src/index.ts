@@ -35,7 +35,7 @@ import {
 } from "./tfs.js";
 import { textToTfsHtml } from "./tfsHtml.js";
 import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
-import { probeSpeech, speechConnection, speechEnabled, speechView, transcribe, writeSpeechToken } from "./speech.js";
+import { generalConnection, probeSpeech, speechEnabled, speechView, transcribe } from "./speech.js";
 import {
   prepareWorkItemTask,
   previewWorkItem,
@@ -1153,15 +1153,12 @@ async function main() {
     }
   };
 
-  /** Sesle görev yazma (Ayarlar): adres/model/dil/ipucu config.json'a (speech), anahtar .gizli/ses.json'a.
-   *  Hemen geçerli. Boş adres = kapat. token: undefined = dokunma, "" ya da null = sil */
+  /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil, ipucu config.json'a (speech). Adres ve anahtar
+   *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
   const speechApi = {
-    view: () => speechView(cfg.speech, cfg, configRoot),
+    view: () => speechView(cfg.speech, cfg),
     save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
       const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
-      if (input.token !== undefined && input.token !== null && typeof input.token !== "string") {
-        return { ok: false, error: "geçersiz istek" };
-      }
       if (input.enabled !== undefined && typeof input.enabled !== "boolean")
         return { ok: false, error: "geçersiz istek" };
       const prev = fs.readFileSync(resolvedConfigPath, "utf8");
@@ -1169,58 +1166,47 @@ async function main() {
         const parsed = JSON.parse(prev) as AppConfig;
         const old = parsed.speech ?? {};
         const enabled = typeof input.enabled === "boolean" ? input.enabled : speechEnabled(old);
-        const pick = (k: "url" | "model" | "language" | "prompt") => (k in input ? str(k) : (old[k] ?? ""));
-        const url = pick("url"),
-          model = pick("model"),
+        const pick = (k: "model" | "language" | "prompt") => (k in input ? str(k) : (old[k] ?? ""));
+        const model = pick("model"),
           language = pick("language"),
           prompt = pick("prompt");
+        // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
-          ...(enabled ? { enabled: true } : { enabled: false }),
-          ...(url ? { url } : {}),
+          enabled,
           ...(model ? { model } : {}),
           ...(language && language !== "tr" ? { language } : {}),
           ...(prompt ? { prompt } : {}),
         };
-        if (enabled && !speechConnection(sp, cfg, configRoot).url) {
-          return {
-            ok: false,
-            error:
-              "Sunucu adresi yok: Ayarlar → Bağlantı bölümünde genel sunucu adresini gir ya da burada ayrı ses sunucusu adresi yaz.",
-          };
+        if (enabled && !generalConnection(cfg).url) {
+          return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || url || model || prompt || language) parsed.speech = sp;
+        if (enabled || model || prompt || (language && language !== "tr")) parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
-        loadAppConfig(resolvedConfigPath); // adres, dil kodu
+        loadAppConfig(resolvedConfigPath); // dil kodu
         if (parsed.speech) cfg.speech = parsed.speech;
         else delete cfg.speech;
       } catch (e) {
         fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
-      if (typeof input.token === "string" && input.token.trim()) writeSpeechToken(configRoot, input.token.trim());
-      else if (input.token === null || input.token === "") writeSpeechToken(configRoot, null);
-      return { ok: true, view: speechView(cfg.speech, cfg, configRoot) };
+      return { ok: true, view: speechView(cfg.speech, cfg) };
     },
-    /** Henüz kaydedilmemiş ayrı adres/anahtarla da denenebilir; adres boşsa genel bağlantı */
-    probe: (input: Record<string, unknown>) => {
-      const ayri = typeof input.url === "string" ? input.url.trim() : undefined;
-      const conn = speechConnection({ ...cfg.speech, ...(ayri !== undefined ? { url: ayri } : {}) }, cfg, configRoot);
-      const token =
-        !conn.shared && typeof input.token === "string" && input.token.trim() ? input.token.trim() : conn.token;
+    probe: () => {
+      const conn = generalConnection(cfg);
       if (!conn.url)
         return Promise.resolve({
           ok: false,
-          error: "Sunucu adresi yok: Ayarlar → Bağlantı bölümünde genel sunucu adresini gir.",
+          error: "Sunucu adresi yok: Ayarlar → Bağlantı bölümünde sunucu adresini gir.",
         });
-      return probeSpeech(conn.url, token);
+      return probeSpeech(conn.url, conn.token);
     },
     transcribe: (audio: Buffer, mime: string, previous?: string) => {
-      const conn = speechConnection(cfg.speech, cfg, configRoot);
+      const conn = generalConnection(cfg);
       if (!speechEnabled(cfg.speech) || !conn.url) {
         return Promise.resolve({
           ok: false,
-          error: "Sesle görev yazma kapalı ya da sunucu adresi yok (Ayarlar → Sesle görev yazma).",
+          error: "Sesle görev yazma kapalı ya da sunucu adresi yok (Ayarlar → Sesle görev yazma, Bağlantı).",
         });
       }
       return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous);

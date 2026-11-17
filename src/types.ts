@@ -404,11 +404,9 @@ export interface AppConfig extends ProviderConfig {
 
 /** Ses tanıma (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM) */
 export interface SpeechConfig {
-  /** Açık mı. Yoksa: ayrı adres girilmişse açık sayılır (eski kayıtlar) */
+  /** Açık mı. Adres ve anahtar genel bağlantıdan (`baseUrl`/`apiKey`) */
   enabled?: boolean;
-  /** AYRI ses sunucusu adresi (ör. http://sunucu:8000; sonundaki /v1 kabul edilir). Yoksa genel
-   *  bağlantı (`baseUrl`) kullanılır. Ayrı sunucunun anahtarı `.gizli/ses.json`'da — genel anahtar
-   *  başka sunucuya GÖNDERİLMEZ */
+  /** Eski sürümlerin ayrı ses sunucusu adresi — artık kullanılmaz; yalnızca `enabled` yokken "açıktı" demek */
   url?: string;
   /** Model adı (ör. openai/whisper-large-v3) — sunucuda tek model varsa boş kalabilir */
   model?: string;
