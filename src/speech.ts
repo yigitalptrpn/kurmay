@@ -37,7 +37,6 @@ export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
     generalUrl: conn.url,
     model: s?.model ?? "",
     language: s?.language ?? "tr",
-    prompt: s?.prompt ?? "",
   };
 }
 
@@ -134,10 +133,10 @@ export async function transcribe(
   if (s.model) form.append("model", s.model);
   const lang = s.language ?? "tr";
   if (lang && lang !== "auto") form.append("language", lang); // "auto": dili model kendisi bulur
-  // İpucu: kullanıcının terimleri + önceki parçanın son kısmı. Model ipucunun yalnızca son
-  // ~224 jetonunu kullanır; önceki metin sona konur, toplam 600 karakterle sınırlı
+  // İpucu: önceki parçanın son kısmı (cümle parça sınırında kopmasın) + panelin verdiği komut
+  // kelimeleri. Model ipucunun yalnızca son ~224 jetonunu kullanır; toplam 600 karakterle sınırlı
   const prev = previous?.replace(/\s+/g, " ").trim().slice(-300) ?? "";
-  const prompt = [s.prompt?.trim(), prev].filter(Boolean).join(" ").slice(-600);
+  const prompt = prev.slice(-600);
   if (prompt) form.append("prompt", prompt);
   form.append("response_format", "json");
   form.append("temperature", "0");

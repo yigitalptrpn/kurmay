@@ -1153,7 +1153,7 @@ async function main() {
     }
   };
 
-  /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil, ipucu config.json'a (speech). Adres ve anahtar
+  /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
   const speechApi = {
     view: () => speechView(cfg.speech, cfg),
@@ -1166,21 +1166,19 @@ async function main() {
         const parsed = JSON.parse(prev) as AppConfig;
         const old = parsed.speech ?? {};
         const enabled = typeof input.enabled === "boolean" ? input.enabled : speechEnabled(old);
-        const pick = (k: "model" | "language" | "prompt") => (k in input ? str(k) : (old[k] ?? ""));
+        const pick = (k: "model" | "language") => (k in input ? str(k) : (old[k] ?? ""));
         const model = pick("model"),
-          language = pick("language"),
-          prompt = pick("prompt");
-        // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) artık kullanılmıyor — kayıtta düşer
+          language = pick("language");
+        // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
           enabled,
           ...(model ? { model } : {}),
           ...(language && language !== "tr" ? { language } : {}),
-          ...(prompt ? { prompt } : {}),
         };
         if (enabled && !generalConnection(cfg).url) {
           return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || model || prompt || (language && language !== "tr")) parsed.speech = sp;
+        if (enabled || model || (language && language !== "tr")) parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
         loadAppConfig(resolvedConfigPath); // dil kodu

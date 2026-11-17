@@ -412,7 +412,7 @@ export interface SpeechConfig {
   model?: string;
   /** Konuşma dili (ISO kodu, varsayılan "tr"); "auto" = model kendisi bulsun */
   language?: string;
-  /** İpucu: özel adlar, terimler — tanımayı iyileştirir */
+  /** Eski sürümlerin ipucu alanı — artık kullanılmaz */
   prompt?: string;
 }
 
