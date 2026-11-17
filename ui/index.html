@@ -279,6 +279,15 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 /* Yol büyük/küçük harfe duyarlı — Radar düğme yazısını büyük harf yapıyor, yol olduğu gibi kalsın */
 :is(.dchip .nm, .dmenu button b, .dmenu .yol) { text-transform:none; }
 #btnStart { flex:none; box-shadow:var(--md-elev-2); }
+/* Sesle yaz: kayıtta kırmızı + süre, metne çevrilirken bekler */
+#btnMic { flex:none; display:inline-flex; align-items:center; gap:6px; padding:0 12px; }
+#btnMic svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+#btnMic .mt { font:12.5px var(--font-mono); text-transform:none; }
+#btnMic .mt:empty { display:none; }
+#btnMic.rec { background:var(--red); border-color:var(--red); color:#fff; animation:mic-nabiz 1.2s ease-in-out infinite; }
+#btnMic.wait { opacity:.7; cursor:progress; }
+@keyframes mic-nabiz { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--red) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { #btnMic.rec { animation:none; } }
 /* Görevle yapıştırılan görseller: yazma kutusunun altında önizleme, görev balonunda küçük resim */
 .ekler { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 #taskImages { margin-top:8px; }
@@ -887,6 +896,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
       <div class="wi-card hidden" id="wiCard"></div>
       <div class="row" style="display:flex;gap:8px;align-items:flex-end">
         <textarea id="taskInput" rows="1" placeholder="Ekibe bir görev ver… (Enter gönderir; dosya ya da görsel yapıştırıp sürükleyebilirsin)"></textarea>
+        <button type="button" class="hidden" id="btnMic" title="Sesle yaz — konuş, metin kutuya yazılsın" aria-label="Sesle yaz"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg><span class="mt"></span></button>
         <button class="primary" id="btnStart">Başlat ➤</button>
       </div>
       <div class="ekler hidden" id="taskImages"></div>
@@ -1322,7 +1332,7 @@ const FIELD_LABELS = {
   risk: "Genel risk", findings: "Bulgular", positives: "Doğru yapılanlar", title: "Başlık", category: "Kategori",
   evidence: "Kanıt", recommendation: "Öneri",
 };
-const HIDDEN_FIELDS = new Set(["route", "approved", "file_plan"]); // kartta/akışta zaten anlatılıyor
+const HIDDEN_FIELDS = new Set(["route", "approved", "file_plan", "title"]); // kartta/akışta zaten anlatılıyor
 function valueText(k, v) {
   if (k === "action") return ACTION_NAMES[v] || v;
   if (k === "severity") return SEVERITY_NAMES[v] || v;
@@ -3661,6 +3671,7 @@ function showTaskCard() {
   loadTargetDir(); // dizin bu arada oluşturulmuş olabilir — uyarıyı tazele
   loadFlow();
   loadTfs();
+  loadSpeech();
   updateTaskCtx();
   autoGrow($("taskInput"));
   $("taskInput").focus();
@@ -3841,6 +3852,107 @@ for (const id of ["taskInput", "rejectComment"]) {
   const el = $(id);
   el.addEventListener("input", () => autoGrow(el));
   autoGrow(el);
+}
+
+// ── Sesle yaz ────────────────────────────────────────────────────────────
+// Ayarlar'da ses tanıma sunucusu girildiyse görev kutusunun yanında 🎙 düğmesi çıkar. Tıkla → konuş →
+// yeniden tıkla: kayıt 16 kHz tek kanal WAV'a çevrilip sunucuya (POST /speech/transcribe) gider, sunucu
+// model sunucusundaki ses tanıma modeline iletir, gelen metin imlecin olduğu yere yazılır. Esc kaydı atar.
+const MIC_MAX_SN = 600; // 10 dk — 16 kHz WAV ≈ 19 MB, sunucu sınırı 25 MB
+let speechOn = false, mic = null; // mic: { rec, stream, chunks, t0, timer, cancelled }
+async function loadSpeech() {
+  try { speechOn = !!(await (await fetch("/speech")).json()).ready; } catch { speechOn = false; }
+  if (!mic) $("btnMic").classList.toggle("hidden", !speechOn);
+}
+window.addEventListener("focus", () => { if (!$("taskCard").classList.contains("hidden")) loadSpeech(); }); // Ayarlar başka sekmede değişmiş olabilir
+function micState(kind, label) {
+  const b = $("btnMic");
+  b.classList.toggle("rec", kind === "rec");
+  b.classList.toggle("wait", kind === "wait");
+  b.querySelector(".mt").textContent = label || "";
+  b.title = kind === "rec" ? "Kaydı bitir ve metne çevir (Esc: vazgeç)" : kind === "wait" ? "Metne çevriliyor…" : "Sesle yaz — konuş, metin kutuya yazılsın";
+  b.setAttribute("aria-label", kind === "rec" ? "Kaydı bitir" : "Sesle yaz");
+}
+const micSure = (sn) => Math.floor(sn / 60) + ":" + String(Math.floor(sn % 60)).padStart(2, "0");
+$("btnMic").addEventListener("click", async () => {
+  if (mic?.rec) { mic.rec.state === "recording" && mic.rec.stop(); return; }
+  if (mic) return; // metne çevriliyor
+  $("taskError").textContent = "";
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    $("taskError").textContent = "Tarayıcı mikrofonu açmıyor: mikrofon yalnızca panel localhost ya da https adresiyle açıldığında çalışır.";
+    return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) {
+    $("taskError").textContent = e?.name === "NotAllowedError" ? "Mikrofon izni verilmedi — tarayıcının adres çubuğundaki izinlerden aç."
+      : e?.name === "NotFoundError" ? "Bu bilgisayarda mikrofon bulunamadı." : "Mikrofon açılamadı: " + (e?.message || e);
+    return;
+  }
+  const rec = new MediaRecorder(stream);
+  mic = { rec, stream, chunks: [], t0: Date.now(), cancelled: false };
+  rec.ondataavailable = (e) => { if (e.data.size) mic.chunks.push(e.data); };
+  rec.onstop = micBitti;
+  rec.start();
+  micState("rec", "0:00");
+  mic.timer = setInterval(() => {
+    const sn = (Date.now() - mic.t0) / 1000;
+    micState("rec", micSure(sn));
+    if (sn >= MIC_MAX_SN && rec.state === "recording") rec.stop();
+  }, 250);
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && mic?.rec?.state === "recording") { ev.preventDefault(); mic.cancelled = true; mic.rec.stop(); }
+});
+async function micBitti() {
+  const { stream, chunks, rec, cancelled } = mic;
+  clearInterval(mic.timer);
+  stream.getTracks().forEach((t) => t.stop());
+  mic.rec = null;
+  if (cancelled || !chunks.length) { mic = null; micState(""); return; }
+  micState("wait", "çevriliyor…");
+  try {
+    const wav = await toWav16k(new Blob(chunks, { type: rec.mimeType }));
+    const res = await fetch("/speech/transcribe", { method: "POST", headers: { "content-type": "audio/wav" }, body: wav });
+    const r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
+    if (!r.ok) throw new Error(r.error || "metne çevrilemedi");
+    if (!r.text) throw new Error("Kayıtta konuşma duyulmadı.");
+    metniYaz(r.text);
+  } catch (e) {
+    $("taskError").textContent = "Sesle yazma: " + (e?.message || e);
+  } finally {
+    mic = null; micState(""); loadSpeech();
+  }
+}
+/** Metni imlecin olduğu yere, gerekirse araya boşluk koyarak yazar */
+function metniYaz(text) {
+  const box = $("taskInput");
+  const a = box.selectionStart ?? box.value.length, b = box.selectionEnd ?? box.value.length;
+  const once = box.value.slice(0, a), sonra = box.value.slice(b);
+  const ek = (once && !/\s$/.test(once) ? " " : "") + text + (sonra && !/^\s/.test(sonra) ? " " : "");
+  box.value = once + ek + sonra;
+  const imlec = once.length + ek.length;
+  box.focus();
+  box.setSelectionRange(imlec, imlec);
+  box.dispatchEvent(new Event("input")); // autoGrow, zaman satırı vb.
+}
+/** Tarayıcının kaydı (webm/ogg) → 16 kHz tek kanal WAV: sunucunun her biçimi çözememe ihtimaline karşı, küçük de */
+async function toWav16k(blob) {
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const dec = await ac.decodeAudioData(await blob.arrayBuffer());
+  ac.close();
+  const sr = 16000, len = Math.max(1, Math.ceil(dec.duration * sr));
+  const off = new OfflineAudioContext(1, len, sr);
+  const src = off.createBufferSource(); src.buffer = dec; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const dv = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  w(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) { const x = Math.max(-1, Math.min(1, pcm[i])); dv.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
+  return new Blob([dv], { type: "audio/wav" });
 }
 
 // ── TFS modu ─────────────────────────────────────────────────────────────

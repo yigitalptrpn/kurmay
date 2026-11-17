@@ -8,8 +8,10 @@ import type { EffortSetting } from "./types.js";
 export interface SessionEntry {
   /** Oturum kimliği (bizim; SDK oturumundan bağımsız — ilk görevden önce de var olur) */
   id: string;
-  /** Oturumu açan ilk görevden türetilen isim */
+  /** Oturumu açan ilk görevden türetilen isim; Analist ilk görevde kısa başlık verirse o olur */
   name: string;
+  /** Ad Analist'in kısa başlığından konduysa true — sonraki görevler adı değiştirmez */
+  titled?: boolean;
   createdAt: string;
   updatedAt: string;
   /** Entry ajanın (analist) SDK oturum kimliği — sonraki görev bunu resume eder */
@@ -47,6 +49,20 @@ export interface SessionEntry {
 function nameFromTask(task: string): string {
   const t = task.trim().replace(/\s+/g, " ");
   return t.length > 60 ? t.slice(0, 60) + "…" : t || "(isimsiz)";
+}
+
+/** Modelin verdiği başlığı oturum adına uygun hale getirir: tek satır, tırnak/nokta yok, en fazla
+ *  60 karakter (kelime sınırında). Anlamsız (çok kısa ya da JSON'a benzeyen) başlık → "" */
+export function cleanTitle(raw: string): string {
+  let t = raw.replace(/\s+/g, " ").trim();
+  t = t.replace(/^["'“”‘’«»`*#\s-]+|["'“”‘’«»`*\s.:;,!-]+$/g, "").trim();
+  if (t.length < 3 || /[{}[\]]/.test(t)) return "";
+  if (t.length > 60) {
+    const cut = t.slice(0, 60);
+    const sp = cut.lastIndexOf(" ");
+    t = (sp > 30 ? cut.slice(0, sp) : cut).replace(/[\s.,;:-]+$/, "") + "…";
+  }
+  return t;
 }
 
 /**
@@ -119,6 +135,20 @@ export class SessionStore {
     s.lastStatus = "running";
     s.updatedAt = new Date().toISOString();
     this.persist();
+  }
+
+  /**
+   * Analist'in kısa başlığını oturumun adı yapar — yalnızca bir kez (ilk başlık) ve TFS'e bağlı
+   * olmayan oturumda (onların adı zaten "#123 · Başlık"). Ad değiştiyse true döner.
+   */
+  setTitle(id: string, title: string): boolean {
+    const s = this.get(id);
+    const t = cleanTitle(title);
+    if (!s || s.titled || s.workItem || s.pr || !t) return false;
+    s.name = t;
+    s.titled = true;
+    this.persist();
+    return true;
   }
 
   /** Bir koşu bittiğinde: analistin SDK oturumunu sakla (sonraki görev resume eder) */
