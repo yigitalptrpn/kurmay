@@ -268,28 +268,24 @@ input.sw:disabled { opacity:.5; cursor:default; }
   </div>
 </div>
 
-<!-- Sesle görev yazma: paneldeki mikrofon düğmesi kaydı bu sunucudaki ses tanıma modeline gönderir
-     (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM). config.json'daki speech; anahtar .gizli/ses.json'da. -->
+<!-- Sesle görev yazma: paneldeki mikrofon düğmesi ve sesli komut, kaydı ses tanıma modeline gönderir
+     (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM). Adres ve anahtar genel bağlantıdan (Bağlantı bölümü).
+     config.json'daki speech. -->
 <div class="card" id="spCard" style="margin-bottom:14px">
   <div class="secc">
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">Sesle görev yazma <span id="spState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Adres girilirse görev kutusunun yanında <b>🎙</b> düğmesi çıkar: konuşursun, söylediğin metin olarak kutuya yazılır, düzeltip gönderirsin. Kayıt model sunucusundaki ses tanıma modeline gönderilir. Mikrofon yalnızca panel <code>localhost</code> ya da <code>https</code> adresiyle açıldığında çalışır. Adresi silip kaydedersen kapanır.</div>
+      <div class="fhint" style="font-size:12.5px">Açıkken panelde mikrofon düğmeleri çıkar: görev kutusunun yanındaki 🎙 ile görevi söyleyerek yazdırırsın, Ctrl+Boşluk ile paneli sesle yönetirsin. Kayıt, aşağıdaki ses tanıma modeline gider — sunucu adresi ve anahtar <b>genel bağlantı ayarlarından</b> gelir. Mikrofon yalnızca panel <code>localhost</code> ya da <code>https</code> adresiyle açıldığında çalışır.</div>
     </div>
+    <input type="checkbox" role="switch" class="sw" id="spSw" aria-label="Sesle görev yazma">
   </div>
   <div class="gbar" style="margin-top:12px">
     <div class="grow">
-      <label class="minl" for="spUrl">Sunucu adresi</label>
-      <input type="text" id="spUrl" spellcheck="false" placeholder="http://model-sunucusu:8000" style="width:100%">
-    </div>
-    <div class="grow">
-      <label class="minl" for="spModel">Model</label>
+      <label class="minl" for="spModel">Ses tanıma modeli</label>
       <input type="text" id="spModel" spellcheck="false" list="spModels" placeholder="openai/whisper-large-v3" style="width:100%">
       <datalist id="spModels"></datalist>
     </div>
-  </div>
-  <div class="gbar" style="margin-top:10px">
     <div>
       <label class="minl" for="spLang">Konuşma dili</label>
       <select id="spLang">
@@ -297,18 +293,12 @@ input.sw:disabled { opacity:.5; cursor:default; }
         <option value="de">Almanca</option><option value="fr">Fransızca</option><option value="ar">Arapça</option><option value="ru">Rusça</option>
       </select>
     </div>
-    <div class="grow">
-      <label class="minl" for="spToken">Erişim anahtarı</label>
-      <div style="display:flex;gap:6px"><input type="password" id="spToken" autocomplete="off" spellcheck="false" placeholder="gerekmiyorsa boş bırak" style="flex:1">
-      <button id="spTokenShow" type="button" title="Göster / gizle" style="min-height:auto;padding:4px 12px">👁</button>
-      <button id="spTokenDel" type="button" class="hidden" title="Kayıtlı anahtarı sil" style="min-height:auto;padding:4px 12px;flex:none">Sil</button></div>
-    </div>
   </div>
-  <div class="fhint" id="spTokenHint" style="margin-top:4px"></div>
   <div style="margin-top:10px">
-    <label class="minl" for="spPrompt">İpucu — sık söylediğin özel adlar ve terimler</label>
+    <label class="minl" for="spPrompt">İpucu — sık söylediğin özel adlar ve terimler (isteğe bağlı)</label>
     <input type="text" id="spPrompt" spellcheck="false" placeholder="Örnek: Kurmay, Analist, Saha Timi, sipariş servisi, Kafka, endpoint" style="width:100%">
   </div>
+  <div class="fhint" id="spConn" style="margin-top:8px"></div>
   <div class="rfoot" style="margin-top:8px">
     <button class="primary" id="spSave" type="button" disabled>Kaydet</button>
     <button id="spTest" type="button">Bağlantıyı dene</button>
@@ -969,8 +959,7 @@ $("pwSave").addEventListener("click", async ()=>{
   renderPwCard();
 });
 
-// Sesle görev yazma kartı: GET/POST /speech, POST /speech/test. Anahtar sunucuda .gizli/ses.json'da —
-// sayfa yalnızca "kayıtlı mı" ve son 4 karakterini bilir; boş bırakılan anahtar alanı kayıtlıyı değiştirmez.
+// Sesle görev yazma kartı: GET/POST /speech, POST /speech/test. Adres ve anahtar genel bağlantıdan (Bağlantı bölümü).
 let spSaved = null;
 async function loadSpeechCard(){
   try { spSaved = await (await fetch("/speech")).json(); } catch { spSaved = null; }
@@ -978,71 +967,67 @@ async function loadSpeechCard(){
 }
 function fillSpeech(){
   const t = spSaved || {};
-  $("spUrl").value = t.url || "";
+  $("spSw").checked = !!t.enabled;
   $("spModel").value = t.model || "";
   $("spLang").value = t.language || "tr";
   if (!$("spLang").value) $("spLang").value = "tr";
   $("spPrompt").value = t.prompt || "";
-  $("spToken").value = "";
   renderSpeechCard();
 }
-const spForm = ()=> ({ url: $("spUrl").value.trim(), model: $("spModel").value.trim(), language: $("spLang").value,
-  prompt: $("spPrompt").value.trim(), token: $("spToken").value.trim() });
+const spForm = ()=> ({ model: $("spModel").value.trim(), language: $("spLang").value, prompt: $("spPrompt").value.trim() });
 function renderSpeechCard(){
   const t = spSaved || {}, f = spForm();
-  $("spState").textContent = t.ready ? "açık" : "kapalı";
+  $("spState").textContent = t.enabled ? (t.ready ? "açık" : "açık · adres yok") : "kapalı";
   $("spState").className = "secc-st" + (t.ready ? " on" : "");
-  $("spToken").disabled = t.tokenSource === "ortam";
-  $("spTokenDel").classList.toggle("hidden", !(t.hasToken && t.tokenSource === "dosya"));
-  $("spTokenHint").textContent = t.tokenSource === "ortam"
-    ? `Anahtar ${t.tokenEnv} ortam değişkeninden geliyor (sonu …${t.tokenHint}) — buradan değiştirilemez.`
-    : t.hasToken ? `Kayıtlı anahtar: …${t.tokenHint}. Ayar dosyasına ve tarayıcıya gitmez. Değiştirmek için yenisini yaz.` : "";
-  $("spSave").disabled = f.url === (t.url || "") && f.model === (t.model || "") && f.language === (t.language || "tr") &&
-    f.prompt === (t.prompt || "") && !f.token;
+  $("spConn").innerHTML = t.generalUrl
+    ? `Sunucu: <code>${esc(t.generalUrl)}</code> (Bağlantı bölümündeki adres ve anahtar)`
+    : `<span style="color:var(--red)">Bağlantı bölümünde sunucu adresi yok — önce onu gir.</span>`;
+  $("spSave").disabled = f.model === (t.model || "") && f.language === (t.language || "tr") && f.prompt === (t.prompt || "");
 }
 const spMsg = (html, renk)=> { $("spMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
-for (const id of ["spUrl","spModel","spToken","spPrompt"]){
+for (const id of ["spModel","spPrompt"]){
   $(id).addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
   $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("spSave").disabled){ e.preventDefault(); $("spSave").click(); } });
 }
 $("spLang").addEventListener("change", ()=>{ spMsg(""); renderSpeechCard(); });
-$("spTokenShow").addEventListener("click", ()=>{ $("spToken").type = $("spToken").type === "password" ? "text" : "password"; });
 async function spPost(url, body){
   const res = await fetch(url, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
   return res.json().catch(()=>({ ok:false, error:"sunucu yanıtı okunamadı" }));
 }
-$("spSave").addEventListener("click", async ()=>{
-  const f = spForm();
-  $("spSave").disabled = true;
-  const body = { url: f.url, model: f.model, language: f.language, prompt: f.prompt };
-  if (f.token) body.token = f.token;
-  const r = await spPost("/speech", body);
-  if (!r.ok){ spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); renderSpeechCard(); return; }
-  spSaved = r.view;
-  // Sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa ayar geri dönmesin
-  if (cfg){
-    if (f.url) cfg.speech = { url: f.url, ...(f.model ? { model: f.model } : {}), ...(f.language !== "tr" ? { language: f.language } : {}), ...(f.prompt ? { prompt: f.prompt } : {}) };
-    else delete cfg.speech;
-  }
-  fillSpeech();
-  spMsg(f.url ? "✓ Kaydedildi — panelde görev kutusunun yanında 🎙 düğmesi çıkar" : "✓ Kapatıldı", "teal");
+/** Kaydedilen ayarı sayfadaki kopyaya da yaz — sonradan üstteki Kaydet'e basılırsa geri dönmesin */
+function spCfgEsitle(){
+  if (!cfg || !spSaved) return;
+  const t = spSaved, dil = t.language && t.language !== "tr";
+  if (t.enabled || t.model || t.prompt || dil)
+    cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}), ...(t.prompt ? { prompt: t.prompt } : {}) };
+  else delete cfg.speech;
+}
+$("spSw").addEventListener("change", async ()=>{
+  const ac = $("spSw").checked;
+  spMsg("");
+  const r = await spPost("/speech", { enabled: ac, ...spForm() });
+  if (!r.ok){ $("spSw").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg(ac ? (spSaved.model ? "✓ Açık — panelde 🎙 düğmeleri çıkar" : "✓ Açık — ses tanıma modelinin adını yazıp kaydet") : "✓ Kapatıldı", "teal");
 });
-$("spTokenDel").addEventListener("click", async ()=>{
-  if (!confirm("Kayıtlı erişim anahtarı silinsin mi?")) return;
-  const t = spSaved || {};
-  const r = await spPost("/speech", { url: t.url || "", model: t.model || "", language: t.language || "tr", prompt: t.prompt || "", token: null });
-  if (!r.ok){ spMsg("✗ " + esc(r.error || "silinemedi"), "red"); return; }
-  spSaved = r.view; fillSpeech(); spMsg("✓ Anahtar silindi", "teal");
+$("spSave").addEventListener("click", async ()=>{
+  $("spSave").disabled = true;
+  const r = await spPost("/speech", spForm());
+  if (!r.ok){ spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); renderSpeechCard(); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg("✓ Kaydedildi", "teal");
 });
 $("spTest").addEventListener("click", async ()=>{
   const f = spForm();
   $("spTest").disabled = true; spMsg("Bağlanılıyor…");
-  const r = await spPost("/speech/test", { url: f.url, token: f.token });
+  const r = await spPost("/speech/test", {});
   $("spTest").disabled = false;
   if (!r.ok){ spMsg("✗ " + esc(r.error || "bağlanılamadı"), "red"); return; }
   const ms = r.models || [];
   $("spModels").innerHTML = ms.map((m)=> `<option value="${esc(m)}">`).join("");
-  if (!f.model && ms.length === 1){ $("spModel").value = ms[0]; renderSpeechCard(); }
+  // Ses modeli adı genelde "whisper" içerir — tek aday varsa kendiliğinden yaz
+  const ses = ms.filter((m)=> /whisper|speech|asr|audio|ses/i.test(m));
+  if (!f.model && (ses.length === 1 || ms.length === 1)){ $("spModel").value = ses[0] || ms[0]; renderSpeechCard(); }
   const yok = f.model && ms.length && !ms.includes(f.model);
   spMsg(`✓ Bağlandı. Sunucudaki modeller: ${ms.length ? ms.map(esc).join(", ") : "—"}` + (yok ? ` <span style="color:var(--red)">— “${esc(f.model)}” listede yok</span>` : ""), yok ? "muted" : "teal");
 });

@@ -263,7 +263,7 @@ export interface UiServerOptions {
 export interface SpeechApi {
   view(): unknown;
   save(input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown };
-  probe(input: Record<string, unknown>): Promise<{ ok: boolean; models?: string[]; error?: string }>;
+  probe(): Promise<{ ok: boolean; models?: string[]; error?: string }>;
   transcribe(
     audio: Buffer,
     mime: string,
@@ -304,12 +304,12 @@ export interface SpeechApi {
  *   GET  /plan-export?session=&format=md|json  oturumun son onay planını dosya olarak indirir (başka ajana vermek için)
  *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
  *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
- *   GET  /speech        sesle görev yazma ayarları (anahtarın kendisi yok: hasToken, tokenHint) — panel + Ayarlar
+ *   GET  /speech        sesle görev yazma ayarları (adres/anahtar genel bağlantıdan) — panel + Ayarlar
  *   POST /session-rename       { id, name } — oturumu elle yeniden adlandırır (sonra kendiliğinden değişmez)
  *   POST /session-group        { id, group } — oturumu gruba koyar ("" = gruptan çıkar)
  *   POST /session-group-rename { from, to } — grubu yeniden adlandırır ya da dağıtır (to = "")
- *   POST /speech        { url, model?, language?, prompt?, token? (""/null = sil) } — kaydeder (canlı; boş adres = kapat)
- *   POST /speech/test   { url?, token? } — sunucuya bağlanır, yüklü modelleri döner
+ *   POST /speech        { enabled?, model?, language?, prompt? } — kaydeder (canlı)
+ *   POST /speech/test   genel sunucuya bağlanır, yüklü modelleri döner
  *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
  *                   panel uzun kaydı ≤28 sn parçalara böler, önceki parçanın metni x-onceki-metin başlığında
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
@@ -863,7 +863,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
     if (req.url === "/speech/test" && req.method === "POST") {
       readJson(req, async (parsed) => {
         if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
-        json(res, 200, await options.speech.probe(parsed));
+        json(res, 200, await options.speech.probe());
       });
       return;
     }
