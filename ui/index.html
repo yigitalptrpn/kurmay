@@ -3898,6 +3898,7 @@ function showTaskCard() {
 }
 
 async function startTask() {
+  if (typeof gorevYazimiBitir === "function") gorevYazimiBitir();
   const task = $("taskInput").value.trim();
   // TFS modu: seçili iş öğesi varsa görev ondan kurulur (kutudaki metin ek talimat, boş olabilir)
   const wi = tfsOn() && wiSel ? wiSel : null;
@@ -4372,14 +4373,14 @@ const ADIM = { analist: "Analist", analisti: "Analist", "saha timi": "Saha Timi"
 const KOMUTLAR = [
   { ornek: "yardım · komutlar", re: /^(yardim|komutlar|komut listesi|ne(ler)? (diyebilirim|soyleyebilirim))$/, yap: () => komutYardim() },
   { ornek: "yeni oturum aç", re: /^yeni (bir )?(oturum|gorev)( ac| baslat)?$/, yap: () => { openSession(""); tamam("Yeni oturum taslağı açıldı — görevi yaz ya da söyle"); } },
-  { ornek: "onay beklemeden devam et", re: /(onay beklemeden|onaysiz|otomatik ilet).*(kapat|iptal)|^plan onay beklesin$|^onay beklesin$|^(plan )?onayi bekle$/, yap: () => fwdSesle(false) },
-  { re: /onay beklemeden|onaysiz (ilet|gec|devam)|otomatik ilet|^plan onaysiz/, yap: () => fwdSesle(true) },
+  { ornek: "onay beklemeden devam et · onay beklesin", re: /^((plan )?onay beklesin|(plan )?onayi bekle|(onaysiz|otomatik) iletmeyi kapat|onay beklemeden (devam etmeyi|ilerlemeyi|gecmeyi) kapat)$/, yap: () => fwdSesle(false) },
+  { re: /^(plan )?(onay beklemeden (devam et|ilerle|gec|ilet|gonder)|onaysiz (ilet|gec|devam et)|otomatik ilet(meyi ac)?)$/, yap: () => fwdSesle(true) },
   { ornek: "onayla", re: /^(onayla|onayliyorum|plani onayla|onay ver|devam et)$/, yap: () => akisOnay(false) },
   { ornek: "bitir", re: /^(bitir|akisi bitir)$/, yap: () => akisOnay(true) },
   { ornek: "reddet, çünkü …", re: /^(reddet|yeniden planla)(\s+(cunku|gerekce|gerekcesi)?\s*(.*))?$/d, yap: (m, ham) => akisRet(serbest(ham, m, 4)) },
   { ornek: "durdur", re: /^(durdur|gorevi durdur|calismayi durdur|iptal et|dur)$/, yap: () => akisDur() },
   { ornek: "şimdi çalıştır", re: /^simdi calistir$/, yap: () => goruluyor("schedule") ? ($("btnRunNow").click(), tamam("Zamanlanan iş şimdi başlatılıyor")) : olmaz("Zamanlanmış bir iş yok.") },
-  { ornek: "görev: …", re: /^(gorev|yaz)\s+(.+)$/d, yap: (m, ham) => { metniYaz(serbest(ham, m, 2)); tamam("Görev kutusuna yazıldı — “başlat” de ya da Enter'a bas"); } },
+  { ornek: "görev … (sonra “başlat”)", re: /^(gorev|gorevi yaz|yaz)(\s+(.+))?$/d, yap: (m, ham) => gorevYazimiBasla(m.indices[3] ? ham.slice(m.indices[3][0]).trim() : "") },
   { ornek: "başlat", re: /^(baslat|gonder|gorevi baslat|gorevi gonder)$/, yap: () => gorevBaslatSesle() },
   { ornek: "kutuyu temizle", re: /^(kutuyu temizle|gorevi temizle|yaziyi sil|temizle)$/, yap: () => { $("taskInput").value = ""; $("taskInput").dispatchEvent(new Event("input")); tamam("Görev kutusu temizlendi"); } },
   { ornek: "ayarları aç", re: /^(ayarlar(i)?( ac)?|ayarlara (git|gec))$/, yap: () => sayfaAc("/config", "Ayarlar") },
@@ -4403,7 +4404,7 @@ const KOMUTLAR = [
   { ornek: "oturumu … olarak adlandır", re: /^(oturumun adini|oturumu|bu oturumu)\s+(.+?)\s+(yap|olarak adlandir|diye adlandir)$|^oturumu yeniden adlandir\s+(.+)$/d, yap: (m, ham) => adSesle(serbest(ham, m, m.indices[2] ? 2 : 4)) },
   { ornek: "oturumu … grubuna taşı", re: /^(bu )?oturumu\s+(.+?)\s+grubuna\s+(tasi|koy|ekle|al)$/d, yap: (m, ham) => grupSesle(serbest(ham, m, 2)) },
   { re: /^(bu )?oturumu gruptan (cikar|al)$/, yap: () => grupSesle("") },
-  { ornek: "… ara", re: /^(ara\s+(.+)|(.+?)\s+(ara|aramasi yap|bul))$/d, yap: (m, ham) => aramaSesle(serbest(ham, m, m.indices[2] ? 2 : 3)) },
+  { ornek: "… ara", re: /^(ara\s+(.+)|(.+?)\s+(diye ara|ara|aramasi yap))$/d, yap: (m, ham) => aramaSesle(serbest(ham, m, m.indices[2] ? 2 : 3)) },
   { ornek: "… oturumunu aç", re: /^((.+?)\s+(oturumunu|oturumuna|oturumu)\s*(ac|gec|git)?|oturumu ac\s+(.+))$/d, yap: (m, ham) => oturumSesle(serbest(ham, m, m.indices[2] ? 2 : 5)) },
 ];
 function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
@@ -4412,7 +4413,20 @@ function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
   // iki tarafta aynı yapılır — böylece yakalanan serbest metin (gerekçe, ad) özgün cümleden kesilir
   const f = komutSade(ham).replace(/\b(hey\s+)?kurmay\b|\blutfen\b/g, (x) => " ".repeat(x.length));
   const bas = f.length - f.trimStart().length, son = f.trimEnd().length;
-  const sade = f.slice(bas, son), hamK = ham.slice(bas, son);
+  // hamK sondaki noktalamayı da taşır (eşleşme sade'de, kesim aynı yerlerden hamK'de)
+  const sade = f.slice(bas, son), hamK = ham.slice(bas);
+  // Görev yazılıyorsa: cümleler komut sanılmaz, kutuya eklenir — yalnızca başlat / tamam / iptal
+  if (gorevYazimi) {
+    const t = sade.replace(/\s+/g, " ");
+    if (/^(baslat|gonder|gorevi (baslat|gonder))$/.test(t)) { gorevYazimiBitir(); return gorevBaslatSesle(); }
+    if (/^(tamam|bitti|gorev bitti|yeter)$/.test(t)) { gorevYazimiBitir(); return tamam("Görev yazımı bitti — göndermek için “başlat” de"); }
+    if (/^(iptal|vazgec|gorevi sil|gorevi iptal et)$/.test(t)) {
+      gorevYazimiBitir(); $("taskInput").value = ""; $("taskInput").dispatchEvent(new Event("input"));
+      return tamam("Görev silindi");
+    }
+    metniYaz(ham);
+    return gorevYazimiNot();
+  }
   // Sorulmuş bir soru varsa önce cevap mı bak
   if (komutOnay) {
     const t = sade.replace(/\s+/g, " ");
@@ -4427,11 +4441,37 @@ function komutUygula(ham, { dinleme: dinlemede = false } = {}) {
       return;
     }
   }
-  // Komut değil. Dinleme modunda kutuya yazılmaz (odadaki konuşma dolmasın), bas-konuşta dikte olur
-  if (dinlemede) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`);
-  if ($("taskCard").classList.contains("hidden")) return olmaz(`Anlaşılmadı: “${esc(ham)}”. Komutları görmek için “yardım” de.`);
-  metniYaz(ham);
-  sesNot(`Komut olarak anlaşılmadı, görev kutusuna yazıldı: “${esc(ham)}” <small>“yardım” de: komut listesi</small>`);
+  // Komut değil: hiçbir şey yapılmaz (görev yazdırmak için "görev …")
+  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`);
+}
+// ── Görev yazımı: "görev …" ile başlar, sonraki cümleler kutuya eklenir ──
+// Bitiş: "başlat"/"gönder" (gönderir), "tamam"/"bitti" (kutuda bırakır), "iptal"/"vazgeç" (siler),
+// ya da 20 sn konuşma yok (kutuda bırakır). Bu arada söylenen hiçbir şey komut sayılmaz.
+let gorevYazimi = null; // { zaman }
+const GOREV_YAZIM_MS = 20000;
+function gorevYazimiBasla(metin) {
+  if ($("taskCard").classList.contains("hidden")) return olmaz("Şu an görev verilemiyor — bu oturumda iş sürüyor. Bitince ya da “yeni oturum aç” deyip yeniden dene.");
+  gorevYazimi = {};
+  if (metin) metniYaz(metin);
+  gorevYazimiNot();
+}
+function gorevYazimiNot() {
+  clearTimeout(gorevYazimi.zaman);
+  gorevYazimi.zaman = setTimeout(() => {
+    if (!gorevYazimi) return;
+    gorevYazimiBitir();
+    sesNot("Görev yazımı bitti (20 sn konuşma olmadı) — metin kutuda. Göndermek için “başlat” de.");
+  }, GOREV_YAZIM_MS);
+  const kutu = $("taskInput").value.trim();
+  sesNot(`✎ <b>Görev yazılıyor</b> — söylediklerin kutuya ekleniyor${kutu ? `: “${esc(kutu.length > 90 ? "…" + kutu.slice(-90) : kutu)}”` : ""}` +
+    `<small>Gönder: “başlat” · Bitir: “tamam” · Sil: “iptal”</small>`, "tamam", true);
+  if (dinleme) dinlemeDurum("görev yazılıyor");
+}
+function gorevYazimiBitir() {
+  if (!gorevYazimi) return;
+  clearTimeout(gorevYazimi.zaman);
+  gorevYazimi = null;
+  if (dinleme) dinlemeDurum("konuşmanı bekliyorum");
 }
 function sayfaAc(adres, ad) { tamam(`${esc(ad)} açılıyor…`); setTimeout(() => (location.href = adres), 400); }
 function fwdSesle(onaysiz) {
@@ -4459,10 +4499,16 @@ function akisDur() {
   if ($("btnCancel").classList.contains("hidden")) return olmaz("Bu oturumda çalışan bir iş yok.");
   onayIste("Çalışan iş durdurulsun mu?", () => { sendCancel(); tamam("Durduruluyor…"); });
 }
-function gorevBaslatSesle() {
+async function gorevBaslatSesle() {
   if ($("taskCard").classList.contains("hidden")) return olmaz("Şu an görev verilemiyor — bu oturumda iş sürüyor.");
   if (!$("taskInput").value.trim() && !wiSel && !prSel && !taskFiles.length) return olmaz("Görev kutusu boş. Önce “görev …” diye söyle.");
-  startTask(); tamam("Görev başlatıldı");
+  // Sunucunun cevabını bekle: reddedilirse (ör. aynı anda çalışan görev sınırı) sebebini söyle
+  $("taskError").textContent = "";
+  sesNot("⏳ Görev gönderiliyor…", "bilgi", true);
+  await startTask();
+  const hata = $("taskError").textContent.trim();
+  if (hata) olmaz("Görev başlatılamadı: " + esc(hata));
+  else tamam("Görev başlatıldı");
 }
 function effortSesle(ne) {
   ne = ne.replace(/\s+/g, " ").trim();
@@ -4513,7 +4559,7 @@ function oturumSesle(ad) {
 function komutYardim() {
   const satir = KOMUTLAR.filter((k) => k.ornek).map((k) => `<li>${esc(k.ornek)}</li>`).join("");
   sesNot(`<b>Sesli komutlar</b> <small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın</small><ul class="ses-yardim">${satir}</ul>` +
-    `<small>Ctrl+Boşluk'a kısa bas: dinleme modu (kapatana kadar her cümle komut). Basılı tutarken listede olmayan cümle görev kutusuna yazılır; dinleme modunda yazılmaz. Onayla, reddet, bitir ve durdur önce sorar.</small>` +
+    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu.</small>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true);
 }
 // Basılı tut = tek komut (bas-konuş); kısa bas = dinleme modunu aç / kapat.
@@ -4542,6 +4588,7 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") {
     if (komut?.rec) { ev.preventDefault(); komutDur(true); }
     else if (komutOnay) { ev.preventDefault(); onayCevap(false); }
+    else if (gorevYazimi) { ev.preventDefault(); gorevYazimiBitir(); sesNot("Görev yazımı bitti — metin kutuda."); }
     else if (dinleme) { ev.preventDefault(); dinlemeKapat(); }
     else if (!$("sesNot").hidden) sesNotKapat();
   }
@@ -4649,7 +4696,7 @@ function dinlemeGonder(d, kareler) {
       sesNot("Dinleme: " + esc(e?.message || e), "hata");
     } finally {
       d.bekleyen--;
-      if (dinleme === d && !d.bekleyen) dinlemeDurum(d.konusuyor ? "duyuyorum…" : "konuşmanı bekliyorum");
+      if (dinleme === d && !d.bekleyen) dinlemeDurum(d.konusuyor ? "duyuyorum…" : gorevYazimi ? "görev yazılıyor" : "konuşmanı bekliyorum");
     }
   });
 }
