@@ -73,6 +73,7 @@ import {
   getPullRequest,
   getRepository,
   myPullRequests,
+  prStatusSummary,
   repoInfoFromRemote,
   replyToThread,
   setThreadStatus,
@@ -994,6 +995,9 @@ async function main() {
     /** PR kartı: PR, açık yorumlar, değişen dosyalar, yerel deponun durumu (dir: görevin dizini) */
     prPreview: (id: number, dir?: string) => previewPr(tfsConn(), id, dir && dirOk(dir) ? dir : cwd),
     prMine: () => myPullRequests(tfsConn()),
+    /** Açık çekme isteklerimin durumu (sesli komut): oylar, açık / yeni yorumlar, çakışma */
+    prStatus: (since: Record<string, string>, fallbackSince: string) =>
+      prStatusSummary(tfsConn(), since, fallbackSince),
     /** "Dala geç": yerel depoyu PR'ın kaynak dalına geçirir (çalışma ağacı temizse) */
     prCheckout: async (id: number, dir?: string) => {
       const c = tfsConn();

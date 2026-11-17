@@ -109,6 +109,7 @@ export interface TfsApi {
   dismiss(session: string): { ok: boolean; error?: string };
   prPreview(id: number, dir?: string): Promise<unknown>;
   prMine(): Promise<unknown>;
+  prStatus(since: Record<string, string>, fallbackSince: string): Promise<unknown>;
   prCheckout(id: number, dir?: string): Promise<unknown>;
   prWrite(
     session: string,
@@ -348,6 +349,7 @@ export interface SpeechApi {
  *   POST /tfs/yazma     { session } — bu sonucu yazma (kart kapanır)
  *   GET  /tfs/pr?id=&dizin=     çekme isteği kartı: PR, açık yorum dizileri, değişen dosyalar, yerel deponun durumu
  *   GET  /tfs/pr-benim          açık PR'larım (açtıklarım + inceleyeni olduklarım)
+ *   POST /tfs/pr-durum          { since: {no: tarih}, fallback } → açık PR'larımın oyları, açık / yeni yorumları
  *   POST /tfs/pr-dal    { id, dizin? } — yerel depoyu PR'ın dalına geçirir (çalışma ağacı temizse)
  *   POST /tfs/pr-yaz    { session, push, message?, replies[], comments[], general? } — PR'a yazar (tfs_pr_written)
  *   POST /tfs/pr-yazma  { session } — PR'a yazma (kart kapanır)
@@ -1370,6 +1372,22 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       if (req.method === "GET" && p === "/tfs/pr-benim") {
         tfs.prMine().then((items) => json(res, 200, { ok: true, items }), fail);
+        return;
+      }
+      if (req.method === "POST" && p === "/tfs/pr-durum") {
+        readJson(req, (b) => {
+          const since: Record<string, string> = {};
+          const raw = b?.since;
+          if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+            for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+              if (/^\d{1,9}$/.test(k) && typeof v === "string" && !Number.isNaN(Date.parse(v))) since[k] = v;
+          }
+          const fb =
+            typeof b?.fallback === "string" && !Number.isNaN(Date.parse(b.fallback))
+              ? b.fallback
+              : new Date(Date.now() - 86_400_000).toISOString();
+          tfs.prStatus(since, fb).then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);
+        });
         return;
       }
       if (req.method === "POST" && p === "/tfs/pr-dal") {

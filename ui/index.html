@@ -323,6 +323,10 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .ses-not button { min-height:32px; padding:4px 14px; text-transform:none; }
 .ses-not button[data-oturum] { margin:6px 6px 0 0; }
 .ses-not .ses-liste { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.ses-not .pr-durum button { text-align:left; display:block; width:100%; padding:6px 10px; }
+.ses-not .pr-durum button b { display:block; overflow-wrap:anywhere; }
+.ses-not .pr-durum button small { margin-top:2px; }
+.ses-not .ses-alt { font-size:12px; color:var(--muted); margin-top:6px; }
 .ses-not .ses-liste button[data-oturum] { margin:0; display:flex; align-items:center; gap:8px; text-align:left; justify-content:flex-start; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ses-not .st { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, currentColor 13%, transparent); flex:none; }
 /* Sesle açılan sayfalar (Ayarlar, Aç/Kapat…) panelin içinde katman olarak açılır — dinleme sürer, "panele dön" kapatır */
@@ -4678,7 +4682,8 @@ function onayCevap(evet) {
   if (evet) o.yap(); else if (o.hayir) o.hayir(); else sesNot("Vazgeçildi, bir şey yapılmadı.");
 }
 $("sesNot").addEventListener("click", (ev) => {
-  const b = ev.target.closest("[data-ses], [data-oturum]");
+  const b = ev.target.closest("[data-ses], [data-oturum], [data-pr]");
+  if (b?.dataset.pr) { sesNotKapat(); tfsSecSesle(b.dataset.pr, true); return; }
   if (b?.dataset.ses === "evet") onayCevap(true);
   else if (b?.dataset.ses === "hayir") onayCevap(false);
   else if (b?.dataset.ses === "kapat") sesNotKapat();
@@ -4701,6 +4706,7 @@ const KOMUTLAR = [
   { ornek: "yeni oturum aç", re: /^yeni (bir )?(oturum|gorev)( ac| baslat)?$/, yap: () => { openSession(""); tamam("Yeni oturum taslağı açıldı — görevi yaz ya da söyle"); } },
   // ── TFS ──
   { ornek: "TFS ayarlarını aç", re: /^(tfs|tefes) (ayarlari(ni)?|ayari(ni)?|ayarlarina git|kartini ac)( ac)?$/, yap: () => sayfaAc("/config#tfsCard", "TFS ayarları") },
+  { ornek: "çekme isteklerimin durumu · çekme isteklerime yorum gelmiş mi", re: /^((benim )?(acik )?cekme isteklerim(in|e|i|de)?|(acik )?pr\s*(lar)?(im|imin|ima|imi|imda)?)(\s+(durumu|durumlari|ne durumda|ne alemde|nasil|neler var|yeni ne var|yorum (gelmis|geldi|var)( mi)?|yorumlari))?(\s+(goster|soyle|getir|oku|nedir))?$/, yap: () => prDurumSesle() },
   { ornek: "TFS modunu aç / kapat", re: /^(tfs|tefes)( modu(nu)?)? (?<is>ac|kapat|etkinlestir|devre disi birak)$/, yap: (m) => tfsModSesle(/ac|etkin/.test(m.groups.is)) },
   { ornek: "1201 numaralı maddeyi çek", re: /^(?<no>.+?) (numarali )?(is ogesini|is ogesi|maddeyi|maddesini|kaydi|kaydini|isi) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), false) },
   { re: /^(is ogesi|madde|kayit) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), false) },
@@ -4802,7 +4808,7 @@ const KALIPLAR = [
   "yardım", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
   "<numara> numaralı maddeyi çek", "<numara> numaralı çekme isteğini aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
-  "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
+  "çekme isteklerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
   "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
   "ayarları aç", "aç kapat sayfasını aç", "güvenlik raporlarını aç", "sürüm notlarını aç",
   "kenar çubuğunu aç", "kenar çubuğunu kapat", "temayı <evrak|radar|harita|karargah|sade|gece> yap",
@@ -4987,6 +4993,66 @@ async function tfsAtananlar() {
   const liste = wiItems.slice();
   if (n && okumaTeklif(`${n} kayıt listelendi.`, () => listeSoz(liste), "Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”")) return;
   tamam(n ? `${n} kayıt listelendi <small>Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”</small>` : "Sana atanmış açık iş öğesi ya da çekme isteği yok.");
+}
+// ── Çekme isteklerimin durumu: oylar, açık / yeni yorumlar, çakışma — sesle özet + tıklanır liste ──
+// "Yeni yorum" = son bakıştan beri başkalarının yazdığı (sistem kayıtları ve kendi yorumların hariç);
+// son bakış PR başına tarayıcıda tutulur, hiç bakılmamışsa son 24 saat.
+const PR_BAKIS = "kurmay-pr-son-bakis";
+const veIle = (l) => l.length > 1 ? l.slice(0, -1).join(", ") + " ve " + l[l.length - 1] : l[0] || "";
+function prDurumParcalari(it) {
+  const ad = (f) => it.reviewers.filter(f).map((r) => r.name);
+  const onay = ad((r) => r.vote >= 5), bek = ad((r) => r.vote === -5), ret = ad((r) => r.vote === -10);
+  const p = [];
+  if (it.isDraft) p.push("taslak");
+  if (onay.length) p.push(`${veIle(onay)} onayladı`);
+  if (bek.length) p.push(`${veIle(bek)} düzeltme bekliyor`);
+  if (ret.length) p.push(`${veIle(ret)} reddetti`);
+  if (!onay.length && !bek.length && !ret.length) p.push(it.reviewers.length ? "henüz kimse oy vermedi" : "inceleyen yok");
+  if (it.newComments) p.push(`${veIle(it.newAuthors)} ${it.newComments} yeni yorum yazdı`);
+  p.push(it.activeThreads ? `${it.activeThreads} açık yorum var` : "açık yorum yok");
+  if (it.conflicts) p.push("birleştirmede çakışma var");
+  return p;
+}
+async function prDurumSesle() {
+  if (!tfsOn()) return olmaz("TFS modu kapalı ya da ayarları eksik. “TFS modunu aç” de ya da “TFS ayarlarını aç” deyip bağlantıyı gir.");
+  sesNot("⏳ Çekme isteklerin TFS'ten okunuyor…", "bilgi", true);
+  let bakis = {};
+  try { bakis = JSON.parse(localStorage.getItem(PR_BAKIS) || "{}") || {}; } catch {}
+  const simdi = new Date().toISOString();
+  let r;
+  try {
+    const res = await fetch("/tfs/pr-durum", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ since: bakis, fallback: new Date(Date.now() - 864e5).toISOString() }) });
+    r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
+  } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  if (!r.ok) return olmaz("Çekme istekleri okunamadı: " + esc(r.error || "bilinmeyen hata"));
+  // Son bakış: yalnızca okunabilenler; kapanan istekler listeden kendiliğinden düşer
+  const yeniBakis = {};
+  for (const it of r.items) yeniBakis[it.id] = it.error ? bakis[it.id] || "" : simdi;
+  try { localStorage.setItem(PR_BAKIS, JSON.stringify(yeniBakis)); } catch {}
+  const mine = r.items.filter((it) => it.role === "acan");
+  const bekleyen = r.items.filter((it) => it.role === "inceleyen" && !it.error && !(it.myVote ?? 0));
+  if (!mine.length && !bekleyen.length) return sesNot("Açtığın açık çekme isteği yok, incelemeni bekleyen de yok.");
+  const soz = [], satir = [];
+  if (mine.length) soz.push(`${mine.length} açık çekme isteğin var.`);
+  else soz.push("Açtığın açık çekme isteği yok.");
+  for (const it of mine.slice(0, 6)) {
+    if (it.error) { soz.push(`${it.id} okunamadı.`); satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b><small>⚠ okunamadı: ${esc(it.error)}</small></button>`); continue; }
+    const p = prDurumParcalari(it);
+    soz.push(`${it.id}, ${it.title}: ${p.join(", ")}.`);
+    satir.push(`<button type="button" data-pr="${it.id}"><b>${it.newComments ? "● " : ""}!${it.id} · ${esc(it.title)}</b><small>${esc(p.join(" · "))}</small></button>`);
+  }
+  if (mine.length > 6) soz.push(`${mine.length - 6} tane daha var, ekranda.`);
+  for (const it of mine.slice(6)) satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b></button>`);
+  if (bekleyen.length) {
+    soz.push(`İncelemeni bekleyen ${bekleyen.length} çekme isteği var: ` + bekleyen.slice(0, 4).map((it) => `${it.id}, ${it.title}${it.createdBy ? `, ${it.createdBy} açtı` : ""}`).join("; ") + ".");
+    satir.push(`<span class="ses-alt">İncelemeni bekleyenler</span>`);
+    for (const it of bekleyen) satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b><small>${esc([it.createdBy && `${it.createdBy} açtı`, it.activeThreads && `${it.activeThreads} açık yorum`].filter(Boolean).join(" · "))}</small></button>`);
+  }
+  soz.push("Birini açmak için, örneğin, " + (mine[0] || bekleyen[0]).id + " numaralı çekme isteğini aç de.");
+  sesNot(`<b>Çekme isteklerin</b><span class="ses-liste pr-durum">${satir.join("")}</span>` +
+    `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı çekme isteğini aç” de.</small>` +
+    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz.join(" "));
 }
 const SIRA = { ilk: 1, birinci: 1, ikinci: 2, ucuncu: 3, dorduncu: 4, besinci: 5, altinci: 6, yedinci: 7, sekizinci: 8, dokuzuncu: 9, onuncu: 10 };
 function tfsListedenSec(sira) {
