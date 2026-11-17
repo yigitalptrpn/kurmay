@@ -295,13 +295,12 @@ input.sw:disabled { opacity:.5; cursor:default; }
     </div>
   </div>
   <div style="margin-top:10px">
-    <label class="minl" for="spPrompt">İpucu — sık söylediğin özel adlar ve terimler (isteğe bağlı)</label>
+    <label class="minl" for="spPrompt">İpucu — ses tanımanın doğru yazması için özel adlar ve terimler (isteğe bağlı)</label>
     <input type="text" id="spPrompt" spellcheck="false" placeholder="Örnek: Kurmay, Analist, Saha Timi, sipariş servisi, Kafka, endpoint" style="width:100%">
   </div>
   <div class="fhint" id="spConn" style="margin-top:8px"></div>
   <div class="rfoot" style="margin-top:8px">
     <button class="primary" id="spSave" type="button" disabled>Kaydet</button>
-    <button id="spTest" type="button">Bağlantıyı dene</button>
     <span id="spMsg"></span>
   </div>
 </div>
@@ -964,6 +963,7 @@ let spSaved = null;
 async function loadSpeechCard(){
   try { spSaved = await (await fetch("/speech")).json(); } catch { spSaved = null; }
   fillSpeech();
+  spModelOnerileri();
 }
 function fillSpeech(){
   const t = spSaved || {};
@@ -1017,20 +1017,17 @@ $("spSave").addEventListener("click", async ()=>{
   spSaved = r.view; spCfgEsitle(); fillSpeech();
   spMsg("✓ Kaydedildi", "teal");
 });
-$("spTest").addEventListener("click", async ()=>{
-  const f = spForm();
-  $("spTest").disabled = true; spMsg("Bağlanılıyor…");
-  const r = await spPost("/speech/test", {});
-  $("spTest").disabled = false;
-  if (!r.ok){ spMsg("✗ " + esc(r.error || "bağlanılamadı"), "red"); return; }
-  const ms = r.models || [];
-  $("spModels").innerHTML = ms.map((m)=> `<option value="${esc(m)}">`).join("");
-  // Ses modeli adı genelde "whisper" içerir — tek aday varsa kendiliğinden yaz
-  const ses = ms.filter((m)=> /whisper|speech|asr|audio|ses/i.test(m));
-  if (!f.model && (ses.length === 1 || ms.length === 1)){ $("spModel").value = ses[0] || ms[0]; renderSpeechCard(); }
-  const yok = f.model && ms.length && !ms.includes(f.model);
-  spMsg(`✓ Bağlandı. Sunucudaki modeller: ${ms.length ? ms.map(esc).join(", ") : "—"}` + (yok ? ` <span style="color:var(--red)">— “${esc(f.model)}” listede yok</span>` : ""), yok ? "muted" : "teal");
-});
+/** Model önerileri: genel sunucudaki modeller sessizce alınır (başarısızsa öneri yok, kart yine çalışır) */
+async function spModelOnerileri(){
+  try {
+    const r = await spPost("/speech/test", {});
+    const ms = (r.ok && r.models) || [];
+    $("spModels").innerHTML = ms.map((m)=> `<option value="${esc(m)}">`).join("");
+    // Ses modeli adı genelde "whisper" içerir — tek aday varsa ve alan boşsa kendiliğinden yaz
+    const ses = ms.filter((m)=> /whisper|speech|asr|audio/i.test(m));
+    if (!$("spModel").value && ses.length === 1){ $("spModel").value = ses[0]; renderSpeechCard(); }
+  } catch { /* öneri yok */ }
+}
 
 // TFS modu kartı: GET/POST /tfs, POST /tfs/dene. Erişim anahtarı sunucuda .gizli/'de durur — sayfa
 // yalnızca "kayıtlı mı" ve son 4 karakterini bilir; boş bırakılan anahtar alanı kayıtlıyı değiştirmez.
