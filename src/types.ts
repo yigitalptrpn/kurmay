@@ -397,15 +397,19 @@ export interface AppConfig extends ProviderConfig {
    *  "Uzak ajana gönder" düğmesi planı bu adrese JSON olarak POST eder. apiKey
    *  verilirse "Authorization: Bearer" başlığıyla gider. Akışı etkilemez. */
   planWebhook?: { url: string; apiKey?: string };
-  /** Sesle görev yazma (Ayarlar): panelde mikrofon düğmesi kaydı bu sunucudaki ses tanıma
-   *  modeline gönderir, metin görev kutusuna yazılır. Erişim anahtarı burada DEĞİL `.gizli/ses.json`'da. */
+  /** Sesle görev yazma (Ayarlar): panelde mikrofon düğmesi kaydı ses tanıma modeline gönderir,
+   *  metin görev kutusuna yazılır. Bağlantı varsayılan olarak genel bağlantıdır (baseUrl + apiKey). */
   speech?: SpeechConfig;
 }
 
-/** Ses tanıma sunucusu (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM) */
+/** Ses tanıma (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM) */
 export interface SpeechConfig {
-  /** Sunucu adresi (ör. http://sunucu:8000; sonundaki /v1 kabul edilir) */
-  url: string;
+  /** Açık mı. Yoksa: ayrı adres girilmişse açık sayılır (eski kayıtlar) */
+  enabled?: boolean;
+  /** AYRI ses sunucusu adresi (ör. http://sunucu:8000; sonundaki /v1 kabul edilir). Yoksa genel
+   *  bağlantı (`baseUrl`) kullanılır. Ayrı sunucunun anahtarı `.gizli/ses.json`'da — genel anahtar
+   *  başka sunucuya GÖNDERİLMEZ */
+  url?: string;
   /** Model adı (ör. openai/whisper-large-v3) — sunucuda tek model varsa boş kalabilir */
   model?: string;
   /** Konuşma dili (ISO kodu, varsayılan "tr"); "auto" = model kendisi bulsun */

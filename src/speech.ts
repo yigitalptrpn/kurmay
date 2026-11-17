@@ -28,11 +28,41 @@ export function writeSpeechToken(configRoot: string, token: string | null): void
   writeSecret(configRoot, "ses", token);
 }
 
-/** Panel ve Ayarlar için durum — anahtarın kendisi yok */
-export function speechView(s: SpeechConfig | undefined, configRoot: string) {
+/** Genel bağlantı (Ayarlar → Bağlantı): ajanların da kullandığı sunucu adresi ve anahtarı */
+export interface GeneralConnection {
+  baseUrl?: string;
+  apiKey?: string;
+}
+/** Genel bağlantı: ayar dosyası, yoksa ortam değişkeni (Kurmay'ı ortamla yönlendirenler için) */
+export function generalConnection(g: GeneralConnection): { url: string; token?: string } {
+  const url = (g.baseUrl || process.env.ANTHROPIC_BASE_URL || "").trim();
+  const token = (g.apiKey || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || "").trim();
+  return { url, ...(token ? { token } : {}) };
+}
+export const speechEnabled = (s: SpeechConfig | undefined) => !!s && (s.enabled ?? !!s.url);
+/**
+ * Kaydın gideceği adres ve anahtar. Ayrı adres girildiyse o ve `.gizli/ses.json`'daki anahtar —
+ * genel anahtar BAŞKA bir sunucuya gönderilmez. Girilmediyse genel bağlantının adresi ve anahtarı.
+ */
+export function speechConnection(s: SpeechConfig | undefined, g: GeneralConnection, configRoot: string) {
+  const own = s?.url?.trim();
+  if (own) return { url: own, token: readSpeechToken(configRoot).token, shared: false };
+  const gen = generalConnection(g);
+  return { url: gen.url, token: gen.token, shared: true };
+}
+
+/** Panel ve Ayarlar için durum — anahtarların kendisi yok */
+export function speechView(s: SpeechConfig | undefined, g: GeneralConnection, configRoot: string) {
   const tok = readSpeechToken(configRoot);
+  const conn = speechConnection(s, g, configRoot);
+  const enabled = speechEnabled(s);
   return {
-    ready: !!s?.url,
+    enabled,
+    ready: enabled && !!conn.url,
+    /** Kaydın gideceği adres (genel ya da ayrı) ve genel bağlantının adresi (Ayarlar'da bilgi olarak) */
+    activeUrl: conn.url,
+    shared: conn.shared,
+    generalUrl: generalConnection(g).url,
     url: s?.url ?? "",
     model: s?.model ?? "",
     language: s?.language ?? "tr",
@@ -123,7 +153,7 @@ export async function probeSpeech(
 
 /** Ses kaydını metne çevirir */
 export async function transcribe(
-  s: SpeechConfig,
+  s: SpeechConfig & { url: string },
   token: string | undefined,
   audio: Buffer,
   mime: string,

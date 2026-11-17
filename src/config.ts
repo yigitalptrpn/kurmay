@@ -144,10 +144,13 @@ export function loadAppConfig(configPath: string): AppConfig {
 
   if (cfg.speech !== undefined) {
     const sp = cfg.speech as unknown as Record<string, unknown> | null;
-    if (!sp || typeof sp !== "object" || Array.isArray(sp) || typeof sp.url !== "string") {
+    if (!sp || typeof sp !== "object" || Array.isArray(sp) || (sp.url !== undefined && typeof sp.url !== "string")) {
       throw new Error(
-        `ayar dosyası: "speech" {"url": "http://…", "model"?: "…", "language"?: "tr"} biçiminde olmalı (verilen: ${JSON.stringify(sp)})`,
+        `ayar dosyası: "speech" {"enabled": true, "model": "…", "language"?: "tr", "url"?: "http://…"} biçiminde olmalı (verilen: ${JSON.stringify(sp)})`,
       );
+    }
+    if (sp.enabled !== undefined && typeof sp.enabled !== "boolean") {
+      throw new Error(`ayar dosyası: "speech.enabled" true/false olmalı`);
     }
     for (const k of ["model", "language", "prompt"]) {
       if (sp[k] !== undefined && typeof sp[k] !== "string") throw new Error(`ayar dosyası: "speech.${k}" metin olmalı`);
@@ -157,8 +160,8 @@ export function loadAppConfig(configPath: string): AppConfig {
         `ayar dosyası: "speech.token" burada durmaz — anahtarı Ayarlar'dan gir (.gizli/ses.json'a yazılır)`,
       );
     }
-    if (!sp.url.trim()) delete cfg.speech;
-    else if (!/^https?:\/\/[^\s]+$/i.test(sp.url.trim())) {
+    if (typeof sp.url === "string" && !sp.url.trim()) delete sp.url;
+    if (typeof sp.url === "string" && !/^https?:\/\/[^\s]+$/i.test(sp.url.trim())) {
       throw new Error(
         `ayar dosyası: "speech.url" http:// ya da https:// ile başlayan bir adres olmalı (verilen: ${JSON.stringify(sp.url)})`,
       );
