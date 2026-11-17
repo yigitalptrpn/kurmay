@@ -169,6 +169,8 @@ async function executeRun(o: {
   attachmentIntro?: string;
   /** Akış bittikten sonra, koşu kaydı kapanmadan (TFS'e yazma) — bu koşunun olaylarıyla */
   afterRun?: (events: TimedEvent[]) => Promise<void>;
+  /** Oturumun adı değişti (Analist'in kısa başlığı) — lobi yenilensin */
+  onRename?: () => void;
 }): Promise<void> {
   const { task, cfg, agents, cwd, runtime, entry } = o;
   const display = o.display ?? task;
@@ -180,6 +182,13 @@ async function executeRun(o: {
   const runLog = path.join(o.runsDir, logName);
   o.sessions.addRunLog(entry.id, logName, display);
   const unsubscribe = bus.subscribe((e) => fs.appendFileSync(runLog, JSON.stringify(e) + "\n"));
+  // Analist (entry) ilk görevde kısa başlık verirse oturumun adı o olur — görevin ilk 60 karakteri
+  // listede çoğu zaman aynı başlıyor, ayırt edilemiyordu. Ek model çağrısı yok: başlık planla gelir.
+  const unsubscribeTitle = bus.subscribe((e) => {
+    if (e.type !== "agent_finished" || e.agent !== cfg.workflow.entry) return;
+    const title = (e.structured as { title?: unknown } | undefined)?.title;
+    if (typeof title === "string" && o.sessions.setTitle(entry.id, title)) o.onRename?.();
+  });
   // Güvenlik denetimi raporu: denetçi düğüm (securityReport) bitince runs/guvenlik/'e kaydedilir
   const unsubscribeReport = watchSecurityReports(bus, o.securityReports, {
     isReportAgent: (agent) =>
@@ -254,6 +263,7 @@ async function executeRun(o: {
   } finally {
     runtime.endRun();
     unsubscribe();
+    unsubscribeTitle();
     unsubscribeReport();
     o.sessions.finishRun(entry.id, sessionStore.entrySessionId, runtime.status, sessionStore.entryContext);
     o.onDone();
@@ -667,6 +677,7 @@ async function main() {
       entry: e,
       securityReports,
       onDone: () => runtimes.notify(),
+      onRename: () => runtimes.notify(),
       startAt: runAt,
       ...(tfs
         ? {

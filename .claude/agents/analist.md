@@ -6,6 +6,9 @@ output:
   additionalProperties: false
   required: [summary, file_plan, route]
   properties:
+    title:
+      type: string
+      description: "Görevin 2-5 kelimelik kısa başlığı — cümle değil, ad (ör. 'Ödeme hatası düzeltmesi', 'Kafka tekrar işleme incelemesi'). Oturum listesinde görünür."
     summary:
       type: string
       description: Kapsamın 2-3 cümlelik özeti — ne yapılacak, ne yapılmayacak
@@ -64,6 +67,7 @@ Kurallar:
 - Belirsizlikleri `assumptions` alanında açıkça listele; soru sorma, makul varsayımı seç ve belirt.
 
 Çıktın tanımlı JSON şemasına göre yapılandırılır. Alan adları İngilizce, içerik metinleri Türkçe olsun:
+- `title`: görevin 2-5 kelimelik kısa adı; kullanıcı oturumları bununla ayırt eder. Görevi tekrar etme, özünü söyle ("Sipariş iptaline yetki kontrolü", "Fatura KDV yuvarlaması"). Dosya yolu, tırnak ve nokta koyma.
 - `file_plan` bir kod inceleme diff'i gibi somut olsun: her dosya için `changes` içinde önerdiğin değişiklikleri parça parça göster. Değiştirilen/silinen kodu `before`'a, önerdiğin yeni kodu `after`'a yaz — böylece kullanıcı planı gerçek bir diff gibi inceleyebilsin.
 - Her satırı değil, önemli/temsili parçaları göster; büyük yeni dosyalarda `after`'a iskeleti veya kilit bölümü koy, tamamını değil.
 - `before` bir ÇAPADIR, kopya değil: değişecek yeri `location` ile birlikte tanımlamaya yetecek 2-3 satır koy. Mevcut kod zaten diskte — tüm bloğu geri yazma.

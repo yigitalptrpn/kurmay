@@ -1332,7 +1332,7 @@ const FIELD_LABELS = {
   risk: "Genel risk", findings: "Bulgular", positives: "Doğru yapılanlar", title: "Başlık", category: "Kategori",
   evidence: "Kanıt", recommendation: "Öneri",
 };
-const HIDDEN_FIELDS = new Set(["route", "approved", "file_plan"]); // kartta/akışta zaten anlatılıyor
+const HIDDEN_FIELDS = new Set(["route", "approved", "file_plan", "title"]); // kartta/akışta zaten anlatılıyor
 function valueText(k, v) {
   if (k === "action") return ACTION_NAMES[v] || v;
   if (k === "severity") return SEVERITY_NAMES[v] || v;
