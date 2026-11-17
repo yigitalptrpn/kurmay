@@ -326,6 +326,7 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .ses-not .pr-durum button { text-align:left; display:block; width:100%; padding:6px 10px; }
 .ses-not .pr-durum button b { display:block; overflow-wrap:anywhere; }
 .ses-not .pr-durum button small { margin-top:2px; }
+.ses-not .ses-notlar { margin:6px 0 0; padding:6px 8px; max-height:30vh; overflow:auto; white-space:pre-wrap; font:inherit; font-size:12.5px; background:var(--md-surface-container, transparent); border-radius:var(--md-shape-sm, 6px); }
 .ses-not .ses-alt { font-size:12px; color:var(--muted); margin-top:6px; }
 .ses-not .ses-liste button[data-oturum] { margin:0; display:flex; align-items:center; gap:8px; text-align:left; justify-content:flex-start; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ses-not .st { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, currentColor 13%, transparent); flex:none; }
@@ -4657,11 +4658,11 @@ function seciciDegistir(sel, deger) {
 }
 function goruluyor(id) { const e = $(id); return e && !e.classList.contains("hidden") && e.offsetParent !== null; }
 /** Geri alınamayan işten önce sor: sesle "evet" / "hayır", düğme ya da Enter / Esc */
-function onayIste(soru, yap, { hayir, evetAd = "Evet", hayirAd = "Hayır" } = {}) {
+function onayIste(soru, yap, { hayir, evetAd = "Evet", hayirAd = "Hayır", soz } = {}) {
   const o = komutOnay = { yap, hayir };
   clearTimeout(onayIste.zaman);
   const soyle = sesNot(`${soru}<span class="ses-dugmeler"><button type="button" class="primary" data-ses="evet">${evetAd}</button>` +
-    `<button type="button" data-ses="hayir">${hayirAd}</button></span><small>Sesle “evet” ya da “hayır” de</small>`, "soru", true);
+    `<button type="button" data-ses="hayir">${hayirAd}</button></span><small>Sesle “evet” ya da “hayır” de</small>`, "soru", true, soz);
   // Düğmeye odak yalnızca katman kapalıyken (Ayarlar'da yazarken imleç kaçmasın)
   if ($("sayfaKatman").hidden) $("sesNot").querySelector('[data-ses="evet"]').focus();
   // Süre soru söylendikten sonra başlar
@@ -4720,7 +4721,9 @@ const KOMUTLAR = [
   { re: /^(plan )?(onay beklemeden (devam et|ilerle|gec|ilet|gonder)|onaysiz (ilet|gec|devam et)|otomatik ilet(meyi ac)?)$/, yap: () => fwdSesle(true) },
   { ornek: "onayla", re: /^(onayla|onayliyorum|plani onayla|onay ver|devam et)$/, yap: () => akisOnay(false) },
   { ornek: "bitir", re: /^(bitir|akisi bitir)$/, yap: () => akisOnay(true) },
-  { ornek: "reddet, çünkü …", re: /^(reddet|yeniden planla)(\s+(cunku|gerekce|gerekcesi)?\s*(.*))?$/d, yap: (m, ham) => akisRet(serbest(ham, m, 4)) },
+  { ornek: "not ekle … (birden çok cümle; bitince “tekrar plan yap”)", re: /^(genel )?(not ekle|yorum ekle|not yaz|yorum yaz|not al|notu|yorumu|not|yorum)(\s+(.+))?$/d, yap: (m, ham) => yorumYazimiBasla(null, m.indices[4] ? ham.slice(m.indices[4][0]).trim() : "") },
+  { ornek: "Toplam.java için not …", re: /^(?<dosya>.+?)\s+(dosyasi|dosyasina|dosyasinin)?\s*(icin|için)\s+(not|yorum)(\s+(ekle|yaz))?(\s+(?<metin>.+))?$/d, yap: (m, ham) => yorumYazimiBasla(serbest(ham, m, 1), m.indices.groups.metin ? ham.slice(m.indices.groups.metin[0]).trim() : "") },
+  { ornek: "reddet, çünkü … · tekrar plan yap", re: /^(reddet|yeniden planla|tekrar planla|tekrar plan yap|yeniden plan yap|plani yeniden yap|plani tekrar yap|bastan planla)(\s+(cunku|gerekce|gerekcesi)?\s*(.*))?$/d, yap: (m, ham) => akisRet(serbest(ham, m, 4)) },
   { ornek: "durdur", re: /^(durdur|gorevi durdur|calismayi durdur|iptal et|dur)$/, yap: () => akisDur() },
   { ornek: "şimdi çalıştır", re: /^simdi calistir$/, yap: () => goruluyor("schedule") ? ($("btnRunNow").click(), tamam("Zamanlanan iş şimdi başlatılıyor")) : olmaz("Zamanlanmış bir iş yok.") },
   { ornek: "görev … (sonra “başlat”)", re: /^(gorev|gorevi yaz|yaz)(\s+(.+))?$/d, yap: (m, ham) => gorevYazimiBasla(m.indices[3] ? ham.slice(m.indices[3][0]).trim() : "") },
@@ -4780,6 +4783,8 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
     metniYaz(ham);
     return gorevYazimiNot();
   }
+  // Plana not yazılıyorsa: cümleler nota eklenir — yalnızca tekrar plan yap / tamam / iptal / dosya değiştir
+  if (yorumYazimi) return yorumCumlesi(sade, hamK);
   // Sorulmuş bir soru varsa önce cevap mı bak
   if (komutOnay) {
     const t = sade.replace(/\s+/g, " ");
@@ -4809,7 +4814,7 @@ const KALIPLAR = [
   "<numara> numaralı maddeyi çek", "<numara> numaralı çekme isteğini aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
   "çekme isteklerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
-  "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
+  "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "tekrar plan yap", "not ekle <not>", "<dosya adı> için not <not>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
   "ayarları aç", "aç kapat sayfasını aç", "güvenlik raporlarını aç", "sürüm notlarını aç",
   "kenar çubuğunu aç", "kenar çubuğunu kapat", "temayı <evrak|radar|harita|karargah|sade|gece> yap",
   "akıl yürütmeyi <kapalı|düşük|orta|yüksek|çok yüksek|en yüksek> yap", "akıl yürütmeyi yükselt", "akıl yürütmeyi düşür",
@@ -4876,10 +4881,108 @@ function akisOnay(bitir) {
 }
 function akisRet(gerekce) {
   if (!goruluyor("approval")) return olmaz("Onay bekleyen bir plan yok.");
-  onayIste(`Plan reddedilsin mi?${gerekce ? ` <br><small>Gerekçe: “${esc(gerekce)}”</small>` : ""}`, () => {
-    if (gerekce) { $("rejectComment").value = gerekce; $("rejectComment").dispatchEvent(new Event("input")); }
-    $("btnReject").click(); tamam("Plan reddedildi, Analist yeniden planlıyor");
-  });
+  if (gerekce) kutuyaEkle($("rejectComment"), gerekce);
+  const notlar = buildRejectComment(), n = notSayisi();
+  const genel = $("rejectComment").value.trim();
+  const soz = n ? `${n} notla yeniden planlansın mı? ` + [genel && `Genel not: ${genel}`,
+    ...hunkComments().map((c) => `${dosyaAdi(c.path)} için: ${c.text}`)].filter(Boolean).map((x) => x.replace(/[.\s]+$/, "") + ".").join(" ")
+    : "Plan notsuz reddedilsin mi?";
+  onayIste((n ? `Plan bu ${n} notla yeniden yapılsın mı?<pre class="ses-notlar">${esc(notlar)}</pre>` : "Plan notsuz reddedilsin mi? <small>Analist neden reddettiğini bilmeden yeniden planlar</small>"), () => {
+    $("btnReject").click(); tamam("Plan geri gönderildi, Analist yeniden planlıyor");
+  }, { soz });
+}
+// ── Yorum yazımı: "not ekle …" ya da "<dosya> için not …" ile başlar, sonraki cümleler nota eklenir ──
+// Bitiş: "tekrar plan yap" / "yeniden planla" / "reddet" (notlarla geri gönderir, önce sorar), "tamam" / "bitti"
+// (notlar kutuda kalır), "iptal" (bu sırada eklenenleri siler), Esc ya da 30 sn konuşma yok (kutuda kalır).
+// Bu arada başka bir dosyanın adıyla "… için not" ya da "genel not" denirse not o kutuya geçer.
+let yorumYazimi = null; // { kutu, ad, eklenen: [{kutu, onceki}], zaman }
+const YORUM_YAZIM_MS = 30000;
+function notSayisi() { return hunkComments().length + ($("rejectComment").value.trim() ? 1 : 0); }
+function kutuyaEkle(kutu, metin) {
+  metin = metin.trim().replace(/^[,;:.\s]+/, "");
+  if (!metin) return;
+  if (kutu.classList.contains("hcmt-box")) kutu.classList.remove("hidden");
+  const v = kutu.value.trim();
+  kutu.value = v ? v + (/[.!?…:]$/.test(v) ? " " : ". ") + metin : metin;
+  kutu.dispatchEvent(new Event("input", { bubbles: true }));
+  if (kutu.id === "rejectComment") autoGrow(kutu);
+}
+/** Plandaki dosya kutusunu adından bulur ("Toplam.java", "toplam", "sipariş servisi") */
+function dosyaKutusu(ad) {
+  const kutular = [...$("approvalText").querySelectorAll(".hcmt-box")];
+  const q = sik(ad.replace(/\b(dosyasi|dosyasina|dosya)\b/gi, ""));
+  if (!q) return { yok: true, kutular };
+  const ad2 = (k) => sik(k.dataset.path.split(/[\\/]/).pop()), yol = (k) => sik(k.dataset.path);
+  const adlar = (f) => [...new Set(kutular.filter(f).map((k) => k.dataset.path))];
+  // Tam ad > ad içinde > yol içinde (ses tanıma noktayı "nokta" yazabilir: "toplamnoktajava")
+  const q2 = q.replace(/nokta/g, "");
+  for (const f of [(k) => ad2(k) === q || ad2(k) === q2, (k) => ad2(k).startsWith(q2) || ad2(k).replace(/\.[a-z0-9]+$/, "") === q2,
+    (k) => ad2(k).includes(q2), (k) => yol(k).includes(q2)]) {
+    const yollar = adlar(f);
+    if (yollar.length === 1) return { kutu: kutular.find((k) => k.dataset.path === yollar[0]) };
+    if (yollar.length > 1) return { birden: yollar, kutular };
+  }
+  return { yok: true, kutular };
+}
+function yorumYazimiBasla(dosya, metin) {
+  if (!goruluyor("approval")) return olmaz("Onay bekleyen bir plan yok — not, plan onaya gelince eklenir.");
+  let kutu = $("rejectComment"), ad = "genel not";
+  if (dosya) {
+    const r = dosyaKutusu(dosya);
+    const liste = (yollar) => yollar.slice(0, 8).map((y) => `<code>${esc(y.split(/[\\/]/).pop())}</code>`).join(", ");
+    if (r.birden) return olmaz(`“${esc(dosya)}” birden çok dosyaya uyuyor: ${liste(r.birden)}. Adını daha tam söyle.`);
+    if (r.yok) {
+      const tum = [...new Set(r.kutular.map((k) => k.dataset.path))];
+      return olmaz(tum.length ? `Planda “${esc(dosya)}” adında dosya yok. Plandaki dosyalar: ${liste(tum)}` : "Bu planda dosya yok — “not ekle …” ile genel not yazabilirsin.");
+    }
+    kutu = r.kutu; ad = r.kutu.dataset.path.split(/[\\/]/).pop();
+  }
+  if (yorumYazimi) yorumYazimi.kutu = kutu, yorumYazimi.ad = ad;
+  else yorumYazimi = { kutu, ad, eklenen: [] };
+  if (!yorumYazimi.eklenen.some((e) => e.kutu === kutu)) yorumYazimi.eklenen.push({ kutu, onceki: kutu.value });
+  if (metin) kutuyaEkle(kutu, metin);
+  kutu.closest(".hunk, .card")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  yorumYazimiNot();
+}
+function yorumCumlesi(sade, ham) {
+  const t = sade.replace(/\s+/g, " ").trim();
+  if (!goruluyor("approval")) { yorumYazimiBitir(); return olmaz("Plan artık onay beklemiyor — not yazımı bitti."); }
+  if (/^(tekrar plan(la| yap)|yeniden plan(la| yap)|plani (yeniden|tekrar) yap|bastan planla|reddet|gonder|notlari gonder)$/.test(t)) { yorumYazimiBitir(); return akisRet(""); }
+  if (/^(tamam|bitti|not bitti|notlar bitti|yeter)$/.test(t)) {
+    yorumYazimiBitir();
+    return tamam(`Not yazımı bitti — ${notSayisi()} not hazır <small>Göndermek için “tekrar plan yap” · plan uygunsa “onayla”</small>`, `${notSayisi()} not hazır. Göndermek için tekrar plan yap de.`);
+  }
+  if (/^(iptal|vazgec|notu sil|notlari sil)$/.test(t)) {
+    for (const e of yorumYazimi.eklenen) { e.kutu.value = e.onceki; e.kutu.dispatchEvent(new Event("input", { bubbles: true })); if (!e.onceki && e.kutu.classList.contains("hcmt-box")) e.kutu.classList.add("hidden"); }
+    yorumYazimiBitir();
+    return tamam("Bu sırada yazılan notlar silindi");
+  }
+  // Başka kutuya geç: "<dosya> için not …" / "genel not …"
+  const m = /^(?<dosya>.+?)\s+(dosyasi|dosyasina|dosyasinin)?\s*icin\s+(not|yorum)(\s+(ekle|yaz))?(\s+(?<metin>.+))?$/d.exec(sade);
+  if (m && dosyaKutusu(serbest(ham, m, 1)).kutu) return yorumYazimiBasla(serbest(ham, m, 1), m.indices.groups.metin ? ham.slice(m.indices.groups.metin[0]).trim() : "");
+  const g = /^genel\s+(not|yorum)(\s+(.+))?$/d.exec(sade);
+  if (g) return yorumYazimiBasla(null, g.indices[3] ? ham.slice(g.indices[3][0]).trim() : "");
+  kutuyaEkle(yorumYazimi.kutu, ham);
+  yorumYazimiNot();
+}
+function yorumYazimiNot() {
+  const y = yorumYazimi;
+  clearTimeout(y.zaman);
+  y.zaman = setTimeout(() => {
+    if (yorumYazimi !== y) return;
+    yorumYazimiBitir();
+    sesNot(`Not yazımı bitti (30 sn konuşma olmadı) — ${notSayisi()} not hazır. Göndermek için “tekrar plan yap” de.`);
+  }, YORUM_YAZIM_MS);
+  const v = y.kutu.value.trim();
+  sesNot(`✎ <b>Not yazılıyor — ${esc(y.ad)}</b>${v ? `: “${esc(v.length > 120 ? "…" + v.slice(-120) : v)}”` : ""}` +
+    `<small>Devam et, her cümle nota eklenir · Gönder: “tekrar plan yap” · Bitir: “tamam” · Başka dosya: “… için not” · Sil: “iptal”</small>`, "tamam", true, false);
+  if (dinleme) dinlemeDurum("not yazılıyor");
+}
+function yorumYazimiBitir() {
+  if (!yorumYazimi) return;
+  clearTimeout(yorumYazimi.zaman);
+  yorumYazimi = null;
+  if (dinleme) dinlemeDurum("konuşmanı bekliyorum");
 }
 function akisDur() {
   if (goruluyor("schedule")) return onayIste("Zamanlanan iş iptal edilsin mi?", () => { $("btnCancelSchedule").click(); tamam("Zamanlama iptal edildi"); });
@@ -5138,7 +5241,7 @@ function oturumSesle(ad) {
 function komutYardim() {
   const satir = KOMUTLAR.filter((k) => k.ornek).map((k) => `<li>${esc(k.ornek)}</li>`).join("");
   sesNot(`<b>Sesli komutlar</b> <small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın</small><ul class="ses-yardim">${satir}</ul>` +
-    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / iş öğesini okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
+    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Plana not: “not ekle …” ya da “Toplam.java için not …” de, istediğin kadar cümle söyle, bitince “tekrar plan yap”. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / iş öğesini okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, "Komut listesi ekranda.");
 }
 // Basılı tut = tek komut (bas-konuş); kısa bas = dinleme modunu aç / kapat.
@@ -5172,6 +5275,7 @@ function sesTus(ev, icerden = false) {
     else if (komut?.rec) { ev.preventDefault(); komutDur(true); }
     else if (komutOnay) { ev.preventDefault(); onayCevap(false); }
     else if (gorevYazimi) { ev.preventDefault(); gorevYazimiBitir(); sesNot("Görev yazımı bitti — metin kutuda."); }
+    else if (yorumYazimi) { ev.preventDefault(); yorumYazimiBitir(); sesNot(`Not yazımı bitti — ${notSayisi()} not hazır.`); }
     else if (icerden) return;
     else if (dinleme) { ev.preventDefault(); dinlemeKapat(); }
     else if (!$("sesNot").hidden) sesNotKapat();
@@ -5289,7 +5393,7 @@ function dinlemeGonder(d, kareler) {
       sesNot("Dinleme: " + esc(e?.message || e), "hata");
     } finally {
       d.bekleyen--;
-      if (dinleme === d && !d.bekleyen) dinlemeDurum(d.konusuyor ? "duyuyorum…" : gorevYazimi ? "görev yazılıyor" : "konuşmanı bekliyorum");
+      if (dinleme === d && !d.bekleyen) dinlemeDurum(d.konusuyor ? "duyuyorum…" : gorevYazimi ? "görev yazılıyor" : yorumYazimi ? "not yazılıyor" : "konuşmanı bekliyorum");
     }
   });
 }
