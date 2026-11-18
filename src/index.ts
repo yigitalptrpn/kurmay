@@ -4,12 +4,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { GitOps, type GitOpKind } from "./gitOps.js";
-import { Assistant, type AssistantReply, type AssistantRequest } from "./assistant.js";
+import { Assistant, type AssistantReply, type AssistantRequest, type McpBridge } from "./assistant.js";
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
-import { disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
-import { listMcpTools, mcpStatus, probeMcp } from "./mcpStatus.js";
+import { activeMcpServers, disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
+import { callMcpTool, listMcpTools, mcpStatus, probeMcp, type McpToolInfo } from "./mcpStatus.js";
 import { compactPercent, contextInfo } from "./context.js";
 import { fetchModels, refreshModelContext } from "./models.js";
 import { RESILIENCE_LIMIT_KEYS, RESILIENCE_RETRY_KEYS, setLiveResilience } from "./resilience.js";
@@ -1199,6 +1199,32 @@ async function main() {
   /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
   const assistant = new Assistant();
+  /** Sesli asistanın eklenti köprüsü: Aç/Kapat'ta kapalı olanlar hariç config'teki eklentiler.
+   *  Bağlanamayan eklenti 60 sn yeniden denenmez (her cümlede 20 sn beklenmesin). */
+  const mcpFail = new Map<string, number>();
+  const mcpBridge: McpBridge = {
+    tools: async () => {
+      const servers = activeMcpServers(cfg) ?? {};
+      const out: Array<{ server: string; tool: McpToolInfo }> = [];
+      await Promise.all(
+        Object.entries(servers).map(async ([name, server]) => {
+          if ((mcpFail.get(name) ?? 0) > Date.now()) return;
+          try {
+            for (const tool of await listMcpTools(name, server, mcpProbeDir())) out.push({ server: name, tool });
+            mcpFail.delete(name);
+          } catch {
+            mcpFail.set(name, Date.now() + 60_000);
+          }
+        }),
+      );
+      return out.sort((a, b) => a.server.localeCompare(b.server) || a.tool.name.localeCompare(b.tool.name));
+    },
+    call: async (name, tool, args) => {
+      const server = activeMcpServers(cfg)?.[name];
+      if (!server) return { ok: false, text: `"${name}" eklentisi yok ya da kapalı.` };
+      return callMcpTool(name, server, mcpProbeDir(), tool, args);
+    },
+  };
   // Git işleri: uzak depo TFS sunucusundaysa kimlik TFS anahtarından (yoksa kullanıcının kendi git kimliği)
   const gitOps = new GitOps(async (remoteUrl) => {
     let c;
@@ -1356,7 +1382,14 @@ async function main() {
           error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
           done: [],
         });
-      const c = { url: conn.url, token: conn.token, model: m, userPrompt: cfg.userPrompt };
+      // Eklentiler yalnızca panel aynı bilgisayardan açıldıysa (kullanıcının kimliğiyle çalışırlar)
+      const c = {
+        url: conn.url,
+        token: conn.token,
+        model: m,
+        userPrompt: cfg.userPrompt,
+        ...(local ? { mcp: mcpBridge } : {}),
+      };
       const yerel = local && !!cfg.speech?.computer;
       return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, yerel);
     },

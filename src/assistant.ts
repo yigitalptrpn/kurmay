@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { McpToolInfo } from "./mcpStatus.js";
 import { authHeaders, httpError, netError, speechBase } from "./speech.js";
 
 /**
@@ -34,6 +35,7 @@ const TOOLS = [
   "tasi",
   "sil",
   "komut_calistir",
+  "eklenti_araci",
   "bitti",
 ] as const;
 type Tool = (typeof TOOLS)[number];
@@ -60,8 +62,25 @@ interface Step {
   hedef: string;
   icerik: string;
   komut: string;
+  /** eklenti_araci: eklentinin adı, aracın adı, parametreler (JSON nesnesi metni) */
+  eklenti: string;
+  metot: string;
+  girdi: string;
   cevap: string;
 }
+/** Asistan ekranında gösterilecek sonuç (eklenti çıktısı, dosya içeriği, komut çıktısı…) */
+export interface AssistantOutput {
+  title: string;
+  text: string;
+  error?: boolean;
+}
+/** Eklentilere köprü (index.ts kurar): bağlı eklentilerin araçları ve çağırma */
+export interface McpBridge {
+  tools(): Promise<Array<{ server: string; tool: McpToolInfo }>>;
+  call(server: string, tool: string, args: Record<string, unknown>): Promise<{ ok: boolean; text: string }>;
+}
+type McpList = Array<{ server: string; tool: McpToolInfo }>;
+const OUTPUT_MAX = 20_000;
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 export interface AssistantRequest {
@@ -73,19 +92,24 @@ export interface AssistantRequest {
   /** Panelin sabit komut kalıpları (panel_komutu için) */
   patterns: string[];
 }
+type ReplyBase = { done: string[]; outputs?: AssistantOutput[] };
 export type AssistantReply =
-  | { ok: false; error: string; done: string[] }
-  | { ok: true; kind: "komut"; command: string; done: string[] }
-  | { ok: true; kind: "cevap"; reply: string; done: string[] }
-  | { ok: true; kind: "onay"; id: string; question: string; done: string[] };
+  | ({ ok: false; error: string } & ReplyBase)
+  | ({ ok: true; kind: "komut"; command: string } & ReplyBase)
+  | ({ ok: true; kind: "cevap"; reply: string } & ReplyBase)
+  | ({ ok: true; kind: "onay"; id: string; question: string } & ReplyBase);
 
-interface Pending {
+interface LoopState {
   messages: Msg[];
-  step: Step;
   dir: string;
   local: boolean;
   done: string[];
+  outputs: AssistantOutput[];
+  mcp: McpList;
   steps: number;
+}
+interface Pending extends LoopState {
+  step: Step;
   expires: number;
 }
 
@@ -94,6 +118,8 @@ export interface AssistantConn {
   token?: string;
   model: string;
   userPrompt?: string;
+  /** Bağlı eklentiler (yalnızca panel aynı bilgisayardan açıldıysa) */
+  mcp?: McpBridge;
 }
 
 const kisalt = (s: string, n = RESULT_MAX) =>
@@ -105,13 +131,15 @@ export class Assistant {
   /** Yeni cümle: model adım adım çalışır; soru gerekirse durur ve onay kimliği döner */
   async start(conn: AssistantConn, req: AssistantRequest, local: boolean): Promise<AssistantReply> {
     const dir = req.dir && fs.existsSync(req.dir) ? path.resolve(req.dir) : os.homedir();
-    const messages: Msg[] = [{ role: "system", content: systemPrompt(dir, local, req.patterns, conn.userPrompt) }];
+    let mcp: McpList = [];
+    if (conn.mcp) mcp = await conn.mcp.tools().catch(() => []);
+    const messages: Msg[] = [{ role: "system", content: systemPrompt(dir, local, req.patterns, conn.userPrompt, mcp) }];
     for (const h of (req.history ?? []).slice(-HISTORY_MAX)) {
       const metin = String(h.metin ?? "").slice(0, 1500);
       if (metin) messages.push({ role: h.rol === "asistan" ? "assistant" : "user", content: metin });
     }
     messages.push({ role: "user", content: req.text.replace(/\s+/g, " ").trim().slice(0, 1000) });
-    return this.loop(conn, { messages, dir, local, done: [], steps: 0 });
+    return this.loop(conn, { messages, dir, local, done: [], outputs: [], mcp, steps: 0 });
   }
 
   /** Kullanıcı soruya cevap verdi: evetse araç çalışır, değilse modele söylenir; döngü sürer */
@@ -121,9 +149,7 @@ export class Assistant {
     if (!p) return { ok: false, error: "Bu soru artık geçerli değil (süresi doldu). Yeniden söyle.", done: [] };
     this.pending.delete(id);
     if (yes) {
-      const r = await runTool(p.step, p.dir);
-      p.done.push(r.summary);
-      p.messages.push({ role: "user", content: `Araç sonucu (${p.step.arac}):\n${kisalt(r.result)}` });
+      await runStep(conn, p.step, p);
     } else {
       p.messages.push({
         role: "user",
@@ -133,21 +159,27 @@ export class Assistant {
     return this.loop(conn, p);
   }
 
-  private async loop(
-    conn: AssistantConn,
-    st: { messages: Msg[]; dir: string; local: boolean; done: string[]; steps: number },
-  ): Promise<AssistantReply> {
+  private async loop(conn: AssistantConn, st: LoopState): Promise<AssistantReply> {
+    const base = () => ({ done: st.done, outputs: st.outputs });
     while (st.steps < MAX_STEPS) {
       st.steps++;
       const r = await askStep(conn, st.messages);
-      if (!r.ok) return { ok: false, error: r.error, done: st.done };
+      if (!r.ok) return { ok: false, error: r.error, ...base() };
       const step = r.step;
       st.messages.push({ role: "assistant", content: JSON.stringify(step) });
-      if (step.arac === "bitti") return { ok: true, kind: "cevap", reply: step.cevap.trim(), done: st.done };
+      if (step.arac === "bitti") return { ok: true, kind: "cevap", reply: step.cevap.trim(), ...base() };
       if (step.arac === "panel_komutu") {
         const komut = step.komut.trim();
-        if (!komut) return { ok: true, kind: "cevap", reply: step.cevap.trim(), done: st.done };
-        return { ok: true, kind: "komut", command: komut, done: st.done };
+        if (!komut) return { ok: true, kind: "cevap", reply: step.cevap.trim(), ...base() };
+        return { ok: true, kind: "komut", command: komut, ...base() };
+      }
+      if (step.arac === "eklenti_araci" && !conn.mcp) {
+        st.messages.push({
+          role: "user",
+          content:
+            "Araç sonucu: eklentiler kapalı (bağlı eklenti yok ya da panel başka bilgisayardan açılmış). Kullanıcıya kısaca söyle.",
+        });
+        continue;
       }
       if (COMPUTER_TOOLS.has(step.arac) && !st.local) {
         st.messages.push({
@@ -157,18 +189,16 @@ export class Assistant {
         });
         continue;
       }
-      const soru = needsConfirm(step, st.dir);
+      const soru = step.arac === "eklenti_araci" ? mcpConfirm(step, st.mcp) : needsConfirm(step, st.dir);
       if (soru) {
         this.sweep();
         const id = randomUUID();
         this.pending.set(id, { ...st, step, expires: Date.now() + PENDING_TTL_MS });
-        return { ok: true, kind: "onay", id, question: soru, done: st.done };
+        return { ok: true, kind: "onay", id, question: soru, ...base() };
       }
-      const res = await runTool(step, st.dir);
-      st.done.push(res.summary);
-      st.messages.push({ role: "user", content: `Araç sonucu (${step.arac}):\n${kisalt(res.result)}` });
+      await runStep(conn, step, st);
     }
-    return { ok: true, kind: "cevap", reply: "Çok adım sürdü, burada durdum.", done: st.done };
+    return { ok: true, kind: "cevap", reply: "Çok adım sürdü, burada durdum.", ...base() };
   }
 
   private sweep() {
@@ -177,7 +207,87 @@ export class Assistant {
   }
 }
 
-function systemPrompt(dir: string, local: boolean, patterns: string[], userPrompt?: string): string {
+/** Adımı çalıştırır: sonucu modele, özeti ve (varsa) çıktıyı ekrana */
+async function runStep(conn: AssistantConn, step: Step, st: LoopState): Promise<void> {
+  if (step.arac === "eklenti_araci") {
+    const r = await runMcp(conn, step, st.mcp);
+    st.done.push(r.summary);
+    if (r.output) st.outputs.push(r.output);
+    st.messages.push({ role: "user", content: `Araç sonucu (${step.eklenti} / ${step.metot}):\n${kisalt(r.result)}` });
+    return;
+  }
+  const r = await runTool(step, st.dir);
+  st.done.push(r.summary);
+  if (r.output) st.outputs.push(r.output);
+  st.messages.push({ role: "user", content: `Araç sonucu (${step.arac}):\n${kisalt(r.result)}` });
+}
+
+const findMcp = (step: Step, mcp: McpList) =>
+  mcp.find((m) => m.server === step.eklenti.trim() && m.tool.name === step.metot.trim());
+
+/** Değişiklik yapabilen (salt okunur işaretli olmayan) eklenti araçları önce sorulur */
+function mcpConfirm(step: Step, mcp: McpList): string {
+  const m = findMcp(step, mcp);
+  if (!m || m.tool.readOnly) return "";
+  const girdi = step.girdi.trim() && step.girdi.trim() !== "{}" ? ` Girdi: ${step.girdi.trim().slice(0, 300)}` : "";
+  return `${m.server} eklentisinin “${m.tool.name}” aracı çalıştırılsın mı?${m.tool.destructive ? " Bu araç silme ya da geri alınamaz değişiklik yapabilir." : ""}${girdi}`;
+}
+
+async function runMcp(
+  conn: AssistantConn,
+  step: Step,
+  mcp: McpList,
+): Promise<{ result: string; summary: string; output?: AssistantOutput }> {
+  const ad = `${step.eklenti.trim()} · ${step.metot.trim()}`;
+  if (!conn.mcp) return { result: "HATA: eklentiler kapalı", summary: "⚠ Eklentiler kapalı" };
+  if (!findMcp(step, mcp))
+    return {
+      result: `HATA: "${step.eklenti}" eklentisinde "${step.metot}" adında araç yok. Listedeki adları aynen kullan.`,
+      summary: `⚠ Eklenti aracı bulunamadı: ${ad}`,
+    };
+  let args: Record<string, unknown> = {};
+  const g = step.girdi.trim();
+  if (g) {
+    try {
+      const v = JSON.parse(g) as unknown;
+      if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("nesne değil");
+      args = v as Record<string, unknown>;
+    } catch {
+      return {
+        result: 'HATA: "girdi" geçerli bir JSON nesnesi değil. Örnek: {"ad": "değer"}',
+        summary: `⚠ ${ad}: girdi okunamadı`,
+      };
+    }
+  }
+  const r = await conn.mcp.call(step.eklenti.trim(), step.metot.trim(), args);
+  return {
+    result: r.ok ? r.text : `HATA: ${r.text}`,
+    summary: r.ok ? `🔌 ${ad}` : `⚠ ${ad} olmadı: ${r.text.slice(0, 200)}`,
+    output: { title: ad, text: kisalt(r.text, OUTPUT_MAX), ...(r.ok ? {} : { error: true }) },
+  };
+}
+
+/** Eklenti araçlarının modele giden listesi: ad, parametreler (* zorunlu), açıklama — uzunsa kısaltılır */
+function mcpLines(mcp: McpList): string[] {
+  const out: string[] = [];
+  let len = 0;
+  for (const { server, tool } of mcp) {
+    const params = (tool.params ?? [])
+      .map((p) => `${p.name}${p.required ? "*" : ""}${p.type ? ": " + p.type : ""}`)
+      .join(", ");
+    const desc = (tool.description ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+    const line = `- ${server} / ${tool.name}(${params})${tool.readOnly ? " [salt okunur]" : ""}${desc ? ": " + desc : ""}`;
+    if (len + line.length > 9000) {
+      out.push(`- … (${mcp.length - out.length} araç daha, listede yer kalmadı)`);
+      break;
+    }
+    out.push(line);
+    len += line.length;
+  }
+  return out;
+}
+
+function systemPrompt(dir: string, local: boolean, patterns: string[], userPrompt?: string, mcp: McpList = []): string {
   const plat = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux";
   return [
     "Sen Kurmay'ın sesli asistanısın. Kullanıcı sana Türkçe konuşur; isteğini yerine getirmek için adım adım araç kullanırsın.",
@@ -185,7 +295,7 @@ function systemPrompt(dir: string, local: boolean, patterns: string[], userPromp
     `Kullanıcının ev klasörü: ${os.homedir()}. Bugün: ${new Date().toLocaleDateString("tr-TR")}.`,
     "",
     "HER yanıtında yalnızca BİR adım yaz, şu JSON biçiminde:",
-    '{"dusunce": "...", "arac": "...", "yol": "", "hedef": "", "icerik": "", "komut": "", "cevap": ""}',
+    '{"dusunce": "...", "arac": "...", "yol": "", "hedef": "", "icerik": "", "komut": "", "eklenti": "", "metot": "", "girdi": "", "cevap": ""}',
     "Kullanmadığın alanları boş bırak. Aracın sonucunu bir sonraki mesajda görürsün, sonra karar verirsin.",
     "",
     "Araçlar:",
@@ -205,6 +315,11 @@ function systemPrompt(dir: string, local: boolean, patterns: string[], userPromp
       : [
           "(Bilgisayar araçları kapalı: panel başka bir bilgisayardan açılmış. Yalnızca panel_komutu ve bitti kullanılabilir.)",
         ]),
+    ...(mcp.length
+      ? [
+          "- eklenti_araci: bağlı bir eklentinin aracını çağırır. 'eklenti'ye eklenti adını, 'metot'a aracın adını (aşağıdaki listeden aynen), 'girdi'ye parametreleri JSON nesnesi olarak yaz (parametre yoksa {}). Sonucu bir sonraki mesajda görürsün; sonuç kullanıcıya asistan ekranında da gösterilir.",
+        ]
+      : []),
     "- bitti: iş bitti ya da yapılacak bir şey yok. 'cevap'a kullanıcıya söylenecek kısa sonucu yaz.",
     "",
     "Kurallar:",
@@ -216,9 +331,19 @@ function systemPrompt(dir: string, local: boolean, patterns: string[], userPromp
     "- Selam, teşekkür ya da sohbetse doğrudan bitti ile kısa cevap ver.",
     "- Cümle sana değil başka birine söylenmiş ya da yarım bir konuşma gibiyse bitti ile cevabı boş bırak.",
     "- Kod yazma, görev planlama gibi büyük işler senin işin değil: kullanıcıya 'görev …' diye söylemesini öner.",
+    ...(mcp.length
+      ? [
+          "- Panel komutlarında olmayan bir bilgi ya da iş istenirse (ör. 'Ahmet'e atanmış işleri getir') uygun eklenti aracını kullan.",
+          "- Eklenti sonucunu 'cevap'ta kısaca özetle (kaç kayıt, en önemlisi ne); ayrıntıyı tekrar etme, ekranda görünüyor.",
+          "- Bir aracın hangi parametreyi istediğini bilmiyorsan listedeki parametre adlarını kullan; değer uydurma, kullanıcının söylediğini yaz.",
+        ]
+      : []),
     "",
     "Panel komut kalıpları:",
     ...patterns.slice(0, 120).map((p) => `- ${p}`),
+    ...(mcp.length
+      ? ["", "Eklenti araçları (eklenti / araç(parametreler, * zorunlu): açıklama):", ...mcpLines(mcp)]
+      : []),
     ...(userPrompt?.trim()
       ? ["", "Kullanıcının talimatları (cevabın üslubu için):", userPrompt.trim().slice(0, 1000)]
       : []),
@@ -234,9 +359,12 @@ const STEP_SCHEMA = {
     hedef: { type: "string" },
     icerik: { type: "string" },
     komut: { type: "string" },
+    eklenti: { type: "string" },
+    metot: { type: "string" },
+    girdi: { type: "string" },
     cevap: { type: "string" },
   },
-  required: ["dusunce", "arac", "yol", "hedef", "icerik", "komut", "cevap"],
+  required: ["dusunce", "arac", "yol", "hedef", "icerik", "komut", "eklenti", "metot", "girdi", "cevap"],
   additionalProperties: false,
 };
 
@@ -297,6 +425,10 @@ async function askStep(
         hedef: s("hedef"),
         icerik: s("icerik"),
         komut: s("komut"),
+        eklenti: s("eklenti"),
+        metot: s("metot"),
+        // Model girdiyi metin yerine nesne olarak da yazabilir
+        girdi: typeof raw.girdi === "object" && raw.girdi ? JSON.stringify(raw.girdi) : s("girdi"),
         cevap: s("cevap"),
       },
     };
@@ -339,7 +471,10 @@ function needsConfirm(step: Step, dir: string): string {
 }
 
 /** Aracı çalıştırır: modele giden sonuç + panelde görünen kısa özet */
-async function runTool(step: Step, dir: string): Promise<{ result: string; summary: string }> {
+async function runTool(
+  step: Step,
+  dir: string,
+): Promise<{ result: string; summary: string; output?: AssistantOutput }> {
   const p = resolvePath(step.yol, dir);
   const hata = (e: unknown) => {
     const err = e as NodeJS.ErrnoException;
@@ -371,10 +506,8 @@ async function runTool(step: Step, dir: string): Promise<{ result: string; summa
           .readdirSync(p, { withFileTypes: true })
           .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, "tr"));
         const lines = ents.slice(0, 200).map((e) => (e.isDirectory() ? e.name + "/" : e.name));
-        return {
-          result: `${p} içinde ${ents.length} öğe:\n${lines.join("\n")}${ents.length > 200 ? "\n…" : ""}`,
-          summary: `📋 Listelendi: ${p} (${ents.length} öğe)`,
-        };
+        const text = `${p} içinde ${ents.length} öğe:\n${lines.join("\n")}${ents.length > 200 ? "\n…" : ""}`;
+        return { result: text, summary: `📋 Listelendi: ${p} (${ents.length} öğe)`, output: { title: p, text } };
       }
       case "oku": {
         const st = fs.statSync(p);
@@ -387,7 +520,8 @@ async function runTool(step: Step, dir: string): Promise<{ result: string; summa
           fs.closeSync(fd);
         }
         if (buf.includes(0)) return { result: "HATA: metin dosyası değil", summary: `⚠ ${p} metin dosyası değil` };
-        return { result: buf.toString("utf8"), summary: `📖 Okundu: ${p}` };
+        const metin = buf.toString("utf8");
+        return { result: metin, summary: `📖 Okundu: ${p}`, output: { title: p, text: kisalt(metin, OUTPUT_MAX) } };
       }
       case "yaz": {
         fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -416,6 +550,11 @@ async function runTool(step: Step, dir: string): Promise<{ result: string; summa
       case "komut_calistir": {
         const r = await runCommand(step.komut, dir);
         return {
+          output: {
+            title: step.komut.trim(),
+            text: r.output || "(çıktı yok)",
+            ...(r.code === 0 ? {} : { error: true }),
+          },
           result: `Çıkış kodu ${r.code ?? "?"}${r.timedOut ? " (süre doldu, durduruldu)" : ""}\n${r.output}`,
           summary: `▶ Komut çalıştı (${r.code === 0 ? "başarılı" : `çıkış kodu ${r.code ?? "?"}`}): ${step.komut.trim()}`,
         };

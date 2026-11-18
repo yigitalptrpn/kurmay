@@ -350,6 +350,35 @@ body.dinlemede .ses-not { top:60px; }
 .ses-yardim { margin:6px 0; padding-left:18px; columns:2; column-gap:24px; font-size:12.5px; }
 @media (max-width:560px) { .ses-yardim { columns:1; } }
 @keyframes mic-nabiz { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--red) 25%, transparent); } }
+/* Asistan ekranı: sesli/yazılı komut konuşması, eklenti sonuçları ve komut listesi — sağdan açılan çekmece */
+.asistan { position:fixed; z-index:68; top:0; right:0; bottom:0; width:min(440px, 100vw); display:flex; flex-direction:column;
+  background:var(--md-surface-container-lowest, var(--card)); color:var(--text); border-left:1px solid var(--border); box-shadow:var(--md-elev-3, -6px 0 24px rgba(0,0,0,.25)); }
+.asistan[hidden] { display:none; }
+.asistan .as-bas { display:flex; align-items:center; gap:6px; padding:10px 12px; border-bottom:1px solid var(--border); }
+.asistan .as-bas b { font-family:var(--font-display, inherit); font-size:15px; margin-right:auto; }
+.asistan .as-bas button { min-height:30px; padding:2px 10px; text-transform:none; font-size:12.5px; }
+.asistan .as-bas button[aria-pressed="true"] { border-color:var(--md-primary); color:var(--md-primary); }
+.asistan .as-yardim { border-bottom:1px solid var(--border); padding:8px 14px; max-height:45vh; overflow:auto; font-size:12.5px; }
+.asistan .as-yardim[hidden] { display:none; }
+.asistan .as-yardim .ses-yardim { columns:1; margin:4px 0 8px; }
+.asistan .as-yardim small { display:block; color:var(--muted); line-height:1.45; }
+.asistan .as-kayit { flex:1; min-height:0; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.asistan .as-bos { color:var(--muted); font-size:13px; text-align:center; margin:auto 12px; line-height:1.5; }
+.asistan .as-g { max-width:92%; padding:7px 11px; border-radius:var(--md-shape-md, 10px); font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.asistan .as-g.sen { align-self:flex-end; background:color-mix(in srgb, var(--md-primary) 14%, transparent); }
+.asistan .as-g.asistan-g { align-self:flex-start; background:var(--md-surface-container, transparent); border:1px solid var(--border); }
+.asistan .as-g.hata { border-color:var(--red); }
+.asistan .as-g small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.asistan .as-g time { display:block; color:var(--muted); font-size:10.5px; margin-top:3px; }
+.asistan .as-g details { margin-top:6px; }
+.asistan .as-g summary { cursor:pointer; font-weight:600; font-size:12.5px; }
+.asistan .as-g details.hata summary { color:var(--red); }
+.asistan .as-g pre { margin:4px 0 0; padding:6px 8px; max-height:40vh; overflow:auto; white-space:pre-wrap; font:12px/1.45 var(--font-mono); background:var(--md-surface-container-low, transparent); border:1px solid var(--border); border-radius:var(--md-shape-sm, 6px); }
+.asistan form { display:flex; gap:6px; padding:10px 12px; border-top:1px solid var(--border); }
+.asistan form input { flex:1; min-width:0; min-height:34px; }
+.asistan form button { min-height:34px; padding:2px 14px; text-transform:none; }
+@media (min-width:900px) { body.asistanda .ses-not, body.asistanda .ses-dinleme { left:calc((100vw - 440px) / 2); } }
+#btnAsistan[aria-pressed="true"] { border-color:var(--md-primary); color:var(--md-primary); }
 @media (prefers-reduced-motion: reduce) { #btnMic.rec { animation:none; } }
 /* Görevle yapıştırılan görseller: yazma kutusunun altında önizleme, görev balonunda küçük resim */
 .ekler { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
@@ -843,6 +872,12 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 </aside>
 <div class="dmenu hidden" id="sessMenu" role="menu"></div>
 <div class="ses-not" id="sesNot" role="status" aria-live="polite" hidden></div>
+<aside class="asistan" id="asistanEkran" aria-label="Asistan" hidden>
+  <div class="as-bas"><b>Asistan</b><button type="button" id="asYardimBtn" aria-pressed="false" title="Komut listesini göster / gizle — sesle: “komutları göster”">Komutlar</button><button type="button" id="asTemizle" title="Konuşma geçmişini sil">Temizle</button><button type="button" id="asKapat" title="Kapat — sesle: “asistan ekranını kapat”" aria-label="Kapat">✕</button></div>
+  <div class="as-yardim" id="asYardim" hidden></div>
+  <div class="as-kayit" id="asKayit" aria-live="polite"></div>
+  <form id="asForm" autocomplete="off"><input id="asGirdi" type="text" placeholder="Komut ya da soru yaz…" aria-label="Asistana yaz"><button type="submit" class="primary">Gönder</button></form>
+</aside>
 <div class="sayfa-katman" id="sayfaKatman" hidden><div class="sk-bar"><button type="button" id="skGeri" class="primary">← Panele dön</button><b id="skAd"></b><small>Sesle: “panele dön”</small></div><iframe id="skFrame" title="Sayfa"></iframe></div>
 <div class="ses-dinleme" id="sesDinleme" hidden><span class="nokta" aria-hidden="true"></span><b>Dinleme açık</b><span class="durum"></span><button type="button" data-kapat title="Dinlemeyi kapat (Esc)">Kapat</button></div>
 
@@ -1030,6 +1065,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <a class="tool" href="/toggles" title="Aç / Kapat" aria-label="Aç / Kapat"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="6"/><circle cx="16" cy="12" r="2.5"/></svg></a>
     <a class="tool" href="/guvenlik" title="Güvenlik raporları" aria-label="Güvenlik raporları"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></a>
     <button type="button" class="tool hidden" id="btnVoiceCmd" title="Sesli komut — basılı tut: tek komut · tıkla: dinleme modu (kısayol Ctrl+Boşluk)" aria-label="Sesli komut" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
+    <button type="button" class="tool" id="btnAsistan" title="Asistan ekranı — konuşmalar, eklenti sonuçları ve komut listesi (sesle: “asistan ekranını aç”)" aria-label="Asistan ekranı" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></button>
     <a class="tool" href="/config" title="Ayarlar" aria-label="Ayarlar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></a>
     <div class="tswitch" role="radiogroup" aria-label="Tema"></div>
   </div>
@@ -4340,6 +4376,7 @@ function sesNot(html, tur = "bilgi", kalici = false, soz) {
     ? `<small>🧠 “${esc(sonAnlama.ham)}” → “${esc(sonAnlama.komut)}” olarak anlaşıldı</small>` : "";
   k.innerHTML = html + iz;
   k.hidden = false;
+  asNotKaydet(html, tur);
   clearTimeout(sesNot.zaman);
   const sure = tur === "hata" ? 7000 : 4000;
   if (!kalici) sesNot.zaman = setTimeout(function gizle() {
@@ -4601,7 +4638,11 @@ function sayfaAc(adres, ad) {
   tamam(`${esc(ad)} açıldı <small>Dönmek için “panele dön” de</small>`, `${ad} açıldı. Dönmek için panele dön de.`);
 }
 function katmanKapat(sesle) {
-  if ($("sayfaKatman").hidden) { if (sesle) sesNot("Zaten paneldesin."); return; }
+  if ($("sayfaKatman").hidden) {
+    if (sesle && !$("asistanEkran").hidden) return asAc(false, true);
+    if (sesle) sesNot("Zaten paneldesin.");
+    return;
+  }
   $("sayfaKatman").hidden = true;
   $("skFrame").src = "about:blank";
   loadTfs(); loadSpeech(); loadFlow(); loadModels();
@@ -4866,11 +4907,14 @@ const KOMUTLAR = [
   { re: /^(tekrarla|tekrar (oku|soyle|et)|bir daha (oku|soyle)|ne dedin)$/, yap: () => sonSoz && konusabilir() ? konus(sonSoz) : sesNot("Tekrarlanacak bir şey yok.") },
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
-  { ornek: "İngilizce de: help · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
+  { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
     const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
   { ornek: "metin düzeltmeyi aç · kapat", re: /^(metin |gorev metni |metni )?(duzeltmeyi|duzeltme(yi)?|modelle duzeltmeyi) (?<is>ac|kapat)$/, yap: (m) => duzeltmeAyarla(m.groups.is === "ac") },
+  { ornek: "asistan ekranını aç · kapat (konuşmalar, eklenti sonuçları)", re: /^(asistani|asistan( ekrani(ni)?| penceresi(ni)?| konusmalari(ni)?)?|konusmalari|konusma gecmisini) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => asAc(/^(ac|goster)$/.test(m.groups.is), true) },
+  { ornek: "komutları göster · gizle", re: /^(komutlari|komut listesini|yardimi) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => { const ac = /^(ac|goster)$/.test(m.groups.is); if (ac) asAc(true); asYardimAyarla(ac); tamam(ac ? "Komut listesi asistan ekranında" : "Komut listesi gizlendi"); } },
+  { ornek: "asistan geçmişini temizle", re: /^(asistan (gecmisini|konusmalarini|ekranini)|konusma gecmisini) (temizle|sil)$/, yap: () => asTemizle(true) },
   { ornek: "panele dön (Ayarlar açıkken)", re: /^(panele (don|gec|git)|geri (don|gel)|geri|sayfayi kapat|ayarlari kapat|pencereyi kapat|kapat)$/, yap: () => katmanKapat(true) },
   { grup: "Oturumlar" },
   { ornek: "yeni görev … (yeni oturumda yazar)", re: /^yeni (bir )?(gorev|oturum)( (ac|baslat|olustur))?\s+(?!(?:ac|baslat|olustur)$)(.+)$/d, yap: (m, ham) => {
@@ -4988,6 +5032,10 @@ const EN_CEVAP = [ // soru açıkken
   [/^(no|nope|cancel|don'?t|never mind|not now|later|no thanks)$/i, "hayır"],
 ];
 const EN_KOMUT = [
+  [/^(open|show) (the )?assistant( screen| panel)?$/i, "asistan ekranını aç"],
+  [/^(close|hide) (the )?assistant( screen| panel)?$/i, "asistan ekranını kapat"],
+  [/^(show|open) (the )?(commands|help)$/i, "komutları göster"],
+  [/^(hide|close) (the )?(commands|help)$/i, "komutları gizle"],
   [/^(help|commands|what can (i|you) (say|do))$/i, "yardım"],
   [/^read( it| this| the plan| the list| the answer)?$/i, "oku"],
   [/^(repeat( that| it)?|say (it|that) again)$/i, "tekrarla"],
@@ -5043,6 +5091,7 @@ function ingilizceKomut(ham) {
 }
 function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {}) {
   ham = ham.trim();
+  if (!modelden && ham) asEkle({ kim: "sen", metin: ham });
   const en = modelden ? null : ingilizceKomut(ham);
   if (en) ham = en;
   sonSesKomutu = Date.now();
@@ -5098,7 +5147,7 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
 // Görev yazımı ("görev …") listede YOK: odadaki konuşma modelle göreve dönüşmesin.
 let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
 const KALIPLAR = [
-  "yardım", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
+  "yardım", "asistan ekranını aç", "asistan ekranını kapat", "komutları göster", "komutları gizle", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
   "<numara> numaralı work item'ı çek", "<numara> numaralı pull request'i aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
   "pull request'lerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
@@ -5291,7 +5340,9 @@ async function modelleAnla(ham, dinlemede) {
 }
 const yapilanlarHtml = (done) => (done || []).filter(Boolean).map((d) => `<small>${esc(d)}</small>`).join("");
 function asistanSonuc(r, ham, dinlemede) {
-  const yapilan = yapilanlarHtml(r.done);
+  // Eklenti / dosya / komut sonuçları asistan ekranında görünür (notta yalnızca kısa cevap)
+  if ((r.outputs || []).length) { asBekleyenCikti = r.outputs; asAc(true); }
+  const yapilan = yapilanlarHtml(r.done) + ((r.outputs || []).length ? `<small>📄 Sonuç asistan ekranında</small>` : "");
   if ((r.done || []).length) asistanGecmisEkle("asistan", "Yaptıklarım: " + r.done.join(" · "));
   if (!r.ok) return sesNot(`Olmadı: “${esc(ham)}”${yapilan}<small>Komutları anlayan model: ${esc(r.error || "bilinmeyen hata")}</small>`, "hata", false, "Olmadı. " + (r.error || ""));
   if (r.kind === "onay") {
@@ -5786,11 +5837,97 @@ function oturumSesle(ad) {
   olmaz(`“${esc(ad)}” adında oturum bulunamadı.`);
 }
 function komutYardim() {
-  const satir = KOMUTLAR.filter((k) => k.ornek || k.grup).map((k) => k.grup ? `<li class="grp">${esc(k.grup)}</li>` : `<li>${esc(k.ornek)}</li>`).join("");
-  sesNot(`<b>Sesli komutlar</b> <small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın</small><ul class="ses-yardim">${satir}</ul>` +
-    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Plana yorum: “yorum yap …”, “not ekle …” ya da “Toplam.java için yorum …” de, istediğin kadar cümle söyle, bitince “tekrar plan yap”. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / work item'ı okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
-    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, "Komut listesi ekranda.");
+  asAc(true);
+  asYardimAyarla(true);
+  sesNot("Komut listesi asistan ekranında. <small>Gizlemek: “komutları gizle” · ekranı kapatmak: “asistan ekranını kapat”</small>", "bilgi", false, "Komut listesi asistan ekranında.");
 }
+// ── Asistan ekranı: sesli/yazılı komutların konuşması, eklenti (MCP) sonuçları ve komut listesi ──
+// Sağdan açılan çekmece; düğmeyle (sağ üstte) ve sesle açılır/kapanır. Geçmiş bu tarayıcıda saklanır
+// (son 80 satır). Notlar (sesNot) da buraya yazılır — ekranın üstündeki not kaybolsa da burada kalır.
+const AS_KAYIT = "kurmay-asistan-kayit", AS_ACIK = "kurmay-asistan-acik", AS_YARDIM = "kurmay-asistan-yardim", AS_EN_FAZLA = 80;
+let asKayit = [];
+try { asKayit = JSON.parse(localStorage.getItem(AS_KAYIT) || "[]"); if (!Array.isArray(asKayit)) asKayit = []; } catch { asKayit = []; }
+let asBekleyenCikti = null; // asistanın ürettiği sonuçlar: sıradaki asistan satırına eklenir
+function asKaydet() { try { localStorage.setItem(AS_KAYIT, JSON.stringify(asKayit.slice(-AS_EN_FAZLA))); } catch { /* yer yoksa yalnızca bellekte */ } }
+function asSatirHtml(g) {
+  const saat = new Date(g.t).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  const alt = (g.alt || []).map((x) => `<small>${esc(x)}</small>`).join("");
+  const cikti = (g.ciktilar || []).map((c, i) => `<details class="${c.error ? "hata" : ""}"${i === 0 && (g.ciktilar.length === 1) ? " open" : ""}><summary>${c.error ? "⚠ " : "📄 "}${esc(c.title || "Sonuç")}</summary><pre>${esc(c.text || "")}</pre></details>`).join("");
+  return `<div class="as-g ${g.kim === "sen" ? "sen" : "asistan-g"}${g.hata ? " hata" : ""}">${g.kim === "sen" ? "🗣 " : ""}${esc(g.metin || "")}${alt}${cikti}<time>${saat}</time></div>`;
+}
+function asCiz() {
+  const k = $("asKayit");
+  k.innerHTML = asKayit.length ? asKayit.map(asSatirHtml).join("")
+    : `<div class="as-bos">Henüz konuşma yok. Sesle komut ver (Ctrl+Boşluk) ya da aşağıya yaz.<br>Eklentiler bağlıysa listede olmayan işleri de sorabilirsin — sonuçlar burada görünür.</div>`;
+  k.scrollTop = k.scrollHeight;
+}
+function asEkle(g) {
+  g.t = Date.now();
+  const son = asKayit[asKayit.length - 1];
+  // Aynı not art arda (ör. "Tamam" iki kez) tek satır kalsın
+  if (son && !g.ciktilar && son.kim === g.kim && son.metin === g.metin && g.t - son.t < 15000) return;
+  asKayit.push(g);
+  if (asKayit.length > AS_EN_FAZLA) asKayit.splice(0, asKayit.length - AS_EN_FAZLA);
+  asKaydet();
+  if (!$("asistanEkran").hidden) asCiz();
+}
+/** Ekrandaki notu düz metne çevirip ekrana yazar (düğmeler atılır, liste düğmelerinin yazısı alt satır olur) */
+function asNotKaydet(html, tur) {
+  if (tur === "dinliyor" || /^\s*(⏳|✎)/.test(html) || html.includes("ses-yardim")) return;
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  const d = t.content;
+  const alt = [];
+  d.querySelectorAll(".ses-liste button, .git-plan > *").forEach((x) => { const y = x.textContent.replace(/\s+/g, " ").trim(); if (y) alt.push(y); x.remove(); });
+  d.querySelectorAll("button, .ses-dugmeler").forEach((x) => x.remove());
+  d.querySelectorAll("small").forEach((x) => { const y = x.textContent.replace(/\s+/g, " ").trim(); if (y && !y.startsWith("📄 Sonuç asistan")) alt.push(y); x.remove(); });
+  const metin = d.textContent.replace(/\s+/g, " ").trim();
+  const ciktilar = asBekleyenCikti; asBekleyenCikti = null;
+  if (!metin && !alt.length && !ciktilar) return;
+  asEkle({ kim: "asistan", metin, ...(alt.length ? { alt } : {}), ...(tur === "hata" ? { hata: true } : {}), ...(ciktilar ? { ciktilar } : {}) });
+}
+function asYardimCiz() {
+  const satir = KOMUTLAR.filter((k) => k.ornek || k.grup).map((k) => k.grup ? `<li class="grp">${esc(k.grup)}</li>` : `<li>${esc(k.ornek)}</li>`).join("");
+  $("asYardim").innerHTML = `<small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın. Buraya yazarak da verebilirsin.</small><ul class="ses-yardim">${satir}</ul>` +
+    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Plana yorum: “yorum yap …”, “not ekle …” ya da “Toplam.java için yorum …” de, istediğin kadar cümle söyle, bitince “tekrar plan yap”. Onayla, reddet, bitir, durdur ve silme işleri önce sorar. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım; eklentiler (ör. TFS eklentisi) bağlıysa onların araçlarını da kullanabilir, sonuçlar bu ekranda görünür.</small>`;
+}
+function asYardimAyarla(ac) {
+  if (ac && !$("asYardim").innerHTML) asYardimCiz();
+  $("asYardim").hidden = !ac;
+  $("asYardimBtn").setAttribute("aria-pressed", String(ac));
+  try { localStorage.setItem(AS_YARDIM, ac ? "1" : "0"); } catch { /* yoksay */ }
+}
+function asAc(ac, sesle) {
+  const e = $("asistanEkran");
+  if (sesle && e.hidden === !ac) return sesNot(ac ? "Asistan ekranı zaten açık." : "Asistan ekranı zaten kapalı.");
+  e.hidden = !ac;
+  document.body.classList.toggle("asistanda", ac);
+  $("btnAsistan").setAttribute("aria-pressed", String(ac));
+  try { localStorage.setItem(AS_ACIK, ac ? "1" : "0"); } catch { /* yoksay */ }
+  if (ac) asCiz();
+  if (sesle) tamam(ac ? "Asistan ekranı açıldı" : "Asistan ekranı kapatıldı");
+}
+function asTemizle(sesle) {
+  if (!asKayit.length) return sesle ? sesNot("Asistan geçmişi zaten boş.") : undefined;
+  const sil = () => { asKayit = []; asKaydet(); asCiz(); tamam("Asistan geçmişi silindi"); };
+  if (sesle) return onayIste(`Asistan ekranındaki ${asKayit.length} satırlık konuşma silinsin mi?`, sil);
+  if (confirm(`Asistan ekranındaki ${asKayit.length} satırlık konuşma silinsin mi?`)) sil();
+}
+$("btnAsistan").addEventListener("click", () => asAc($("asistanEkran").hidden));
+$("asKapat").addEventListener("click", () => asAc(false));
+$("asYardimBtn").addEventListener("click", () => asYardimAyarla($("asYardim").hidden));
+$("asTemizle").addEventListener("click", () => asTemizle(false));
+$("asForm").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const v = $("asGirdi").value.trim();
+  if (!v) return;
+  $("asGirdi").value = "";
+  komutUygula(v);
+});
+try {
+  if (localStorage.getItem(AS_YARDIM) === "1") asYardimAyarla(true);
+  if (localStorage.getItem(AS_ACIK) === "1") asAc(true);
+} catch { /* yoksay */ }
 // Basılı tut = tek komut (bas-konuş); kısa bas = dinleme modunu aç / kapat.
 // Ctrl+Boşluk ya da sağ üstteki mikrofon simgesi (fare / dokunma) aynı mantık.
 let basma = null; // { t0, yut } — yut: bu basış dinlemeyi kapattı, bırakınca bir şey yapma
