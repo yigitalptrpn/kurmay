@@ -4141,10 +4141,12 @@ for (const id of ["taskInput", "rejectComment"]) {
 // yeniden tıkla: kayıt 16 kHz tek kanal WAV'a çevrilip sunucuya (POST /speech/transcribe) gider, sunucu
 // model sunucusundaki ses tanıma modeline iletir, gelen metin imlecin olduğu yere yazılır. Esc kaydı atar.
 const MIC_MAX_SN = 600; // 10 dk — 16 kHz WAV ≈ 19 MB, sunucu sınırı 25 MB
+let duzeltAcik = false; // Ayarlar → Görev metnini modelle düzelt (komut modeli seçiliyse)
 let komutModeli = ""; // Ayarlar → Sesle görev yazma → Komutları anlayan model (boş = kapalı)
 let speechOn = false, mic = null; // mic: { rec, stream, chunks, t0, timer, cancelled }
 async function loadSpeech() {
   try { const v = await (await fetch("/speech")).json(); speechOn = !!v.ready; komutModeli = speechOn ? v.commandModel || "" : "";
+    duzeltAcik = !!(v.fixDictation && komutModeli);
     const om = v.generalUrl ? v.ttsModel || "" : ""; if (om !== okumaModeli) { okumaModeli = om; okumaHataGosterildi = false; } } catch { speechOn = false; komutModeli = ""; }
   if (!mic) $("btnMic").classList.toggle("hidden", !speechOn);
   $("btnVoiceCmd").classList.toggle("hidden", !speechOn);
@@ -4190,11 +4192,12 @@ async function micBitti() {
   if (cancelled || !chunks.length) { mic = null; micState(""); return; }
   micState("wait", "çevriliyor…");
   const { metinler, hata } = await sesiCevir(new Blob(chunks, { type: rec.mimeType }), {
-    ilerleme: (i, n) => micState("wait", `çevriliyor ${i}/${n}`),
+    ilerleme: (i, n) => micState("wait", `çevriliyor ${i}/${n}`), ipucu: dikteIpucu(),
   });
   if (hata) $("taskError").textContent = "Sesle yazma: " + hata + (metinler.length ? " — o ana kadar çevrilen kısım yazıldı." : "");
   if (metinler.length) metniYaz(metinler.join(" "));
   mic = null; micState(""); loadSpeech();
+  if (metinler.length) metniDuzelt();
 }
 /**
  * Kaydı metne çevirir (dikte ve sesli komut ortak). Ses tanıma modeli sesi 30 saniyelik pencerelerle
@@ -4211,9 +4214,9 @@ async function sesiCevir(blob, { ilerleme, ipucu } = {}) {
     for (let i = 0; i < parcalar.length; i++, basla += parcalar[i - 1].length) {
       if (sessizMi(parcalar[i])) continue; // sessiz parçada model uydurma metin yazabiliyor
       if (parcalar.length > 1 && ilerleme) ilerleme(i + 1, parcalar.length);
-      const onceki = (metinler.length ? metinler.join(" ") : ipucu || "").slice(-300);
+      const onceki = [ipucu || "", ...metinler].join(" ").trim().slice(-330);
       const res = await fetch("/speech/transcribe", { method: "POST", body: wavYap(parcalar[i]),
-        headers: { "content-type": "audio/wav", ...(onceki ? { "x-onceki-metin": encodeURIComponent(onceki) } : {}) } });
+        headers: { "content-type": "audio/wav", "x-terimler": encodeURIComponent(otoTerimler()), ...(onceki ? { "x-onceki-metin": encodeURIComponent(onceki) } : {}) } });
       const r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
       if (!r.ok) throw new Error((parcalar.length > 1 ? `${i + 1}. parça (${micSure(basla / SES_HZ)} sonrası) çevrilemedi: ` : "") + (r.error || "metne çevrilemedi"));
       if (r.text) metinler.push(r.text);
@@ -4650,16 +4653,77 @@ async function komutBitti() {
     return;
   }
   sesNot("⏳ Anlaşılıyor…", "bilgi", true);
-  const { metinler, hata } = await sesiCevir(new Blob(chunks, { type: rec.mimeType }), { ipucu: komutIpucu() });
+  const { metinler, hata } = await sesiCevir(new Blob(chunks, { type: rec.mimeType }), { ipucu: gorevYazimi ? dikteIpucu() : komutIpucu() });
   komut = null;
   if (hata && !metinler.length) { sesNot(esc(hata), "hata"); return; }
   komutUygula(metinler.join(" ").trim());
 }
 // Ses tanıma modeline ipucu: komut kelimeleri + son oturum adları (yanlış duymayı azaltır).
 // Sunucu son 300 karakteri alır — önemlisi sonda
+async function sesAyariKaydet(govde) {
+  try {
+    const r = await (await fetch("/speech", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(govde) })).json();
+    if (!r.ok) throw new Error(r.error || "kaydedilemedi");
+    await loadSpeech();
+    return r.view;
+  } catch (e) { olmaz("Ayar kaydedilemedi: " + esc(e.message)); return null; }
+}
+async function sozlugeEkle(ter) {
+  ter = ter.replace(/^["“']+|["”'.]+$/g, "").trim();
+  if (!ter) return olmaz("Eklenecek kelimeyi söyle: “sözlüğe Kafka ekle”.");
+  const v = await (await fetch("/speech")).json().catch(() => ({}));
+  const var_ = (v.terms || "").split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+  if (var_.some((x) => x.toLocaleLowerCase("tr") === ter.toLocaleLowerCase("tr"))) return sesNot(`“${esc(ter)}” sözlükte zaten var.`);
+  if (await sesAyariKaydet({ terms: [...var_, ter].join(", ") })) tamam(`“${esc(ter)}” sözlüğe eklendi <small>Yazımı yanlışsa Ayarlar → Sesle görev yazma → Sözlük'ten düzelt</small>`);
+}
+async function duzeltmeAyarla(ac) {
+  if (ac && !komutModeli) return olmaz("Önce Ayarlar → Sesle görev yazma'da “Komutları anlayan model”i seç.");
+  if (await sesAyariKaydet({ fixDictation: ac })) tamam(ac ? "Sesle yazılan görev metni modelle düzeltilecek" : "Metin düzeltme kapalı");
+}
+// ── Görev metnini modelle düzeltme (Ayarlar → Sesle görev yazma → "Görev metnini modelle düzelt") ──
+// Sesle yazılan metin bitince (tamam / 20 sn sessizlik / başlat / dikte düğmesi) komut modeline gider:
+// yanlış duyulan terimler, noktalama, büyük harf. Kutudaki metin değişir, notta özgün metin ve "Geri al".
+let sonDuzeltilen = "", duzeltOzgun = "";
+async function metniDuzelt({ sessiz = false } = {}) {
+  const kutu = $("taskInput"), metin = kutu.value.trim();
+  if (!duzeltAcik || !metin || metin === sonDuzeltilen) return false;
+  if (!sessiz) sesNot("⏳ Metin düzeltiliyor…", "bilgi", true, false);
+  let r;
+  try {
+    const res = await fetch("/speech/duzelt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: metin, terms: otoTerimler() }) });
+    r = await res.json();
+  } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  if (kutu.value.trim() !== metin) return false; // bu arada kullanıcı değiştirdi — dokunma
+  if (!r.ok) { if (!sessiz) olmaz("Metin düzeltilemedi: " + esc(r.error || "") + " — olduğu gibi kaldı."); return !sessiz; }
+  sonDuzeltilen = r.text;
+  if (!r.changed) { if (!sessiz) tamam("Görev yazımı bitti — metin düzgün görünüyor. Göndermek için “başlat” de"); return !sessiz; }
+  duzeltOzgun = kutu.value;
+  kutu.value = r.text;
+  kutu.dispatchEvent(new Event("input"));
+  sesNot(`✎ <b>Metin düzeltildi</b><small>Özgün: “${esc(metin.length > 200 ? metin.slice(0, 200) + "…" : metin)}”</small>` +
+    `<span class="ses-dugmeler"><button type="button" data-duzelt-geri>Geri al</button><button type="button" data-ses="kapat">Tamam</button></span>`,
+    "tamam", !sessiz, sessiz ? false : "Metin düzeltildi. Göndermek için başlat de.");
+  return true;
+}
+$("sesNot").addEventListener("click", (ev) => {
+  if (!ev.target.closest("[data-duzelt-geri]")) return;
+  const kutu = $("taskInput");
+  if (duzeltOzgun) { kutu.value = duzeltOzgun; sonDuzeltilen = duzeltOzgun.trim(); kutu.dispatchEvent(new Event("input")); }
+  tamam("Özgün metin geri kondu");
+});
+/** Görev yazdırırken ipucu: kutuda o ana kadar yazılan metin (model konuyu ve yazım biçimini oradan alır) */
+const dikteIpucu = () => $("taskInput").value.replace(/\s+/g, " ").trim().slice(-330);
+/** Kendiliğinden sözlük: depo ve dal adları, değişen dosyaların adları, ekip adları — ses tanıma
+ *  teknik adları bilemez; ipucunda görünce doğru yazar. Ayarlar'daki terimler sunucuda öne eklenir. */
+function otoTerimler() {
+  const t = new Set(["Analist", "Saha Timi", "Teftiş", "Kurmay"]);
+  for (const r of gitRepolar || []) { t.add(r.name); if (r.branch && r.branch !== "HEAD") t.add(r.branch); }
+  for (const yol of [...changedFiles.keys()].slice(-15)) t.add(String(yol).split(/[\\/]/).pop());
+  return [...t].join(", ").slice(0, 280);
+}
 function komutIpucu() {
   const adlar = Object.values(sessionsById).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4).map((s) => s.name);
-  return (adlar.join(", ") + ". Komutlar: yeni oturum aç, ayarları aç, onayla, reddet, bitir, durdur, onay beklemeden devam et, akıl yürütme, Analist, Saha Timi, Teftiş.").slice(-300);
+  return ((adlar.length ? adlar.join(", ") + ". " : "") + "Komutlar: yeni oturum aç, ayarları aç, onayla, reddet, bitir, durdur, onay beklemeden devam et, akıl yürütme, Analist, Saha Timi, Teftiş.").slice(-300);
 }
 // Karşılaştırma için sadeleştir: küçük harf, Türkçe harfler düz, noktalama boşluk — UZUNLUK KORUNUR
 // (yakalanan serbest metin özgün cümleden aynı yerden alınır)
@@ -4746,6 +4810,9 @@ const KOMUTLAR = [
   { re: /^(tekrarla|tekrar (oku|soyle|et)|bir daha (oku|soyle)|ne dedin)$/, yap: () => sonSoz && konusabilir() ? konus(sonSoz) : sesNot("Tekrarlanacak bir şey yok.") },
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
+  { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
+    const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
+  { ornek: "metin düzeltmeyi aç · kapat", re: /^(metin |gorev metni |metni )?(duzeltmeyi|duzeltme(yi)?|modelle duzeltmeyi) (?<is>ac|kapat)$/, yap: (m) => duzeltmeAyarla(m.groups.is === "ac") },
   { ornek: "panele dön (Ayarlar açıkken)", re: /^(panele (don|gec|git)|geri (don|gel)|geri|sayfayi kapat|ayarlari kapat|pencereyi kapat|kapat)$/, yap: () => katmanKapat(true) },
   { grup: "Oturumlar" },
   { ornek: "yeni görev … (yeni oturumda yazar)", re: /^yeni (bir )?(gorev|oturum)( (ac|baslat|olustur))?\s+(.+)$/d, yap: (m, ham) => {
@@ -4846,7 +4913,10 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
   if (gorevYazimi) {
     const t = sade.replace(/\s+/g, " ");
     if (/^(baslat|gonder|gorevi (baslat|gonder))$/.test(t)) { gorevYazimiBitir(); return gorevBaslatSesle(); }
-    if (/^(tamam|bitti|gorev bitti|yeter)$/.test(t)) { gorevYazimiBitir(); return tamam("Görev yazımı bitti — göndermek için “başlat” de"); }
+    if (/^(tamam|bitti|gorev bitti|yeter)$/.test(t)) {
+      gorevYazimiBitir();
+      return metniDuzelt().then((d) => { if (!d) tamam("Görev yazımı bitti — göndermek için “başlat” de"); });
+    }
     if (/^(iptal|vazgec|gorevi sil|gorevi iptal et)$/.test(t)) {
       gorevYazimiBitir(); $("taskInput").value = ""; $("taskInput").dispatchEvent(new Event("input"));
       return tamam("Görev silindi");
@@ -4895,6 +4965,7 @@ const KALIPLAR = [
   "oturumu gruptan çıkar", "<aranacak metin> ara", "sonraki oturum", "önceki oturum", "onay bekleyen oturumu aç",
   "çalışan oturumları göster", "<oturum adı> oturumunu aç", "<oturum adı> oturumunu durdur", "bu oturumu durdur",
   "oku", "tekrarla", "sus", "sesli yanıtı kapat", "sesli yanıtı aç", "panele dön",
+  "sözlüğe <kelime> ekle", "metin düzeltmeyi aç", "metin düzeltmeyi kapat",
   "yeni görev <görev metni>", "tüm oturumları sil", "<oturum adı> oturumunu sil", "bu oturumu sil", "<grup> grubundaki oturumları sil",
   "git durumu", "tüm repolarda <dal> dalına geç", "<repo> reposunda <dal> dalına geç", "tüm repoları güncelle", "<repo> reposunu güncelle",
   "<repo> reposunda <dal> dalı aç", "değişiklikleri kaydet ve gönder mesaj <mesaj>", "<repo> reposundaki değişiklikleri kaydet ve gönder mesaj <mesaj>",
@@ -5084,7 +5155,7 @@ function gorevYazimiNot() {
   gorevYazimi.zaman = setTimeout(() => {
     if (!gorevYazimi) return;
     gorevYazimiBitir();
-    sesNot("Görev yazımı bitti (20 sn konuşma olmadı) — metin kutuda. Göndermek için “başlat” de.");
+    metniDuzelt().then((d) => { if (!d) sesNot("Görev yazımı bitti (20 sn konuşma olmadı) — metin kutuda. Göndermek için “başlat” de."); });
   }, GOREV_YAZIM_MS);
   const kutu = $("taskInput").value.trim();
   sesNot(`✎ <b>Görev yazılıyor</b> — söylediklerin kutuya ekleniyor${kutu ? `: “${esc(kutu.length > 90 ? "…" + kutu.slice(-90) : kutu)}”` : ""}` +
@@ -5226,6 +5297,7 @@ async function gorevBaslatSesle() {
   if (!$("taskInput").value.trim() && !wiSel && !prSel && !taskFiles.length) return olmaz("Görev kutusu boş. Önce “görev …” diye söyle.");
   // Sunucunun cevabını bekle: reddedilirse (ör. aynı anda çalışan görev sınırı) sebebini söyle
   $("taskError").textContent = "";
+  await metniDuzelt({ sessiz: true });
   sesNot("⏳ Görev gönderiliyor…", "bilgi", true);
   await startTask();
   const hata = $("taskError").textContent.trim();
@@ -5552,6 +5624,9 @@ $("btnVoiceCmd").addEventListener("click", (ev) => ev.preventDefault());
 // Bu modda komut olmayan cümle görev kutusuna YAZILMAZ (odadaki konuşma kutuya dolmasın) — "görev …" ile yazılır.
 // 5 dakika konuşma olmazsa kendiliğinden kapanır. Ses yalnızca konuşma anlarında sunucuya gider.
 let dinleme = null;
+// Görev yazdırırken cümleler daha uzun ve düşünerek söylenir: duraklama daha uzun beklenir
+// (kısa parçada ses tanıma belirgin şekilde kötü — bağlamı yok)
+const DINLEME_GOREV_SUSKU_MS = 1800;
 const DINLEME_SUSKU_MS = 800, DINLEME_EN_KISA_MS = 400, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
 // Ses tanıma modelinin sessizlikte / gürültüde yazdığı bilinen uydurma cümleler
 const UYDURMA = /altyaz[ıi]|izledi[ğg]iniz için|abone ol|^\W*$/i;
@@ -5621,7 +5696,7 @@ function dinlemeIsle(d, kare) {
   d.susku = duzey > esik ? 0 : d.susku + kareMs;
   if (duzey > esik) d.son = Date.now();
   const sure = d.parca.reduce((t, k) => t + k.length, 0) / d.sr;
-  if (d.susku >= DINLEME_SUSKU_MS || sure >= DINLEME_EN_UZUN_SN) {
+  if (d.susku >= (gorevYazimi || yorumYazimi ? DINLEME_GOREV_SUSKU_MS : DINLEME_SUSKU_MS) || sure >= DINLEME_EN_UZUN_SN) {
     const parca = d.parca; d.parca = []; d.konusuyor = false;
     if ((sure - d.susku / 1000) * 1000 >= DINLEME_EN_KISA_MS) dinlemeGonder(d, parca);
     else if (!d.bekleyen) dinlemeDurum("konuşmanı bekliyorum");
@@ -5637,7 +5712,8 @@ function dinlemeGonder(d, kareler) {
       const ses = await yenidenOrnekle(pcm, d.sr);
       if (sessizMi(ses)) return;
       const res = await fetch("/speech/transcribe", { method: "POST", body: wavYap(ses),
-        headers: { "content-type": "audio/wav", "x-onceki-metin": encodeURIComponent(komutIpucu()) } });
+        headers: { "content-type": "audio/wav", "x-terimler": encodeURIComponent(otoTerimler()),
+          "x-onceki-metin": encodeURIComponent(gorevYazimi ? dikteIpucu() : komutIpucu()) } });
       const r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
       if (dinleme !== d) return; // bu arada kapatıldı
       if (!r.ok) { sesNot(esc(r.error || "metne çevrilemedi"), "hata"); return; }

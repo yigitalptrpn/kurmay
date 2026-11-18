@@ -279,7 +279,9 @@ export interface SpeechApi {
     audio: Buffer,
     mime: string,
     previous?: string,
+    terms?: string,
   ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
+  fix(text: string, terms?: string): Promise<{ ok: boolean; text?: string; changed?: boolean; error?: string }>;
   understand(
     text: string,
     patterns: string[],
@@ -917,6 +919,16 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       });
       return;
     }
+    if (req.url === "/speech/duzelt" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const terms = typeof parsed?.terms === "string" ? parsed.terms.slice(0, 1500) : undefined;
+        if (!options.speech || !text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.fix(text, terms);
+        json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
     if (url.pathname === "/git/durum" && req.method === "GET") {
       if (!options.git) return json(res, 404, { ok: false, error: "kapalı" });
       const dir = url.searchParams.get("dir") || undefined;
@@ -1008,7 +1020,13 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         } catch {
           previous = undefined;
         }
-        const r = await api.transcribe(Buffer.concat(chunks), mime, previous);
+        let terms: string | undefined;
+        try {
+          terms = decodeURIComponent(String(req.headers["x-terimler"] ?? "")).slice(0, 600) || undefined;
+        } catch {
+          terms = undefined;
+        }
+        const r = await api.transcribe(Buffer.concat(chunks), mime, previous, terms);
         json(res, r.ok ? 200 : 502, r);
       });
       return;

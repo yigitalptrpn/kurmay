@@ -45,6 +45,7 @@ import {
   synthesize,
   transcribe,
   understandCommand,
+  fixDictation,
 } from "./speech.js";
 import {
   prepareWorkItemTask,
@@ -1214,7 +1215,8 @@ async function main() {
       const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
       if (
         (input.enabled !== undefined && typeof input.enabled !== "boolean") ||
-        (input.computer !== undefined && typeof input.computer !== "boolean")
+        (input.computer !== undefined && typeof input.computer !== "boolean") ||
+        (input.fixDictation !== undefined && typeof input.fixDictation !== "boolean")
       )
         return { ok: false, error: "geçersiz istek" };
       const prev = fs.readFileSync(resolvedConfigPath, "utf8");
@@ -1230,6 +1232,8 @@ async function main() {
           ttsModel = pick("ttsModel"),
           ttsVoice = pick("ttsVoice");
         const computer = typeof input.computer === "boolean" ? input.computer : !!old.computer;
+        const fixDictation = typeof input.fixDictation === "boolean" ? input.fixDictation : !!old.fixDictation;
+        const terms = ("terms" in input ? str("terms") : (old.terms ?? "")).slice(0, 2000);
         // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
           enabled,
@@ -1239,11 +1243,23 @@ async function main() {
           ...(ttsModel ? { ttsModel } : {}),
           ...(ttsVoice ? { ttsVoice } : {}),
           ...(computer ? { computer } : {}),
+          ...(terms ? { terms } : {}),
+          ...(fixDictation ? { fixDictation } : {}),
         };
         if (enabled && !generalConnection(cfg).url) {
           return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || model || commandModel || ttsModel || ttsVoice || computer || (language && language !== "tr"))
+        if (
+          enabled ||
+          model ||
+          commandModel ||
+          ttsModel ||
+          ttsVoice ||
+          computer ||
+          terms ||
+          fixDictation ||
+          (language && language !== "tr")
+        )
           parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
@@ -1265,7 +1281,7 @@ async function main() {
         });
       return probeSpeech(conn.url, conn.token);
     },
-    transcribe: (audio: Buffer, mime: string, previous?: string) => {
+    transcribe: (audio: Buffer, mime: string, previous?: string, terms?: string) => {
       const conn = generalConnection(cfg);
       if (!speechEnabled(cfg.speech) || !conn.url) {
         return Promise.resolve({
@@ -1273,7 +1289,23 @@ async function main() {
           error: "Sesle görev yazma kapalı ya da sunucu adresi yok (Ayarlar → Sesle görev yazma, Bağlantı).",
         });
       }
-      return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous);
+      // Sözlük: Ayarlar'daki terimler önce (kullanıcının seçtikleri), panelin kendiliğinden eklediği adlar sonra
+      const sozluk = [cfg.speech?.terms, terms]
+        .filter(Boolean)
+        .join(", ")
+        .replace(/\s*[\n;]+\s*/g, ", ");
+      return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous, sozluk);
+    },
+    /** Görev metnini komut modeliyle düzeltir (Ayarlar → Görev metnini modelle düzelt) */
+    fix: (text: string, terms?: string) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+        });
+      return fixDictation(conn.url, conn.token, m, text, [cfg.speech?.terms, terms].filter(Boolean).join(", "));
     },
     /** Sabit listede bulunmayan sesli komutu modelle anlamaya çalışır (Ayarlar'da model seçiliyse) */
     understand: (text: string, patterns: string[]) => {
