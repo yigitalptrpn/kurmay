@@ -12,6 +12,8 @@ import type { SecurityReport } from "./securityReport.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import { SEARCH_KINDS, type SearchKind } from "./search.js";
 import { SPEECH_MAX_BYTES } from "./speech.js";
+import { metindekiAdlar } from "./okunus.js";
+import { projeAdlari } from "./projeAdlari.js";
 import { parseWorkItemRef } from "./tfs.js";
 import { parsePrRef } from "./tfsPr.js";
 import type { ModelInfo } from "./models.js";
@@ -916,6 +918,21 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
           return json(res, 400, { ok: false, error: "geçersiz istek" });
         const r = await options.speech.understand(text, patterns);
         json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+    if (req.url === "/speech/adaylar" && req.method === "POST") {
+      // Sesle yazılan metinde okunuşla geçen sınıf/dosya adları (projedeki kod dosyalarından) — ekranda
+      // gösterilmez, ses tanıma sözlüğüne ve metin düzeltmeye aday olarak gider
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text.slice(-2000) : "";
+        const dir = typeof parsed?.dir === "string" && parsed.dir ? parsed.dir : "";
+        if (!text.trim() || !dir) return json(res, 200, { ok: true, adlar: [] });
+        try {
+          json(res, 200, { ok: true, adlar: metindekiAdlar(text, await projeAdlari(dir)) });
+        } catch {
+          json(res, 200, { ok: true, adlar: [] });
+        }
       });
       return;
     }

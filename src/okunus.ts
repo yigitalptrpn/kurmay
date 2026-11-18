@@ -74,3 +74,31 @@ export function okunusBul(sorgu: string, adlar: string[]): { ad?: string; adayla
   if (s.length === 1 || s[1].puan - s[0].puan >= 0.1) return { ad: s[0].ad };
   return { adaylar: s.slice(0, 3).map((x) => x.ad) };
 }
+
+/**
+ * Metinde okunuşça geçen adları bulur ("peymınt kontrolır'a metot ekle" → PaymentController).
+ * Metnin 1-3 kelimelik her penceresi adların ses iskeletleriyle karşılaştırılır; yalnızca yakın
+ * olanlar döner (en yakın önce, en fazla `max`). Metinde zaten aynen geçen ad dönmez.
+ */
+export function metindekiAdlar(metin: string, adlar: Array<{ ad: string; k: string }>, max = 12): string[] {
+  const kelimeler = metin.split(/\s+/).filter(Boolean);
+  const kucuk = metin.toLocaleLowerCase("tr");
+  const enIyi = new Map<string, number>();
+  for (let i = 0; i < kelimeler.length; i++) {
+    for (let n = 1; n <= 3 && i + n <= kelimeler.length; n++) {
+      const q = okunus(kelimeler.slice(i, i + n).join(" "));
+      if (q.length < 4) continue; // kısa kelimeler her adla benzeşir
+      for (const { ad, k } of adlar) {
+        if (k.length < 4 || Math.abs(k.length - q.length) > Math.max(2, k.length * 0.3)) continue;
+        const puan = k === q ? 0 : mesafe(q, k) / Math.max(q.length, k.length);
+        if (puan > 0.25) continue;
+        if ((enIyi.get(ad) ?? 1) > puan) enIyi.set(ad, puan);
+      }
+    }
+  }
+  return [...enIyi]
+    .filter(([ad]) => !kucuk.includes(ad.toLocaleLowerCase("tr")))
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, max)
+    .map(([ad]) => ad);
+}
