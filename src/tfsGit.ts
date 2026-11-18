@@ -139,7 +139,7 @@ export interface LocalRepo {
   remoteUrl: string;
 }
 
-async function repoAt(dir: string): Promise<{ root: string; remote: string; remoteUrl: string } | undefined> {
+export async function repoAt(dir: string): Promise<{ root: string; remote: string; remoteUrl: string } | undefined> {
   if (!fs.existsSync(path.join(dir, ".git"))) return undefined;
   try {
     const root = path.resolve(await git(dir, ["rev-parse", "--show-toplevel"]));

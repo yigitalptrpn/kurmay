@@ -3,6 +3,7 @@ import { getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { GitOps, type GitOpKind } from "./gitOps.js";
 import { Assistant, type AssistantReply, type AssistantRequest } from "./assistant.js";
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
@@ -1169,6 +1170,44 @@ async function main() {
   /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
   const assistant = new Assistant();
+  // Git işleri: uzak depo TFS sunucusundaysa kimlik TFS anahtarından (yoksa kullanıcının kendi git kimliği)
+  const gitOps = new GitOps(async (remoteUrl) => {
+    let c;
+    try {
+      c = tfsConn();
+    } catch {
+      return {};
+    }
+    return authEnv(c, remoteUrl);
+  });
+  const GIT_OPS = new Set(["dal", "guncelle", "yeniDal", "kaydet", "sakla", "geriGetir"]);
+  const gitApi = {
+    status: async (dir?: string) => {
+      const d = dir && fs.existsSync(dir) ? dir : cwd;
+      try {
+        return { ok: true, dir: d, repos: await gitOps.status(d) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    plan: async (r: Record<string, unknown>) => {
+      const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string) : undefined);
+      const op = s("op");
+      if (!op || !GIT_OPS.has(op)) return { ok: false, error: "geçersiz git işi" };
+      try {
+        return await gitOps.plan({
+          dir: s("dir") || cwd,
+          op: op as GitOpKind,
+          repo: s("repo"),
+          branch: s("branch"),
+          message: s("message"),
+        });
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    apply: (id: string) => gitOps.apply(id),
+  };
   const speechApi = {
     view: () => speechView(cfg.speech, cfg),
     save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
@@ -1873,6 +1912,7 @@ async function main() {
       // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
       tfs: tfsApi,
       speech: speechApi,
+      git: gitApi,
       setToggle,
       getMcpStatus: mcpView,
       getMcpTools: async (name) => {

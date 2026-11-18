@@ -259,6 +259,15 @@ export interface UiServerOptions {
   tfs?: TfsApi;
   /** Sesle görev yazma (src/speech.ts): ayarlar, bağlantı denemesi, kaydı metne çevirme */
   speech?: SpeechApi;
+  /** Git işleri (src/gitOps.ts): depoların durumu, işi planla, onaylanınca uygula */
+  git?: GitApi;
+}
+
+/** Git uçları (src/index.ts kurar); dir verilmezse genel hedef dizin */
+export interface GitApi {
+  status(dir?: string): Promise<{ ok: boolean; dir?: string; repos?: unknown; error?: string }>;
+  plan(req: Record<string, unknown>): Promise<unknown>;
+  apply(id: string): Promise<unknown>;
 }
 
 /** Sesle görev yazma uçları (src/index.ts kurar) */
@@ -905,6 +914,30 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
           return json(res, 400, { ok: false, error: "geçersiz istek" });
         const r = await options.speech.understand(text, patterns);
         json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+    if (url.pathname === "/git/durum" && req.method === "GET") {
+      if (!options.git) return json(res, 404, { ok: false, error: "kapalı" });
+      const dir = url.searchParams.get("dir") || undefined;
+      void options.git.status(dir).then((r) => json(res, 200, r));
+      return;
+    }
+    if ((req.url === "/git/plan" || req.url === "/git/uygula") && req.method === "POST") {
+      // Depolarda değişiklik yapar: yalnızca JSON ve aynı kökenden (başka site tetikleyemesin)
+      const origin = req.headers.origin;
+      if (
+        !/^application\/json/i.test(req.headers["content-type"] ?? "") ||
+        (origin && new URL(origin).host !== req.headers.host)
+      )
+        return json(res, 403, { ok: false, error: "izin yok" });
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.git) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        if (req.url === "/git/uygula") {
+          if (typeof parsed.id !== "string") return json(res, 400, { ok: false, error: "geçersiz istek" });
+          return json(res, 200, await options.git.apply(parsed.id));
+        }
+        json(res, 200, await options.git.plan(parsed));
       });
       return;
     }
