@@ -4866,13 +4866,14 @@ const KOMUTLAR = [
   { re: /^(tekrarla|tekrar (oku|soyle|et)|bir daha (oku|soyle)|ne dedin)$/, yap: () => sonSoz && konusabilir() ? konus(sonSoz) : sesNot("Tekrarlanacak bir şey yok.") },
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
+  { ornek: "İngilizce de: help · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
     const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
   { ornek: "metin düzeltmeyi aç · kapat", re: /^(metin |gorev metni |metni )?(duzeltmeyi|duzeltme(yi)?|modelle duzeltmeyi) (?<is>ac|kapat)$/, yap: (m) => duzeltmeAyarla(m.groups.is === "ac") },
   { ornek: "panele dön (Ayarlar açıkken)", re: /^(panele (don|gec|git)|geri (don|gel)|geri|sayfayi kapat|ayarlari kapat|pencereyi kapat|kapat)$/, yap: () => katmanKapat(true) },
   { grup: "Oturumlar" },
-  { ornek: "yeni görev … (yeni oturumda yazar)", re: /^yeni (bir )?(gorev|oturum)( (ac|baslat|olustur))?\s+(.+)$/d, yap: (m, ham) => {
+  { ornek: "yeni görev … (yeni oturumda yazar)", re: /^yeni (bir )?(gorev|oturum)( (ac|baslat|olustur))?\s+(?!(?:ac|baslat|olustur)$)(.+)$/d, yap: (m, ham) => {
     openSession(""); gorevYazimiBasla(serbest(ham, m, 5)); } },
   { ornek: "yeni oturum aç", re: /^yeni (bir )?(oturum|gorev)( ac| baslat| olustur)?$/, yap: () => { openSession(""); tamam("Yeni oturum taslağı açıldı — görevi yaz ya da söyle"); } },
   { grup: "TFS" },
@@ -4969,8 +4970,81 @@ const KOMUTLAR = [
   } },
   { ornek: "… oturumunu aç", re: /^((.+?)\s+(oturumunu|oturumuna|oturumu)\s*(ac|gec|git)?|oturumu ac\s+(.+))$/d, yap: (m, ham) => oturumSesle(serbest(ham, m, m.indices[2] ? 2 : 5)) },
 ];
+// ── İngilizce söyleyiş: en sık komutlar İngilizce de anlaşılır (gerisini komut modeli anlar) ──
+// İngilizce cümle Türkçe karşılığına çevrilir, sonra her zamanki yoldan geçer — aynı iş, aynı onay.
+// Serbest metin (arama, gerekçe, commit mesajı, dal/depo adı) söylendiği gibi taşınır.
+const EN_GOREV = [ // görev yazılırken yalnızca bunlar (gerisi görev metnidir)
+  [/^(start|send( it)?|submit|start the task|send the task)$/i, "başlat"],
+  [/^(done|finished|that'?s it|that'?s all|ok(ay)?)$/i, "tamam"],
+  [/^(cancel|discard( it)?|delete it|cancel the task)$/i, "iptal"],
+];
+const EN_YORUM = [ // plana not yazılırken
+  [/^(re-?plan|plan again|redo the plan|send|reject)$/i, "tekrar plan yap"],
+  [/^(done|finished|that'?s it|ok(ay)?)$/i, "tamam"],
+  [/^(cancel|discard( it)?)$/i, "iptal"],
+];
+const EN_CEVAP = [ // soru açıkken
+  [/^(yes|yeah|yep|sure|ok(ay)?|do it|go ahead|read( it)?|open( it)?)$/i, "evet"],
+  [/^(no|nope|cancel|don'?t|never mind|not now|later|no thanks)$/i, "hayır"],
+];
+const EN_KOMUT = [
+  [/^(help|commands|what can (i|you) (say|do))$/i, "yardım"],
+  [/^read( it| this| the plan| the list| the answer)?$/i, "oku"],
+  [/^(repeat( that| it)?|say (it|that) again)$/i, "tekrarla"],
+  [/^(stop talking|be quiet|quiet|shut up|silence|mute)$/i, "sus"],
+  [/^((open|start|create) )?(a )?new session$/i, "yeni oturum aç"],
+  [/^new task (.+)$/i, (m) => "yeni görev " + m[1]],
+  [/^(write (a )?)?task (.+)$/i, (m) => "görev " + m[3]],
+  [/^(approve|accept)( it| the plan)?$|^looks good$/i, "onayla"],
+  [/^(finish|end)( it| the flow)?$/i, "bitir"],
+  [/^(reject|decline)( it| the plan)?(,? because (.+))?$/i, (m) => "reddet" + (m[4] ? " çünkü " + m[4] : "")],
+  [/^(re-?plan|plan again|redo the plan)$/i, "tekrar plan yap"],
+  [/^(add (a )?)?(comment|note)( on the plan)?$/i, "yorum yap"],
+  [/^(add (a )?)?(comment|note) (.+)$/i, (m) => "yorum ekle " + m[4]],
+  [/^(stop|abort|stop (it|the task|the run|the job))$/i, "durdur"],
+  [/^run (it )?now$/i, "şimdi çalıştır"],
+  [/^(start|send( it)?|submit|start the task)$/i, "başlat"],
+  [/^clear (the )?(box|task|text)$/i, "kutuyu temizle"],
+  [/^((open|show) )?(the )?settings( page)?$|^go to settings$/i, "ayarları aç"],
+  [/^(go back|back|close( it| this| the page)?|back to (the )?panel)$/i, "panele dön"],
+  [/^((open|show) )?(the )?security (reports?|page)$/i, "güvenlik raporlarını aç"],
+  [/^((open|show) )?(the )?release notes$/i, "sürüm notlarını aç"],
+  [/^(next|go to (the )?next) session$/i, "sonraki oturum"],
+  [/^(previous|go to (the )?previous) session$/i, "önceki oturum"],
+  [/^(what'?s running|what is running|(show )?running sessions)$/i, "çalışan oturumları göster"],
+  [/^(open (the )?)?(session )?waiting for (my )?approval$/i, "onay bekleyen oturumu aç"],
+  [/^(search|find|look for) (.+?) (in|across) (all|every) sessions?$/i, (m) => `tüm oturumlarda ${m[2]} ara`],
+  [/^(search|find|look for) (.+?) in (this|the current) session$/i, (m) => `bu oturumda ${m[2]} ara`],
+  [/^clear (the )?search$/i, "aramayı temizle"],
+  [/^(search|find|look for) (.+)$/i, (m) => `${m[2]} ara`],
+  [/^((show )?(my )?assigned (work )?items|(what'?s|what is) assigned to me|(show )?my work items)$/i, "bana atananları göster"],
+  [/^((show )?(the )?status of my pull requests|my pull requests( status)?|(any )?(new )?comments on my pull requests)$/i, "pull request'lerimin durumu"],
+  [/^(git status|status of (the )?repos|which branch am i on)$/i, "git durumu"],
+  [/^(?:checkout|switch to) (.+?)(?: branch)? (?:in|on) (?:all|every) repos(?:itories)?$/i, (m) => `tüm repolarda checkout ${m[1]}`],
+  [/^(?:checkout|switch to) (.+?)(?: branch)? (?:in|on) (?:the )?(.+?)(?: repo(?:sitory)?)?$/i, (m) => `${m[2]} reposunda checkout ${m[1]}`],
+  [/^(?:switch to) (.+?)(?: branch)?$/i, (m) => `checkout ${m[1]}`],
+  [/^pull( all( repos(itories)?)?| everything)?$/i, "tüm repoları pull et"],
+  [/^pull (?:in |on )?(?:the )?(.+?)(?: repo(?:sitory)?)$/i, (m) => `${m[1]} reposunda pull et`],
+  [/^(?:create|open) (?:a )?(?:new )?branch (.+)$/i, (m) => `new branch ${m[1]}`],
+  [/^commit and push(?: (?:in|on) (?:the )?(.+?) repo(?:sitory)?)?(?:,? (?:with )?(?:the )?message (.+))?$/i, (m) => (m[1] ? m[1] + " reposunda " : "") + "commit ve push yap" + (m[2] ? " mesaj " + m[2] : "")],
+  [/^(stash pop|pop (the )?stash|unstash|apply (the )?stash)$/i, "stash pop"],
+  [/^stash( (my|the|all) changes)?$/i, "değişiklikleri stash'le"],
+];
+function ingilizceKomut(ham) {
+  const t = ham.replace(/\b(hey\s+|hi\s+)?kur\s?ma[yi]\b[,:]?/gi, " ").replace(/\bplease\b/gi, " ").replace(/\s+/g, " ")
+    .trim().replace(/^[,;:\s]+/, "").replace(/[\s.!?,;:]+$/, "");
+  if (!t || /[çğıöşüÇĞİÖŞÜ]/.test(t)) return null; // Türkçe harf varsa İngilizce değil
+  const liste = gorevYazimi ? EN_GOREV : yorumYazimi ? EN_YORUM : komutOnay ? [...EN_CEVAP, ...EN_KOMUT] : EN_KOMUT;
+  for (const [re, tr] of liste) {
+    const m = re.exec(t);
+    if (m) return typeof tr === "function" ? tr(m) : tr;
+  }
+  return null;
+}
 function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {}) {
   ham = ham.trim();
+  const en = modelden ? null : ingilizceKomut(ham);
+  if (en) ham = en;
   sonSesKomutu = Date.now();
   if (!modelden) sonAnlama = null;
   // Sade dizge özgünle AYNI uzunlukta: "kurmay", "hey kurmay", "lütfen" boşluğa çevrilir, kırpma
