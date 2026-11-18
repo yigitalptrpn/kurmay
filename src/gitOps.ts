@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { okunusBul } from "./okunus.js";
 import { git, GitError, repoAt } from "./tfsGit.js";
 
 /**
@@ -187,9 +188,17 @@ export class GitOps {
     for (const f of [(x: string) => x === n, (x: string) => x.startsWith(n), (x: string) => x.includes(n)]) {
       const hits = all.filter((r) => f(norm(r.name)));
       if (hits.length === 1) return { repos: hits };
-      if (hits.length > 1) return { error: `“${q}” birden çok depoya uyuyor.`, candidates: hits.map((r) => r.name) };
+      if (hits.length > 1)
+        return { error: `“${q}” birden çok depoya uyuyor.`, candidates: hits.map((r) => r.name).slice(0, 5) };
     }
-    return { error: `“${q}” adında depo yok.`, candidates: all.map((r) => r.name) };
+    // Okunuşa göre: İngilizce ad Türkçe söylenmiş olabilir ("ordır servis" → order-service)
+    const o = okunusBul(
+      q.replace(/\b(repo|depo)\w*\b/gi, ""),
+      all.map((r) => r.name),
+    );
+    if (o.ad) return { repos: all.filter((r) => r.name === o.ad) };
+    if (o.adaylar) return { error: `“${q}” birden çok depoya benziyor.`, candidates: o.adaylar };
+    return { error: `“${q}” adında depo yok (bu dizinde ${all.length} depo var — listesi için “git durumu” de).` };
   }
 
   /** Dal adını depodaki dallarla eşler (söylenen "feature 132" → "feature/132") */
@@ -205,7 +214,8 @@ export class GitOps {
       const inc = repo.branches.filter((b) => norm(b).includes(n));
       if (inc.length === 1) return inc[0];
     }
-    return undefined;
+    // Okunuşa göre ("divelop" → develop, "fiçır 132" → feature/132)
+    return okunusBul(q0, repo.branches).ad;
   }
 
   private async localBranch(dir: string, b: string): Promise<boolean> {

@@ -4737,6 +4737,31 @@ function komutIpucu() {
 const komutSade = (t) => srFold(t).replace(/[^\p{L}\p{N}\s]/gu, " ");
 function serbest(ham, m, grup) { const [a, b] = m.indices[grup] || [0, 0]; return ham.slice(a, b).trim().replace(/[.!?。]+$/, ""); }
 /** Oturumu adından bulur: kelimelerin çoğu tutmalı; iki aday yakınsa sorar */
+// Okunuşa göre eşleştirme — src/okunus.ts ile AYNI mantık (biri değişirse öteki de): İngilizce adlar
+// Türkçe söylenince ses tanıma okunduğu gibi yazar ("ordır servis" → order-service); ikisi de ses iskeletine çevrilir
+function okunus(s) {
+  let t = String(s).replace(/([a-zçğıöşü])(?=[A-Z])/g, "$1 ").toLocaleLowerCase("tr").replace(/â/g, "a").replace(/î/g, "i").replace(/û/g, "u");
+  t = t.replace(/tion/g, "şın").replace(/sion/g, "jın").replace(/ture/g, "çur").replace(/sh/g, "ş").replace(/ch/g, "ç").replace(/ph/g, "f")
+    .replace(/th/g, "t").replace(/ck/g, "k").replace(/qu/g, "kv").replace(/x/g, "ks").replace(/w/g, "v").replace(/c(?=[eiy])/g, "s").replace(/[cjq]/g, "k");
+  return t.replace(/ğ/g, "").replace(/[aeıioöuüyh]/g, "").replace(/[^a-zçşğ0-9]/g, "").replace(/(.)\1+/g, "$1");
+}
+function okunusMesafe(a, b) {
+  const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) { let o = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, o + (a[i - 1] === b[j - 1] ? 0 : 1)); o = t; } }
+  return d[b.length];
+}
+/** En yakın tek ad ya da (yakın birden çoksa) en fazla 3 aday; adlar: [{ad, deger}] */
+function okunusBul(sorgu, adlar) {
+  const q = okunus(sorgu);
+  if (q.length < 2) return {};
+  const s = adlar.map((x) => { const k = okunus(x.ad);
+    const puan = !k ? 1 : k === q ? 0 : q.length >= 3 && k.includes(q) ? 0.2 : okunusMesafe(q, k) / Math.max(q.length, k.length);
+    return { ...x, puan }; }).filter((x) => x.puan <= 0.34).sort((a, b) => a.puan - b.puan);
+  if (!s.length) return {};
+  if (s.length === 1 || s[1].puan - s[0].puan >= 0.1) return { tek: s[0].deger };
+  return { adaylar: s.slice(0, 3).map((x) => x.deger) };
+}
 function oturumBul(sorgu) {
   const kel = komutSade(sorgu).split(/\s+/).filter((w) => w.length >= 2);
   if (!kel.length) return { yok: true };
@@ -4748,7 +4773,11 @@ function oturumBul(sorgu) {
     const k = ad.filter((a) => kel.some((w) => tutar(w, a))).length / Math.max(1, ad.length); // adın ne kadarı söylendi
     return { s, p, k };
   }).filter((x) => x.p >= 0.6).sort((a, b) => b.p - a.p || b.k - a.k || b.s.updatedAt.localeCompare(a.s.updatedAt));
-  if (!puanlar.length) return { yok: true };
+  if (!puanlar.length) {
+    // Okunuşa göre (oturum adında İngilizce sınıf/servis adı geçiyorsa)
+    const o = okunusBul(sorgu, Object.values(sessionsById).map((s) => ({ ad: s.name, deger: s })));
+    return o.tek ? { s: o.tek } : o.adaylar ? { adaylar: o.adaylar } : { yok: true };
+  }
   const [ilk, iki] = puanlar;
   if (iki && iki.p === ilk.p && ilk.k - iki.k < 0.2) return { adaylar: puanlar.slice(0, 3).map((x) => x.s) };
   return { s: ilk.s };
@@ -4760,7 +4789,8 @@ function secenekBul(sel, sorgu) {
   const ops = [...sel.options].filter((o) => o.value);
   return ops.find((o) => sik(o.textContent) === q || sik(o.value) === q)
     || ops.find((o) => sik(o.value).includes(q) || sik(o.textContent).includes(q))
-    || ops.find((o) => q.includes(sik(o.value).replace(/[^a-z0-9]/g, "")));
+    || ops.find((o) => q.includes(sik(o.value).replace(/[^a-z0-9]/g, "")))
+    || okunusBul(sorgu.replace(/[\d.:]+[a-z]?\b/gi, ""), ops.map((o) => ({ ad: o.value.split("/").pop().split(":")[0].replace(/[\d.]+/g, ""), deger: o }))).tek;
 }
 function seciciDegistir(sel, deger) {
   if (sel.value === deger) return false;
@@ -5072,7 +5102,7 @@ async function gitPlanla(istek) {
     const res = await fetch("/git/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir: viewDir().dir, ...istek }) });
     r = await res.json();
   } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return olmaz(esc(r.error || "git işi planlanamadı") + (r.candidates?.length ? `<small>Depolar: ${r.candidates.map(esc).join(", ")}</small>` : ""));
+  if (!r.ok) return olmaz(esc(r.error || "git işi planlanamadı") + (r.candidates?.length ? `<small>Şunlardan biri mi: ${r.candidates.slice(0, 5).map(esc).join(", ")}?</small>` : ""));
   const satirlar = r.items.map((i) => `<div class="${i.run ? "" : "atla"}">${i.run ? "▸" : "·"} <b>${esc(i.repo)}</b>: ${esc(i.text)}</div>`).join("");
   if (!r.runs) return sesNot(`<b>${esc(r.title)}</b> — yapılacak bir şey yok<span class="git-plan">${satirlar}</span>`, "bilgi", false,
     `${r.title}: yapılacak bir şey yok. ` + r.items.map((i) => `${i.repo}, ${i.text}`).join(". "));
@@ -5113,7 +5143,8 @@ window.addEventListener("focus", () => gitYukle());
 
 // ── Oturumları toplu silme (elle: “Tümünü sil”; sesle: “tüm oturumları sil”, “… oturumunu sil”) ──
 // Çalışan / onay bekleyen oturum silinmez (atlanır). Konuşma ve koşu kayıtları diskte kalır.
-const grupBul = (ad) => grupAdlari().find((g) => sik(g) === sik(ad)) || grupAdlari().find((g) => sik(g).includes(sik(ad)));
+const grupBul = (ad) => grupAdlari().find((g) => sik(g) === sik(ad)) || grupAdlari().find((g) => sik(g).includes(sik(ad)))
+  || okunusBul(ad, grupAdlari().map((g) => ({ ad: g, deger: g }))).tek;
 function topluSil(ids, ad, sesle) {
   const liste = ids.map((id) => sessionsById[id]).filter(Boolean);
   const silinecek = liste.filter((x) => !x.busy), mesgul = liste.length - silinecek.length;
@@ -5272,6 +5303,11 @@ function dosyaKutusu(ad) {
     if (yollar.length === 1) return { kutu: kutular.find((k) => k.dataset.path === yollar[0]) };
     if (yollar.length > 1) return { birden: yollar, kutular };
   }
+  // Okunuşa göre ("peymınt kontrolır" → PaymentController.java)
+  const tumu = [...new Set(kutular.map((k) => k.dataset.path))];
+  const o = okunusBul(ad.replace(/\b(dosyasi|dosyasina|dosya)\b/gi, ""), tumu.map((y) => ({ ad: y.split(/[\\/]/).pop().replace(/\.[a-z0-9]+$/i, ""), deger: y })));
+  if (o.tek) return { kutu: kutular.find((k) => k.dataset.path === o.tek) };
+  if (o.adaylar) return { birden: o.adaylar, kutular };
   return { yok: true, kutular };
 }
 function yorumYazimiBasla(dosya, metin, kelime) {
