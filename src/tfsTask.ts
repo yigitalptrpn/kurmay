@@ -358,10 +358,10 @@ export async function prepareWorkItemTask(
   // ── Metin ──
   // Ajan talimatı ekranda gösterilmez (görev balonunda yalnızca iş öğesinin içeriği)
   const guide = [
-    `Bu görev TFS'teki #${item.id} numaralı iş öğesidir — Kurmay iş öğesini TFS'ten aldı (alanlar, bölümler, ` +
+    `Bu görev TFS'teki #${item.id} numaralı work item'dır — Kurmay work item'ı TFS'ten aldı (alanlar, bölümler, ` +
       "tartışma, bağlı öğeler; ekler ve metindeki görseller indirildi).",
     "- Hata ise: yeniden üretme adımları ve sistem bilgisiyle kök nedeni bul ve düzelt; yalnızca belirtiyi gizleme.",
-    "- Ürün iş öğesi / kullanıcı hikâyesi ise: kabul kriterlerinin HEPSİNİ karşıla — karşılanmayan kriter kalmasın.",
+    "- Ürün work item / kullanıcı hikâyesi ise: kabul kriterlerinin HEPSİNİ karşıla — karşılanmayan kriter kalmasın.",
     "- Tartışmadaki son kararlar açıklamadaki eski bilgiden önce gelir. Belirsiz ya da çelişkili bir nokta varsa makul bir varsayım seç ve yaz.",
     `- ${SADE_DIL}`,
   ].join("\n");
@@ -411,14 +411,14 @@ export async function prepareWorkItemTask(
 
   const names = files.map((f) => f.name);
   if (names.length || skipped.length) {
-    L.push("", "### İş öğesinin ekleri");
+    L.push("", "### Work item'ın ekleri");
     if (names.length) L.push(`İndirilenler (yolları aşağıdaki "Ekler" bölümünde): ${names.join(", ")}`);
     if (skipped.length) L.push(`İndirilemeyenler: ${skipped.join("; ")}`);
   }
 
   let display = L.join("\n");
   if (display.length > TASK_MAX)
-    display = display.slice(0, TASK_MAX).replace(/\s+\S*$/, "") + "\n…(iş öğesi metni çok uzun, kırpıldı)";
+    display = display.slice(0, TASK_MAX).replace(/\s+\S*$/, "") + "\n…(work item metni çok uzun, kırpıldı)";
   const text = `${guide}\n\n${display}`;
   return {
     meta: {
@@ -468,7 +468,8 @@ export function runSucceeded(events: readonly TimedEvent[]): boolean {
  */
 export const SADE_DIL =
   "Yazdığın özet, gerekçe ve cevaplar TFS'e olduğu gibi yazılacak; işin dışından biri de anlamalı: kısa cümle, " +
-  "günlük kelime, bir cümlede bir bilgi. Türkçesi olan yabancı kelimeyi kullanma (çekme isteği, dal, kayıt, birleştirme…); " +
+  "günlük kelime, bir cümlede bir bilgi. Git ve TFS terimleri ekibin alıştığı gibi İngilizce yazılır (commit, push, branch, " +
+  "merge, pull request, work item); bunların dışında Türkçesi olan yabancı kelimeyi kullanma; " +
   "gereksiz söz ve süs yok. Kod, dosya ve sınıf adları olduğu gibi kalır.";
 
 /** Kurmay'ın TFS'e yazdığı her mesajın başlığı (iş öğesi notu, PR cevabı/yorumu, PR açıklaması) —

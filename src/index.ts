@@ -440,7 +440,7 @@ async function main() {
     try {
       await writeWorkItem(conn, wi.id, { html: textToTfsHtml(text) });
       rt.bus.emit({ type: "tfs_written", id: wi.id, ok: true, auto: true, url: wi.url });
-      console.log(`📌 TFS #${wi.id}: sonuç iş öğesine yazıldı`);
+      console.log(`📌 TFS #${wi.id}: sonuç work item'a yazıldı`);
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       rt.bus.emit({ type: "tfs_written", id: wi.id, ok: false, auto: true, error });
@@ -484,11 +484,11 @@ async function main() {
     if (input.push) {
       if (!input.files?.length) return fail("gönderilecek dosya yok");
       const repo = pr.repoDir ? await openRepo(pr.repoDir, runDir) : undefined;
-      if (!repo) return fail("çekme isteğinin bilgisayardaki kopyası bulunamadı — değişiklikler gönderilemedi");
+      if (!repo) return fail("pull request'in bilgisayardaki kopyası bulunamadı — değişiklikler gönderilemedi");
       const branch = await currentBranch(repo.dir).catch(() => "");
       if (branch !== pr.source)
         return fail(
-          `bilgisayardaki kopya artık "${branch}" dalında, çekme isteğinin dalı "${pr.source}" — değişiklikler gönderilmedi`,
+          `bilgisayardaki kopya artık "${branch}" branch'inde, pull request'in branch'i "${pr.source}" — değişiklikler gönderilmedi`,
         );
       try {
         const r = await commitAndPush(
@@ -499,7 +499,7 @@ async function main() {
         );
         pushed = { branch: r.branch, commit: r.commit };
         console.log(
-          `📤 Çekme isteği !${pr.id}: ${r.files.length} dosya ${r.branch} dalına gönderildi (kayıt ${r.commit.slice(0, 8)})`,
+          `📤 Pull request !${pr.id}: ${r.files.length} dosya ${r.branch} branch'ine push edildi (commit ${r.commit.slice(0, 8)})`,
         );
       } catch (e) {
         return fail(`değişiklikler gönderilemedi: ${e instanceof Error ? e.message : String(e)}`);
@@ -898,7 +898,7 @@ async function main() {
         const runDir = started?.targetDir ?? e.targetDir ?? cwd;
         const { repos } = await groupByRepo(runChangedFiles(events, cfg.workflow.entry, runDir), runDir);
         if (!repos.size)
-          return { ok: false, error: "değişen dosyalar bir git deposunda değil — çekme isteği açılamaz" };
+          return { ok: false, error: "değişen dosyalar bir git deposunda değil — pull request açılamaz" };
         for (const [root, rels] of repos) {
           const repo = await openRepo(root, runDir);
           const label = repo?.rel ?? root;
@@ -941,7 +941,7 @@ async function main() {
             if ((await serverVersion(c)) < 5 && made.artifactId) {
               await linkArtifact(c, pend.id, made.artifactId, "Pull Request").catch((err) =>
                 console.warn(
-                  `⚠ TFS #${pend.id}: çekme isteği bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
+                  `⚠ TFS #${pend.id}: pull request bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
                 ),
               );
             }
@@ -952,7 +952,7 @@ async function main() {
               ...(made.existed ? { existed: true } : {}),
               branch: pushed.branch,
             });
-            console.log(`🔀 TFS #${pend.id}: çekme isteği !${made.id} (${label}, ${pushed.branch} → ${target})`);
+            console.log(`🔀 TFS #${pend.id}: pull request !${made.id} (${label}, ${pushed.branch} → ${target})`);
           } catch (err) {
             prs.push({
               repo: label,
@@ -964,13 +964,13 @@ async function main() {
         if (prs.every((p) => p.error)) {
           return {
             ok: false,
-            error: `çekme isteği açılamadı — ${prs.map((p) => `${p.repo}: ${p.error}`).join("; ")}`,
+            error: `pull request açılamadı — ${prs.map((p) => `${p.repo}: ${p.error}`).join("; ")}`,
             prs,
           };
         }
       }
       const prLines = prs.filter((p) => p.id).map((p) => `[!${p.id}](${p.url}) (${p.repo}, dal ${p.branch})`);
-      const note = text.trim() + (prLines.length ? `\n\n**Çekme isteği:** ${prLines.join(", ")}` : "");
+      const note = text.trim() + (prLines.length ? `\n\n**Pull request:** ${prLines.join(", ")}` : "");
       try {
         const r = await writeWorkItem(c, pend.id, {
           ...(note.trim() ? { html: textToTfsHtml(note) } : {}),
@@ -989,7 +989,7 @@ async function main() {
       } catch (err) {
         return {
           ok: false,
-          error: `${prs.length ? "çekme isteği açıldı ama " : ""}iş öğesine yazılamadı: ${err instanceof Error ? err.message : String(err)}`,
+          error: `${prs.length ? "pull request açıldı ama " : ""}work item'a yazılamadı: ${err instanceof Error ? err.message : String(err)}`,
           ...(prs.length ? { prs } : {}),
         };
       }
@@ -1009,7 +1009,7 @@ async function main() {
       const repo = await findRepo(target, pr.repository.name);
       if (!repo) throw new TfsError(`"${pr.repository.name}" deposu hedef dizinde bulunamadı (${target})`);
       const commit = await checkoutPrBranch(repo, pr.source, await authEnv(c, repo.remoteUrl));
-      console.log(`🔀 ${repo.rel}: çekme isteği !${id} dalına geçildi (${pr.source}, kayıt ${commit})`);
+      console.log(`🔀 ${repo.rel}: pull request !${id} branch'ine checkout yapıldı (${pr.source}, commit ${commit})`);
       return { branch: pr.source, commit, repo: repo.rel };
     },
     /** PR'a yaz (kartta düzenlenmiş haliyle) */
@@ -1018,7 +1018,7 @@ async function main() {
       if (!e) return { ok: false, error: "oturum bulunamadı" };
       const rt = runtimes.get(e.id, e.runLogs);
       const pend = pendingPrWriteback(rt);
-      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      if (!pend) return { ok: false, error: "bu oturumda pull request'e yazılmayı bekleyen sonuç yok" };
       const r = await executePrWrite(
         pend.pr,
         { ...input, files: input.push ? pend.draft.commit?.files : undefined },
@@ -1035,7 +1035,7 @@ async function main() {
       if (!e) return { ok: false, error: "oturum bulunamadı" };
       const rt = runtimes.get(e.id, e.runLogs);
       const pend = pendingPrWriteback(rt);
-      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      if (!pend) return { ok: false, error: "bu oturumda pull request'e yazılmayı bekleyen sonuç yok" };
       emitAfterRun(e, rt, { type: "tfs_pr_written", id: pend.pr.id, ok: false, skipped: true });
       return { ok: true };
     },
@@ -2027,7 +2027,7 @@ async function main() {
                   ...(prepared.skipped.length ? { skipped: prepared.skipped } : {}),
                 },
                 attachmentIntro:
-                  `TFS iş öğesindeki ekler ve metindeki görseller (${prepared.files.length} dosya)` +
+                  `TFS work item'daki ekler ve metindeki görseller (${prepared.files.length} dosya)` +
                   `${files?.length ? `, ayrıca kullanıcının verdiği ${files.length} dosya` : ""}.`,
               };
               console.log(`📌 TFS #${prepared.meta.id} alındı: ${prepared.meta.title} (${prepared.files.length} ek)`);
@@ -2069,7 +2069,7 @@ async function main() {
               tfs = { display: t, pr: { ...prepared.meta, inherited: true } };
             } else if (entry?.workItem && tfsReady(cfg.tfs, configRoot)) {
               const w = entry.workItem;
-              agentTask = `Bu görev, bu oturumda üzerinde çalışılan TFS #${w.id} — "${w.title}" iş öğesinin devamıdır.\n\n${t}`;
+              agentTask = `Bu görev, bu oturumda üzerinde çalışılan TFS #${w.id} — "${w.title}" work item'ın devamıdır.\n\n${t}`;
               tfs = { display: t, workItem: { ...w, inherited: true } };
             }
             const busy = runtimes.busy();

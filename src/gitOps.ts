@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { okunusBul } from "./okunus.js";
 import { git, GitError, repoAt } from "./tfsGit.js";
 
 /**
@@ -187,9 +188,17 @@ export class GitOps {
     for (const f of [(x: string) => x === n, (x: string) => x.startsWith(n), (x: string) => x.includes(n)]) {
       const hits = all.filter((r) => f(norm(r.name)));
       if (hits.length === 1) return { repos: hits };
-      if (hits.length > 1) return { error: `“${q}” birden çok depoya uyuyor.`, candidates: hits.map((r) => r.name) };
+      if (hits.length > 1)
+        return { error: `“${q}” birden çok depoya uyuyor.`, candidates: hits.map((r) => r.name).slice(0, 5) };
     }
-    return { error: `“${q}” adında depo yok.`, candidates: all.map((r) => r.name) };
+    // Okunuşa göre: İngilizce ad Türkçe söylenmiş olabilir ("ordır servis" → order-service)
+    const o = okunusBul(
+      q.replace(/\b(repo|depo)\w*\b/gi, ""),
+      all.map((r) => r.name),
+    );
+    if (o.ad) return { repos: all.filter((r) => r.name === o.ad) };
+    if (o.adaylar) return { error: `“${q}” birden çok depoya benziyor.`, candidates: o.adaylar };
+    return { error: `“${q}” adında depo yok (bu dizinde ${all.length} depo var — listesi için “git durumu” de).` };
   }
 
   /** Dal adını depodaki dallarla eşler (söylenen "feature 132" → "feature/132") */
@@ -205,7 +214,8 @@ export class GitOps {
       const inc = repo.branches.filter((b) => norm(b).includes(n));
       if (inc.length === 1) return inc[0];
     }
-    return undefined;
+    // Okunuşa göre ("divelop" → develop, "fiçır 132" → feature/132)
+    return okunusBul(q0, repo.branches).ad;
   }
 
   private async localBranch(dir: string, b: string): Promise<boolean> {
@@ -236,8 +246,8 @@ export class GitOps {
 
     switch (req.op) {
       case "dal": {
-        if (!branchQ) return { ok: false, error: "Hangi dala geçileceğini söyle." };
-        title = `“${spokenBranch(branchQ)}” dalına geçiş`;
+        if (!branchQ) return { ok: false, error: "Hangi branch'e geçileceğini söyle." };
+        title = `Checkout: “${spokenBranch(branchQ)}”`;
         // Yerelde ve son getirmede bulunamayan dal için uzak depoyu bir kez getir (yalnızca bilgi günceller)
         const missing = pick.repos.filter((r) => !r.error && r.remote && !this.matchBranch(r, branchQ));
         if (missing.length) {
@@ -260,52 +270,53 @@ export class GitOps {
             continue;
           }
           const b = this.matchBranch(r, branchQ);
-          if (!b) skip(r, `“${branchQ}” dalı yok (sunucuda da bulunamadı) — atlanacak`);
-          else if (r.branch === b) skip(r, `zaten ${b} dalında`);
-          else if (r.dirty) skip(r, `${r.dirty} kaydedilmemiş değişiklik var — atlanacak (önce kaydet ya da sakla)`);
+          if (!b) skip(r, `“${branchQ}” branch'i yok (sunucuda da bulunamadı) — atlanacak`);
+          else if (r.branch === b) skip(r, `zaten ${b} branch'inde`);
+          else if (r.dirty)
+            skip(r, `${r.dirty} commit edilmemiş değişiklik var — atlanacak (önce commit et ya da stash'le)`);
           else {
             const local = await this.localBranch(r.dir, b);
             add(
               { repo: r, branch: b, fromRemote: !local },
-              `${r.branch} → ${b}${local ? "" : " (sunucudaki daldan açılacak)"}`,
+              `${r.branch} → ${b}${local ? "" : " (sunucudaki branch'ten açılacak)"}`,
             );
           }
         }
         break;
       }
       case "guncelle":
-        title = "Sunucudan güncelleme (yalnızca hızlı ileri)";
+        title = "Pull (yalnızca fast-forward)";
         for (const r of pick.repos) {
           if (r.error) skip(r, `okunamadı: ${r.error}`);
-          else if (r.branch === "HEAD") skip(r, "bir dalda değil — atlanacak");
-          else if (!r.upstream) skip(r, `${r.branch} dalının sunucuda karşılığı yok — atlanacak`);
+          else if (r.branch === "HEAD") skip(r, "bir branch'te değil — atlanacak");
+          else if (!r.upstream) skip(r, `${r.branch} branch'inin sunucuda karşılığı yok — atlanacak`);
           else
             add(
               { repo: r },
-              `${r.branch} ← ${r.upstream}${r.ahead ? ` · ${r.ahead} gönderilmemiş kaydın var` : ""}${r.dirty ? ` · ${r.dirty} kaydedilmemiş değişiklik (çakışırsa durur)` : ""}`,
+              `${r.branch} ← ${r.upstream}${r.ahead ? ` · ${r.ahead} push edilmemiş commit'in var` : ""}${r.dirty ? ` · ${r.dirty} commit edilmemiş değişiklik (çakışırsa durur)` : ""}`,
             );
         }
         break;
       case "yeniDal": {
         const name = spokenBranch(branchQ);
-        if (!name) return { ok: false, error: "Yeni dalın adını söyle." };
+        if (!name) return { ok: false, error: "Yeni branch'in adını söyle." };
         try {
           await git(pick.repos[0].dir, ["check-ref-format", "--branch", name]);
         } catch {
-          return { ok: false, error: `“${name}” geçerli bir dal adı değil.` };
+          return { ok: false, error: `“${name}” geçerli bir branch adı değil.` };
         }
-        title = `Yeni dal: ${name}`;
+        title = `New branch: ${name}`;
         for (const r of pick.repos) {
           if (r.error) skip(r, `okunamadı: ${r.error}`);
           else if (r.branches.includes(name))
-            skip(r, `${name} dalı zaten var — atlanacak (geçmek için “dalına geç” de)`);
-          else add({ repo: r, branch: name }, `${r.branch} dalından ${name} açılıp ona geçilecek`);
+            skip(r, `${name} branch'i zaten var — atlanacak (geçmek için “… branch'ine checkout yap” de)`);
+          else add({ repo: r, branch: name }, `${r.branch} branch'inden ${name} açılıp ona geçilecek`);
         }
         break;
       }
       case "kaydet": {
-        if (!message) return { ok: false, error: "Kayıt mesajını söyle (… mesaj …) ya da kutuya yaz." };
-        title = `Kaydet ve gönder: “${message}”`;
+        if (!message) return { ok: false, error: "Commit mesajını söyle (… mesaj …) ya da kutuya yaz." };
+        title = `Commit + Push: “${message}”`;
         for (const r of pick.repos) {
           if (r.error) {
             skip(r, `okunamadı: ${r.error}`);
@@ -316,7 +327,7 @@ export class GitOps {
             continue;
           }
           if (r.branch === "HEAD") {
-            skip(r, "bir dalda değil — atlanacak");
+            skip(r, "bir branch'te değil — atlanacak");
             continue;
           }
           const files = await this.dirtyList(r.dir);
@@ -329,19 +340,19 @@ export class GitOps {
         break;
       }
       case "sakla":
-        title = "Değişiklikleri sakla (stash)";
+        title = "Stash";
         for (const r of pick.repos) {
           if (r.error) skip(r, `okunamadı: ${r.error}`);
           else if (!r.dirty) skip(r, "değişiklik yok");
-          else add({ repo: r }, `${r.dirty} değişiklik saklanacak`);
+          else add({ repo: r }, `${r.dirty} değişiklik stash'lenecek`);
         }
         break;
       case "geriGetir":
-        title = "Saklanan değişiklikleri geri getir";
+        title = "Stash pop";
         for (const r of pick.repos) {
           if (r.error) skip(r, `okunamadı: ${r.error}`);
-          else if (!r.stash) skip(r, "saklanmış değişiklik yok");
-          else add({ repo: r }, `en son saklanan geri getirilecek${r.stash > 1 ? ` (${r.stash} kayıt var)` : ""}`);
+          else if (!r.stash) skip(r, "stash yok");
+          else add({ repo: r }, `son stash geri getirilecek${r.stash > 1 ? ` (${r.stash} stash var)` : ""}`);
         }
         break;
       default:
@@ -375,10 +386,10 @@ export class GitOps {
       case "dal": {
         // Plan ile onay arasında değişiklik yapılmış olabilir — yine dokunma
         if ((await this.dirtyList(d)).length)
-          throw new GitError("bu arada kaydedilmemiş değişiklik oluştu — geçilmedi");
+          throw new GitError("bu arada commit edilmemiş değişiklik oluştu — checkout yapılmadı");
         if (s.fromRemote) await git(d, ["checkout", "-b", s.branch!, "--track", `${s.repo.remote}/${s.branch}`]);
         else await git(d, ["checkout", s.branch!]);
-        return `${s.branch} dalına geçildi`;
+        return `${s.branch} branch'ine checkout yapıldı`;
       }
       case "guncelle": {
         const before = await git(d, ["rev-parse", "HEAD"]);
@@ -386,11 +397,11 @@ export class GitOps {
         const after = await git(d, ["rev-parse", "HEAD"]);
         if (before === after) return "zaten güncel";
         const n = await git(d, ["rev-list", "--count", `${before}..${after}`]).catch(() => "?");
-        return `${n} yeni kayıt alındı`;
+        return `${n} yeni commit alındı`;
       }
       case "yeniDal":
         await git(d, ["checkout", "-b", s.branch!]);
-        return `${s.branch} dalı açıldı, ona geçildi`;
+        return `${s.branch} branch'i açıldı, checkout yapıldı`;
       case "kaydet": {
         await git(d, ["add", "-A"]);
         const [subject, ...body] = (p.message ?? "").split(/\r?\n/);
@@ -398,7 +409,7 @@ export class GitOps {
         if (body.join("\n").trim()) args.push("-m", body.join("\n").trim());
         await git(d, args);
         const commit = (await git(d, ["rev-parse", "--short", "HEAD"])).trim();
-        if (!s.repo.remote) return `kaydedildi (${commit}) — uzak depo yok, gönderilmedi`;
+        if (!s.repo.remote) return `commit edildi (${commit}) — uzak depo yok, push yapılmadı`;
         const branch = await git(d, ["rev-parse", "--abbrev-ref", "HEAD"]);
         try {
           await git(d, ["push", ...(s.repo.upstream ? [] : ["-u"]), s.repo.remote, `HEAD:refs/heads/${branch}`], {
@@ -406,22 +417,24 @@ export class GitOps {
             timeoutMs: NET_TIMEOUT_MS,
           });
         } catch (e) {
-          throw new GitError(`kaydedildi (${commit}) ama gönderilemedi: ${e instanceof Error ? e.message : String(e)}`);
+          throw new GitError(
+            `commit edildi (${commit}) ama push yapılamadı: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
-        return `kaydedildi (${commit}) ve gönderildi → ${s.repo.remote}/${branch}`;
+        return `commit edildi (${commit}) ve push yapıldı → ${s.repo.remote}/${branch}`;
       }
       case "sakla":
         await git(d, ["stash", "push", "-u", "-m", `Kurmay ${new Date().toLocaleString("tr-TR")}`]);
-        return "değişiklikler saklandı";
+        return "değişiklikler stash'lendi";
       case "geriGetir":
         try {
           await git(d, ["stash", "pop"]);
         } catch (e) {
           throw new GitError(
-            `geri getirilirken çakıştı — değişiklikler saklı kaldı, elle çözmen gerek: ${e instanceof Error ? e.message : String(e)}`,
+            `stash pop çakıştı — değişiklikler stash'te kaldı, elle çözmen gerek: ${e instanceof Error ? e.message : String(e)}`,
           );
         }
-        return "saklanan değişiklikler geri getirildi";
+        return "stash geri getirildi";
     }
   }
 

@@ -332,7 +332,7 @@ function httpError(r: RawResponse, what: string): TfsError {
       return new TfsError("sunucu oturum açma sayfası döndürdü — erişim anahtarı geçersiz", 203, typeKey);
     case 403:
       return new TfsError(
-        `yetki yok: ${what} (anahtarın kapsamında "İş öğeleri — okuma ve yazma" var mı?)${tail}`,
+        `yetki yok: ${what} (anahtarın kapsamında "Work Items — Read & write" var mı?)${tail}`,
         403,
         typeKey,
       );
@@ -707,7 +707,7 @@ function describeArtifact(url: string, name: string): string | undefined {
   let m = /^vstfs:\/\/\/Git\/Commit\/[^/]+\/[^/]+\/([0-9a-f]{7,40})/i.exec(dec);
   if (m) return `commit ${m[1].slice(0, 10)}`;
   m = /^vstfs:\/\/\/Git\/PullRequestId\/[^/]+\/[^/]+\/(\d+)/i.exec(dec);
-  if (m) return `çekme isteği !${m[1]}`;
+  if (m) return `pull request !${m[1]}`;
   m = /^vstfs:\/\/\/Git\/Ref\/[^/]+\/[^/]+\/GB(.+)$/i.exec(dec);
   if (m) return `dal ${m[1]}`;
   m = /^vstfs:\/\/\/VersionControl\/Changeset\/(\d+)/i.exec(dec);
@@ -873,12 +873,12 @@ export async function getWorkItem(c: TfsConnection, id: number, signal?: AbortSi
   try {
     raw = await call<RawWorkItem>(c, "GET", `/_apis/wit/workitems/${id}`, {
       query: { $expand: "all", "api-version": ver(v) },
-      what: `#${id} iş öğesi`,
+      what: `#${id} work item`,
       signal,
     });
   } catch (e) {
     if (e instanceof TfsError && (e.status === 404 || e.status === 403)) {
-      throw new TfsError(`#${id} iş öğesi bulunamadı ya da okuma yetkin yok`, e.status, e.code);
+      throw new TfsError(`#${id} work item bulunamadı ya da okuma yetkin yok`, e.status, e.code);
     }
     throw e;
   }
@@ -914,7 +914,7 @@ export async function getSummaries(
     try {
       const r = await call<{ value?: RawWorkItem[] }>(c, "GET", "/_apis/wit/workitems", {
         query: { ids: part.join(","), fields, "api-version": ver(v), ...(v >= 4.1 ? { errorPolicy: "omit" } : {}) },
-        what: "iş öğesi listesi",
+        what: "work item listesi",
         signal,
       });
       put(r?.value);

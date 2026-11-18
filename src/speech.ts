@@ -211,7 +211,7 @@ export async function understandCommand(
     'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\n' +
     'Komut "yok" ise ve cümle sana söylenmiş bir selam, teşekkür, soru ya da sohbetse "cevap" alanına kısa, ' +
     "sıcak, sade Türkçe bir cevap yaz (en fazla iki kısa cümle; sesli okunacak, madde işareti ve emoji kullanma). " +
-    "Ne yapabildiğini sorarsa kalıplardan bir iki örnek ver. Görevler, kod, çekme istekleri ya da iş öğeleri " +
+    "Ne yapabildiğini sorarsa kalıplardan bir iki örnek ver. Görevler, kod, pull request'ler ya da work item'lar " +
     "hakkında bilgi UYDURMA — bilmiyorsan ilgili komutu söylemesini öner. Cümle başka birine söylenmiş ya da " +
     'yarım bir konuşma gibiyse "cevap" boş kalsın. Komut bulduysan "cevap" boş kalsın.\n\nKomut kalıpları:\n' +
     list.map((p) => `- ${p}`).join("\n") +

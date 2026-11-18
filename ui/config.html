@@ -136,11 +136,11 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">TFS modu <span id="tfsState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Açıkken görev kutusunda bir <b>iş öğesi</b> (#123) ya da <b>çekme isteği</b> (!45) seçersin: numara, adres, başlıkta arama ya da sana atananlar.
-        İş öğesinde Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve görselleri TFS'ten kendisi alıp ekibe görev yapar;
-        bitince sonucu iş öğesine yazar, istersen değişiklikleri yeni dala gönderip iş öğesine bağlı çekme isteği açar. Çekme isteğinde ya açık yorumları ele alır
-        (kodu çekme isteğinin dalında düzeltir, her yoruma cevap yazar, "düzeltildi" yapar, değişikliği dala gönderir) ya da isteği inceleyip bulguları satır yorumu olarak yazar.
-        Kişisel erişim anahtarı gerekir — kapsam: <i>İş öğeleri</i> ve <i>Kod</i>, okuma ve yazma.</div>
+      <div class="fhint" style="font-size:12.5px">Açıkken görev kutusunda bir <b>work item</b> (#123) ya da <b>pull request</b> (!45) seçersin: numara, adres, başlıkta arama ya da sana atananlar.
+        Work itemnde Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve görselleri TFS'ten kendisi alıp ekibe görev yapar;
+        bitince sonucu work item'a yazar, istersen değişiklikleri yeni branch'e gönderip work item'a bağlı pull request açar. Pull request'te ya açık yorumları ele alır
+        (kodu pull request'in branch'inde düzeltir, her yoruma cevap yazar, "düzeltildi" yapar, değişikliği branch'e gönderir) ya da isteği inceleyip bulguları satır yorumu olarak yazar.
+        Kişisel erişim anahtarı gerekir — kapsam: <i>Work item'lar</i> ve <i>Kod</i>, okuma ve yazma.</div>
     </div>
     <input type="checkbox" role="switch" class="sw" id="tfsSw" aria-label="TFS modu">
   </div>
@@ -148,7 +148,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="grow">
       <label class="minl" for="tfsUrl">Sunucu (koleksiyon adresi)</label>
       <input type="text" id="tfsUrl" spellcheck="false" placeholder="http://tfs-sunucusu:8080/tfs/DefaultCollection" style="width:100%">
-      <div class="fhint">Tarayıcıdaki bir iş öğesinin adresini de yapıştırabilirsin — koleksiyon ve proje ondan ayrılır.</div>
+      <div class="fhint">Tarayıcıdaki bir work item'ın adresini de yapıştırabilirsin — koleksiyon ve proje ondan ayrılır.</div>
     </div>
     <div>
       <label class="minl" for="tfsProject">Proje</label>
@@ -164,10 +164,10 @@ input.sw:disabled { opacity:.5; cursor:default; }
   </div>
   <div class="gbar" style="margin-top:10px">
     <div>
-      <label class="minl" for="tfsWrite">İş bitince sonucu TFS'e yaz (iş öğesi / çekme isteği)</label>
+      <label class="minl" for="tfsWrite">İş bitince sonucu TFS'e yaz (work item / pull request)</label>
       <select id="tfsWrite">
         <option value="ask">sorarak — panelde taslak hazır gelir, düzenleyip gönderirsin</option>
-        <option value="auto">kendiliğinden — not ve yorumlar doğrudan yazılır; çekme isteğinde değişiklik dala gönderilir</option>
+        <option value="auto">kendiliğinden — not ve yorumlar doğrudan yazılır; pull request'te değişiklik branch'e gönderilir</option>
         <option value="off">yazma</option>
       </select>
     </div>
@@ -1176,7 +1176,7 @@ function renderTfsCard(){
     ? `Anahtar ${t.tokenEnv} ortam değişkeninden geliyor (sonu …${t.tokenHint}) — buradan değiştirilemez.`
     : t.hasToken
       ? `Kayıtlı anahtar: …${t.tokenHint}. Ayar dosyasına ve tarayıcıya gitmez (çalışma klasöründe .gizli/ altında). Değiştirmek için yenisini yaz. Panelde giriş olmadığı için panele erişen herkes bu anahtarla TFS'te okuyup yazabilir.`
-      : "Anahtar yok — TFS'te sağ üstteki profil → Güvenlik → Kişisel erişim anahtarları'ndan oluştur (kapsam: İş öğeleri ve Kod — okuma ve yazma).";
+      : "Anahtar yok — TFS'te sağ üstteki profil → Güvenlik → Kişisel erişim anahtarları'ndan oluştur (kapsam: Work item'lar ve Kod — okuma ve yazma).";
   $("tfsSave").disabled = !tfsDirty();
 }
 /** Tarayıcıdan kopyalanan TFS adresini koleksiyon + projeye ayırır (…/Koleksiyon/Proje/_workitems/…) */
@@ -1243,7 +1243,7 @@ $("tfsSw").addEventListener("change", async ()=>{
   $("tfsSw").disabled = false;
   if (!r.ok){ $("tfsSw").checked = !want; tfsMsg(`✗ ${esc(r.error || "uygulanamadı")}`, "red"); return; }
   tfsSaved = r.view; syncTfsCfg(r.config); fillTfs();
-  tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde iş öğesi seçici çıkar" : "TFS modu kapatıldı", "teal");
+  tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde work item seçici çıkar" : "TFS modu kapatıldı", "teal");
 });
 
 function render(){
