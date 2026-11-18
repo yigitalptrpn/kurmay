@@ -194,6 +194,8 @@ export type OrchestratorEvent =
       structured?: unknown;
       /** Süre/tur/token ölçümü — panelde ajan satırının altında gösterilir */
       metrics?: AgentMetrics;
+      /** Ajanın konuşma kimliği — oturum silinince konuşma kaydı da silinsin diye */
+      sessionId?: string;
     }
   // endsFlow: rota akışı bitiriyor (ör. analist route=done) — onaylanırsa
   // sonraki adım yok, reddedilirse aynı ajan gerekçeyle yeniden koşar
