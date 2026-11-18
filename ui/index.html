@@ -5848,15 +5848,15 @@ let dinleme = null;
 // (kısa parçada ses tanıma belirgin şekilde kötü — bağlamı yok)
 const DINLEME_GOREV_SUSKU_MS = 1800;
 const DINLEME_SUSKU_MS = 800, DINLEME_EN_KISA_MS = 400, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
-// ── Uyandırma kelimesi: dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
+// ── Uyandırma kelimesi (isteğe bağlı, VARSAYILAN KAPALI): açıksa dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
 // Odadaki konuşma komut sanılmasın. "Kurmay" denince 15 sn uyanık kalır: o sırada (ve her komuttan sonra
 // yine 15 sn) cümleler "Kurmay"sız da işlenir. Görev / not yazımında ve soru açıkken gerekmez.
-// Bas-konuşta (basılı tutarak) gerekmez. "uyandırma kelimesini kapat" ile kapanır.
+// Bas-konuşta (basılı tutarak) gerekmez. Sesle "uyandırma kelimesini aç / kapat".
 const KURMAY_RE = /\b(hey\s+|hay\s+)?kur\s?ma[yi]\b/;
 const UYANIK_MS = 15000;
 let uyanik = 0, uyanikZaman = 0;
-let uyandirmaAcik = true;
-try { uyandirmaAcik = localStorage.getItem("kurmay-uyandirma") !== "0"; } catch {}
+let uyandirmaAcik = false; // varsayılan kapalı (kullanıcı isteği: her seferinde "Kurmay" demek istemedi)
+try { uyandirmaAcik = localStorage.getItem("kurmay-uyandirma") === "1"; } catch {}
 const uyandirmaGerekli = () => uyandirmaAcik && !gorevYazimi && !yorumYazimi && !komutOnay && Date.now() > uyanik;
 function beklemeYazisi() { return uyandirmaGerekli() ? "“Kurmay” de, sonra komutunu söyle" : "dinliyorum"; }
 function uyandir() {
