@@ -184,7 +184,8 @@ export async function understandCommand(
   model: string,
   text: string,
   patterns: string[],
-): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }> {
+  userPrompt?: string,
+): Promise<{ ok: boolean; command?: string; reply?: string; error?: string; seconds?: number }> {
   const base = speechBase(url);
   const sentence = text.replace(/\s+/g, " ").trim().slice(0, 500);
   const list = patterns
@@ -196,13 +197,21 @@ export async function understandCommand(
     "Sen bir yazılım panelinin sesli komut çözücüsüsün. Kullanıcının Türkçe cümlesini aşağıdaki komut " +
     "kalıplarından tam olarak BİRİNE çevir. Kalıptaki <...> yerlerine cümledeki değeri yaz (sayıları rakamla). " +
     "Kalıbın kelimelerini değiştirme. Cümle hiçbir kalıba açıkça uymuyorsa, sohbet ya da başka bir konuşmaysa " +
-    'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\nKomut kalıpları:\n' +
+    'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\n' +
+    'Komut "yok" ise ve cümle sana söylenmiş bir selam, teşekkür, soru ya da sohbetse "cevap" alanına kısa, ' +
+    "sıcak, sade Türkçe bir cevap yaz (en fazla iki kısa cümle; sesli okunacak, madde işareti ve emoji kullanma). " +
+    "Ne yapabildiğini sorarsa kalıplardan bir iki örnek ver. Görevler, kod, çekme istekleri ya da iş öğeleri " +
+    "hakkında bilgi UYDURMA — bilmiyorsan ilgili komutu söylemesini öner. Cümle başka birine söylenmiş ya da " +
+    'yarım bir konuşma gibiyse "cevap" boş kalsın. Komut bulduysan "cevap" boş kalsın.\n\nKomut kalıpları:\n' +
     list.map((p) => `- ${p}`).join("\n") +
-    '\n\nYalnızca şu biçimde JSON yaz: {"komut": "..."}';
+    (userPrompt?.trim()
+      ? `\n\nKullanıcının talimatları (cevabın üslubu için):\n${userPrompt.trim().slice(0, 1000)}`
+      : "") +
+    '\n\nYalnızca şu biçimde JSON yaz: {"komut": "...", "cevap": "..."}';
   const body = (schema: boolean) => ({
     model,
     temperature: 0,
-    max_tokens: 120,
+    max_tokens: 200,
     messages: [
       { role: "system", content: system },
       { role: "user", content: sentence },
@@ -215,8 +224,8 @@ export async function understandCommand(
               name: "komut",
               schema: {
                 type: "object",
-                properties: { komut: { type: "string" } },
-                required: ["komut"],
+                properties: { komut: { type: "string" }, cevap: { type: "string" } },
+                required: ["komut", "cevap"],
                 additionalProperties: false,
               },
             },
@@ -257,10 +266,12 @@ export async function understandCommand(
     }
     // İçerik JSON değilse (şemasız yanıt) metindeki ilk {...} denenir
     let command = "";
+    let reply = "";
     const m = /\{[\s\S]*\}/.exec(content);
     try {
-      const j = JSON.parse(m ? m[0] : content) as { komut?: unknown };
+      const j = JSON.parse(m ? m[0] : content) as { komut?: unknown; cevap?: unknown };
       if (typeof j.komut === "string") command = j.komut;
+      if (typeof j.cevap === "string") reply = j.cevap.replace(/\s+/g, " ").trim().slice(0, 400);
     } catch {
       command = content;
     }
@@ -268,8 +279,9 @@ export async function understandCommand(
       .replace(/\s+/g, " ")
       .trim()
       .replace(/^["“]|["”]$/g, "");
-    if (!command) return { ok: false, error: "Model boş yanıt verdi.", seconds };
-    return { ok: true, command: /^yok\.?$/i.test(command) ? "" : command, seconds };
+    if (!command && !reply) return { ok: false, error: "Model boş yanıt verdi.", seconds };
+    const none = !command || /^yok\.?$/i.test(command);
+    return { ok: true, command: none ? "" : command, reply: none ? reply : "", seconds };
   } catch (e) {
     return { ok: false, error: netError(e, base) };
   }

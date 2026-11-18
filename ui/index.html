@@ -4807,7 +4807,7 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
   if (modelden) return sesNot(`Anlaşılmadı. <small>Model “${esc(ham)}” dedi, ama bu bir komut değil · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
   if (komutModeli) return modelleAnla(ham, dinlemede);
   // Komut değil: hiçbir şey yapılmaz (görev yazdırmak için "görev …")
-  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
+  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Görev yazdırmak için “görev …” de · “yardım”: komut listesi · listede olmayan cümleleri anlaması ve sohbet etmesi için Ayarlar → Sesle görev yazma → “Komutları anlayan model”</small>`, "bilgi", false, "Anlaşılmadı.");
 }
 // ── Komut modeli: sabit liste yetmeyince cümle modele gider, model aşağıdaki kalıplardan birini döner ──
 // Dönen cümle yine sabit listeyle eşlenir (model kendisi iş yapmaz); tutmazsa hiçbir şey olmaz.
@@ -4837,6 +4837,8 @@ async function modelleAnla(ham, dinlemede) {
     r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
   } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
   if (!r.ok) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Komutları anlayan model yanıt vermedi: ${esc(r.error || "bilinmeyen hata")}</small>`, "hata", false, "Anlaşılmadı, model yanıt vermedi.");
+  // Komut değil ama model sohbet cevabı verdiyse onu söyle (selam, teşekkür, "ne yapabilirsin")
+  if (!r.command && r.reply) return sesNot(`💬 ${esc(r.reply)}<small>“${esc(ham)}” · komut listesi için “yardım”</small>`, "bilgi", false, r.reply);
   if (!r.command) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Bir komuta benzemiyor · görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
   sonAnlama = { ham, komut: r.command, t: Date.now() };
   komutUygula(r.command, { dinleme: dinlemede, modelden: true });

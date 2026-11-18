@@ -273,7 +273,7 @@ export interface SpeechApi {
   understand(
     text: string,
     patterns: string[],
-  ): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }>;
+  ): Promise<{ ok: boolean; command?: string; reply?: string; error?: string; seconds?: number }>;
   say(
     text: string,
     model?: string,

@@ -1238,7 +1238,7 @@ async function main() {
           ok: false,
           error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
         });
-      return understandCommand(conn.url, conn.token, m, text, patterns);
+      return understandCommand(conn.url, conn.token, m, text, patterns, cfg.userPrompt);
     },
     /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
     say: (text: string, model?: string, voice?: string) => {
