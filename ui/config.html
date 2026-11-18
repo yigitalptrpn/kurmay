@@ -1093,20 +1093,33 @@ function spCfgEsitle(){
       ...(t.terms ? { terms: t.terms } : {}), ...(t.fixDictation ? { fixDictation: true } : {}) };
   else delete cfg.speech;
 }
+/** Anahtar kutuları (modelle düzelt, bilgisayarda iş) yalnızca kendi alanını kaydeder; ikisi de komut modeline
+ *  bağlı olduğu için yukarıda seçilip henüz kaydedilmemiş model de birlikte kaydedilir. Formdaki öteki
+ *  kaydedilmemiş değişiklikler silinmez (eskiden fillSpeech hepsini kayıtlı değere döndürüyordu — seçilen model "kapalı"ya dönüyordu). */
+async function spToggle(alan, ac){
+  const f = spForm(), body = { [alan]: ac };
+  if (f.commandModel !== ((spSaved && spSaved.commandModel) || "")) body.commandModel = f.commandModel;
+  const r = await spPost("/speech", body);
+  if (!r.ok) return r;
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  $("spModel").value = f.model; $("spLang").value = f.language || "tr";
+  if ([...$("spTts").options].some((o)=> o.value === f.ttsModel)) $("spTts").value = f.ttsModel;
+  $("spVoice").value = f.ttsVoice; $("spTerms").value = f.terms;
+  renderSpeechCard();
+  return r;
+}
 $("spFix").addEventListener("change", async ()=>{
   const ac = $("spFix").checked;
   spMsg("");
-  const r = await spPost("/speech", { fixDictation: ac });
+  const r = await spToggle("fixDictation", ac);
   if (!r.ok){ $("spFix").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
-  spSaved = r.view; spCfgEsitle(); fillSpeech();
   spMsg(ac ? (spSaved.commandModel ? "✓ Sesle yazılan görev metni modelle düzeltilecek" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı", "teal");
 });
 $("spPc").addEventListener("change", async ()=>{
   const ac = $("spPc").checked;
   spMsg("");
-  const r = await spPost("/speech", { computer: ac });
+  const r = await spToggle("computer", ac);
   if (!r.ok){ $("spPc").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
-  spSaved = r.view; spCfgEsitle(); fillSpeech();
   spMsg(ac ? (spSaved.commandModel ? "✓ Model artık bilgisayarda iş yapabilir — silme ve komut önce sorulur" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı — model yalnızca panel komutlarını seçer", "teal");
 });
 $("spSw").addEventListener("change", async ()=>{
