@@ -40,6 +40,7 @@ export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
     commandModel: s?.commandModel ?? "",
     ttsModel: s?.ttsModel ?? "",
     ttsVoice: s?.ttsVoice ?? "",
+    computer: !!s?.computer,
   };
 }
 
@@ -48,7 +49,8 @@ export function speechBase(url: string): string {
   return url.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
 }
 
-const authHeaders = (token?: string): Record<string, string> => (token ? { authorization: `Bearer ${token}` } : {});
+export const authHeaders = (token?: string): Record<string, string> =>
+  token ? { authorization: `Bearer ${token}` } : {};
 
 /** Sunucunun hata metnini kısaltır (JSON ise içindeki mesajı alır) */
 function serverText(body: string): string {
@@ -67,7 +69,7 @@ function serverText(body: string): string {
 }
 
 /** HTTP hatasını sade Türkçe açıklamaya çevirir; sunucunun kendi metni sona eklenir */
-function httpError(status: number, body: string): string {
+export function httpError(status: number, body: string): string {
   const raw = serverText(body);
   const tail = raw ? ` Sunucunun yanıtı: ${raw}` : "";
   if (status === 401 || status === 403)
@@ -85,7 +87,7 @@ function httpError(status: number, body: string): string {
 }
 
 /** Bağlantı/zaman aşımı hatası → Türkçe */
-function netError(e: unknown, base: string): string {
+export function netError(e: unknown, base: string): string {
   const err = e as { name?: string; message?: string; cause?: { code?: string; message?: string } };
   if (err?.name === "TimeoutError" || err?.name === "AbortError") return `Sunucu zamanında yanıt vermedi (${base}).`;
   const code = err?.cause?.code;

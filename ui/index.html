@@ -4828,20 +4828,56 @@ const KALIPLAR = [
   "çalışan oturumları göster", "<oturum adı> oturumunu aç", "<oturum adı> oturumunu durdur", "bu oturumu durdur",
   "oku", "tekrarla", "sus", "sesli yanıtı kapat", "sesli yanıtı aç", "panele dön",
 ];
+// Sesli asistan (sunucu src/assistant.ts): model adım adım iş yapar — panel komutu, sohbet cevabı ya da
+// (Ayarlar'da açıksa, panel aynı bilgisayardaysa) klasör açma, dosya okuma/yazma, silme, komut çalıştırma.
+// Silme ve komut çalıştırma önce sorulur (onayIste → /speech/asistan/onay). Kısa konuşma geçmişi tutulur
+// ("onu sil" gibi göndermeler için); 10 dk konuşma olmazsa sıfırlanır.
+let asistanGecmis = [], asistanZaman = 0;
+const ASISTAN_GECMIS_MS = 10 * 60 * 1000;
+function asistanGecmisEkle(rol, metin) {
+  if (!metin) return;
+  asistanGecmis.push({ rol, metin });
+  if (asistanGecmis.length > 8) asistanGecmis = asistanGecmis.slice(-8);
+  asistanZaman = Date.now();
+}
+async function asistanIstek(url, body) {
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı", done: [] }));
+  } catch { return { ok: false, error: "sunucuya ulaşılamadı", done: [] }; }
+}
 async function modelleAnla(ham, dinlemede) {
   sesNot(`⏳ Anlamaya çalışıyorum… <small>“${esc(ham)}”</small>`, "bilgi", true);
+  if (Date.now() - asistanZaman > ASISTAN_GECMIS_MS) asistanGecmis = [];
   const patterns = [...KALIPLAR, ...(komutOnay ? ["evet", "hayır"] : [])];
-  let r;
-  try {
-    const res = await fetch("/speech/intent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: ham, patterns }) });
-    r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
-  } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Komutları anlayan model yanıt vermedi: ${esc(r.error || "bilinmeyen hata")}</small>`, "hata", false, "Anlaşılmadı, model yanıt vermedi.");
-  // Komut değil ama model sohbet cevabı verdiyse onu söyle (selam, teşekkür, "ne yapabilirsin")
-  if (!r.command && r.reply) return sesNot(`💬 ${esc(r.reply)}<small>“${esc(ham)}” · komut listesi için “yardım”</small>`, "bilgi", false, r.reply);
-  if (!r.command) return sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Bir komuta benzemiyor · görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
-  sonAnlama = { ham, komut: r.command, t: Date.now() };
-  komutUygula(r.command, { dinleme: dinlemede, modelden: true });
+  const r = await asistanIstek("/speech/asistan", { text: ham, patterns, history: asistanGecmis, dir: viewDir().dir });
+  asistanGecmisEkle("kullanici", ham);
+  asistanSonuc(r, ham, dinlemede);
+}
+const yapilanlarHtml = (done) => (done || []).filter(Boolean).map((d) => `<small>${esc(d)}</small>`).join("");
+function asistanSonuc(r, ham, dinlemede) {
+  const yapilan = yapilanlarHtml(r.done);
+  if ((r.done || []).length) asistanGecmisEkle("asistan", "Yaptıklarım: " + r.done.join(" · "));
+  if (!r.ok) return sesNot(`Olmadı: “${esc(ham)}”${yapilan}<small>Komutları anlayan model: ${esc(r.error || "bilinmeyen hata")}</small>`, "hata", false, "Olmadı. " + (r.error || ""));
+  if (r.kind === "onay") {
+    asistanGecmisEkle("asistan", "Sordum: " + r.question);
+    return onayIste(`${esc(r.question)}${yapilan}`, () => asistanOnay(r.id, true, ham, dinlemede),
+      { hayir: () => asistanOnay(r.id, false, ham, dinlemede), soz: r.question });
+  }
+  if (r.kind === "komut") {
+    asistanGecmisEkle("asistan", "Panel komutu: " + r.command);
+    sonAnlama = { ham, komut: r.command, t: Date.now() };
+    return komutUygula(r.command, { dinleme: dinlemede, modelden: true });
+  }
+  const cevap = (r.reply || "").trim();
+  if (cevap) asistanGecmisEkle("asistan", cevap);
+  if (cevap || yapilan) return sesNot(`${cevap ? "💬 " + esc(cevap) : "✓ Tamam"}${yapilan}<small>“${esc(ham)}”</small>`, cevap ? "bilgi" : "tamam", false, cevap || "Tamam.");
+  sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Bir komuta benzemiyor · görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
+}
+async function asistanOnay(id, evet, ham, dinlemede) {
+  sesNot(evet ? "⏳ Yapıyorum…" : "Vazgeçildi.", "bilgi", true, false);
+  asistanGecmisEkle("kullanici", evet ? "Evet, yap." : "Hayır, yapma.");
+  asistanSonuc(await asistanIstek("/speech/asistan/onay", { id, yes: evet }), ham, dinlemede);
 }
 // ── Görev yazımı: "görev …" ile başlar, sonraki cümleler kutuya eklenir ──
 // Bitiş: "başlat"/"gönder" (gönderir), "tamam"/"bitti" (kutuda bırakır), "iptal"/"vazgeç" (siler),

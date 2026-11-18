@@ -420,6 +420,9 @@ export interface SpeechConfig {
   ttsModel?: string;
   /** Okuma modelinin ses adı (modele göre; boş = modelin varsayılanı) */
   ttsVoice?: string;
+  /** Sesli asistan bilgisayarda iş yapabilsin (komut modeliyle): klasör açma, dosya okuma/yazma,
+   *  silme ve komut çalıştırma (bu ikisi önce sorulur). Yalnızca panel aynı bilgisayardan açıldıysa. */
+  computer?: boolean;
 }
 
 export interface AgentDefinition {

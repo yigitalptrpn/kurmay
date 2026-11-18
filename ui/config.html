@@ -297,7 +297,12 @@ input.sw:disabled { opacity:.5; cursor:default; }
   <div style="margin-top:10px">
     <label class="minl" for="spCmd">Komutları anlayan model</label>
     <select id="spCmd" style="width:100%"><option value="">kapalı — yalnızca sabit komut listesi</option></select>
-    <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider; model onu listedeki bir komuta çevirir (“bugün bana ne iş var” → bana atananları göster). Model kendisi bir şey yapmaz, uymayan cümlede hiçbir şey olmaz; onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
+    <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider. Model cümleyi anlayıp listedeki bir komutu seçer (“bugün bana ne iş var” → bana atananları göster) ya da kısa bir cevap verir (“günaydın”). Onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
+    <label class="spPc" style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
+      <input type="checkbox" id="spPc" style="margin-top:3px">
+      <span><b>Bilgisayarda iş yapabilsin</b>
+        <span class="fhint" style="display:block;font-size:12.5px">Model senin yerine klasörü Dosya Gezgini'nde açar, dosyaları listeler, okur, yazar, taşır (“bulunduğun dizini aç”, “buraya notlar diye klasör aç”). <b>Silme, komut çalıştırma ve program açma önce sorulur</b>; Windows'ta silinen Geri Dönüşüm Kutusu'na gider. Yalnızca panel bu bilgisayardan (<code>localhost</code>) açıldığında çalışır. Model yanlış dosyayı seçebilir — soruları okuyarak onayla.</span></span>
+    </label>
   </div>
   <div class="gbar" style="margin-top:10px">
     <div class="grow">
@@ -986,6 +991,7 @@ function fillSpeech(){
   $("spLang").value = t.language || "tr";
   if (!$("spLang").value) $("spLang").value = "tr";
   spCmdSecenek(t.commandModel || "");
+  $("spPc").checked = !!t.computer;
   spTtsSecenek(t.ttsModel || "");
   $("spVoice").value = t.ttsVoice || "";
   renderSpeechCard();
@@ -1068,11 +1074,19 @@ async function spPost(url, body){
 function spCfgEsitle(){
   if (!cfg || !spSaved) return;
   const t = spSaved, dil = t.language && t.language !== "tr";
-  if (t.enabled || t.model || dil || t.commandModel || t.ttsModel || t.ttsVoice)
+  if (t.enabled || t.model || dil || t.commandModel || t.ttsModel || t.ttsVoice || t.computer)
     cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}), ...(t.commandModel ? { commandModel: t.commandModel } : {}),
-      ...(t.ttsModel ? { ttsModel: t.ttsModel } : {}), ...(t.ttsVoice ? { ttsVoice: t.ttsVoice } : {}) };
+      ...(t.ttsModel ? { ttsModel: t.ttsModel } : {}), ...(t.ttsVoice ? { ttsVoice: t.ttsVoice } : {}), ...(t.computer ? { computer: true } : {}) };
   else delete cfg.speech;
 }
+$("spPc").addEventListener("change", async ()=>{
+  const ac = $("spPc").checked;
+  spMsg("");
+  const r = await spPost("/speech", { computer: ac });
+  if (!r.ok){ $("spPc").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg(ac ? (spSaved.commandModel ? "✓ Model artık bilgisayarda iş yapabilir — silme ve komut önce sorulur" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı — model yalnızca panel komutlarını seçer", "teal");
+});
 $("spSw").addEventListener("change", async ()=>{
   const ac = $("spSw").checked;
   spMsg("");

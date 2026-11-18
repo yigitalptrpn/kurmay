@@ -3,6 +3,7 @@ import { getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { Assistant, type AssistantReply, type AssistantRequest } from "./assistant.js";
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
@@ -1167,11 +1168,15 @@ async function main() {
 
   /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
+  const assistant = new Assistant();
   const speechApi = {
     view: () => speechView(cfg.speech, cfg),
     save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
       const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
-      if (input.enabled !== undefined && typeof input.enabled !== "boolean")
+      if (
+        (input.enabled !== undefined && typeof input.enabled !== "boolean") ||
+        (input.computer !== undefined && typeof input.computer !== "boolean")
+      )
         return { ok: false, error: "geçersiz istek" };
       const prev = fs.readFileSync(resolvedConfigPath, "utf8");
       try {
@@ -1185,6 +1190,7 @@ async function main() {
           commandModel = pick("commandModel"),
           ttsModel = pick("ttsModel"),
           ttsVoice = pick("ttsVoice");
+        const computer = typeof input.computer === "boolean" ? input.computer : !!old.computer;
         // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
           enabled,
@@ -1193,11 +1199,12 @@ async function main() {
           ...(commandModel ? { commandModel } : {}),
           ...(ttsModel ? { ttsModel } : {}),
           ...(ttsVoice ? { ttsVoice } : {}),
+          ...(computer ? { computer } : {}),
         };
         if (enabled && !generalConnection(cfg).url) {
           return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || model || commandModel || ttsModel || ttsVoice || (language && language !== "tr"))
+        if (enabled || model || commandModel || ttsModel || ttsVoice || computer || (language && language !== "tr"))
           parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
@@ -1239,6 +1246,20 @@ async function main() {
           error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
         });
       return understandCommand(conn.url, conn.token, m, text, patterns, cfg.userPrompt);
+    },
+    /** Sesli asistan: komut modeli adım adım iş yapar (bilgisayar araçları yalnızca yerel panelde) */
+    assistant: (req: AssistantRequest, local: boolean, answer?: { id: string; yes: boolean }) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve<AssistantReply>({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+          done: [],
+        });
+      const c = { url: conn.url, token: conn.token, model: m, userPrompt: cfg.userPrompt };
+      const yerel = local && !!cfg.speech?.computer;
+      return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, yerel);
     },
     /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
     say: (text: string, model?: string, voice?: string) => {

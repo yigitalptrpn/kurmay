@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AssistantReply, AssistantRequest } from "./assistant.js";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
@@ -279,6 +280,8 @@ export interface SpeechApi {
     model?: string,
     voice?: string,
   ): Promise<{ ok: true; audio: Buffer; mime: string; seconds: number } | { ok: false; error: string }>;
+  /** Sesli asistan: yeni cümle (answer yok) ya da bekleyen soruya cevap; local = panel aynı bilgisayardan */
+  assistant(req: AssistantRequest, local: boolean, answer?: { id: string; yes: boolean }): Promise<AssistantReply>;
 }
 
 /**
@@ -902,6 +905,46 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
           return json(res, 400, { ok: false, error: "geçersiz istek" });
         const r = await options.speech.understand(text, patterns);
         json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+    if ((req.url === "/speech/asistan" || req.url === "/speech/asistan/onay") && req.method === "POST") {
+      // Bilgisayarda iş yapabildiği için: yalnızca JSON (başka sitenin formu ön sorgusuz gönderemesin)
+      // ve başka bir kökenden gelen istek reddedilir
+      const origin = req.headers.origin;
+      if (
+        !/^application\/json/i.test(req.headers["content-type"] ?? "") ||
+        (origin && new URL(origin).host !== req.headers.host)
+      )
+        return json(res, 403, { ok: false, error: "izin yok" });
+      const ra = req.socket.remoteAddress ?? "";
+      const local = ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        if (req.url === "/speech/asistan/onay") {
+          if (typeof parsed.id !== "string" || typeof parsed.yes !== "boolean")
+            return json(res, 400, { ok: false, error: "geçersiz istek" });
+          return json(
+            res,
+            200,
+            await options.speech.assistant({ text: "", patterns: [] }, local, { id: parsed.id, yes: parsed.yes }),
+          );
+        }
+        const text = typeof parsed.text === "string" ? parsed.text : "";
+        const patterns = Array.isArray(parsed.patterns)
+          ? (parsed.patterns as unknown[]).filter((p): p is string => typeof p === "string")
+          : [];
+        const history = Array.isArray(parsed.history)
+          ? (parsed.history as unknown[]).filter(
+              (h): h is { rol: string; metin: string } =>
+                !!h &&
+                typeof (h as { rol?: unknown }).rol === "string" &&
+                typeof (h as { metin?: unknown }).metin === "string",
+            )
+          : [];
+        if (!text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const dir = typeof parsed.dir === "string" ? parsed.dir : undefined;
+        json(res, 200, await options.speech.assistant({ text, patterns, history, dir }, local));
       });
       return;
     }
