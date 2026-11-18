@@ -2928,7 +2928,7 @@ function oturumMenusu(btn, id) {
     (s.group ? `<button type="button" role="menuitem" data-act="grup" data-grup="">↩ Gruptan çıkar</button>` : "") +
     `<hr>` + (s.busy
       ? `<div class="mbaslik">Çalışan oturum silinemez</div>`
-      : `<button type="button" role="menuitem" class="sil" data-act="sil">✕ Listeden sil</button>`));
+      : `<button type="button" role="menuitem" class="sil" data-act="sil">✕ Sil</button>`));
   $("sessMenu").dataset.id = id;
   delete $("sessMenu").dataset.grp;
 }
@@ -3341,7 +3341,7 @@ function openSession(id) {
 
 async function removeSession(id) {
   const name = sessionsById[id]?.name || id;
-  if (!confirm(`"${name}" oturumu silinsin mi?\n(Sadece listeden kaldırılır; konuşma ve koşu kayıtları diskte kalır.)`)) return;
+  if (!confirm(`"${name}" oturumu silinsin mi?\nKonuşma, koşu kayıtları ve ekleri diskten de silinir. Geri alınamaz.`)) return;
   let ok = false;
   try {
     const res = await fetch("/session-delete", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id }) });
@@ -5238,7 +5238,7 @@ async function gitDurumSesle() {
 window.addEventListener("focus", () => gitYukle());
 
 // ── Oturumları toplu silme (elle: “Tümünü sil”; sesle: “tüm oturumları sil”, “… oturumunu sil”) ──
-// Çalışan / onay bekleyen oturum silinmez (atlanır). Konuşma ve koşu kayıtları diskte kalır.
+// Çalışan / onay bekleyen oturum silinmez (atlanır). Konuşma, koşu kayıtları ve ekler diskten de silinir.
 const grupBul = (ad) => grupAdlari().find((g) => sik(g) === sik(ad)) || grupAdlari().find((g) => sik(g).includes(sik(ad)))
   || okunusBul(ad, grupAdlari().map((g) => ({ ad: g, deger: g }))).tek;
 function topluSil(ids, ad, sesle) {
@@ -5247,7 +5247,7 @@ function topluSil(ids, ad, sesle) {
   if (!silinecek.length) return olmaz(mesgul ? "Çalışan oturum silinmez — önce durdur." : "Silinecek oturum yok.");
   const soru = `${esc(ad)}: ${silinecek.length} oturum listeden silinsin mi?` +
     (silinecek.length <= 6 ? `<small>${silinecek.map((x) => esc(x.name)).join(" · ")}</small>` : "") +
-    (mesgul ? `<small>${mesgul} çalışan oturum atlanacak.</small>` : "") + `<small>Konuşma ve koşu kayıtları diskte kalır.</small>`;
+    (mesgul ? `<small>${mesgul} çalışan oturum atlanacak.</small>` : "") + `<small>Konuşma, koşu kayıtları ve ekler diskten de silinir — geri alınamaz.</small>`;
   const yap = async () => {
     let n = 0;
     for (const x of silinecek) {
@@ -5848,15 +5848,15 @@ let dinleme = null;
 // (kısa parçada ses tanıma belirgin şekilde kötü — bağlamı yok)
 const DINLEME_GOREV_SUSKU_MS = 1800;
 const DINLEME_SUSKU_MS = 800, DINLEME_EN_KISA_MS = 400, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
-// ── Uyandırma kelimesi: dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
+// ── Uyandırma kelimesi (isteğe bağlı, VARSAYILAN KAPALI): açıksa dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
 // Odadaki konuşma komut sanılmasın. "Kurmay" denince 15 sn uyanık kalır: o sırada (ve her komuttan sonra
 // yine 15 sn) cümleler "Kurmay"sız da işlenir. Görev / not yazımında ve soru açıkken gerekmez.
-// Bas-konuşta (basılı tutarak) gerekmez. "uyandırma kelimesini kapat" ile kapanır.
+// Bas-konuşta (basılı tutarak) gerekmez. Sesle "uyandırma kelimesini aç / kapat".
 const KURMAY_RE = /\b(hey\s+|hay\s+)?kur\s?ma[yi]\b/;
 const UYANIK_MS = 15000;
 let uyanik = 0, uyanikZaman = 0;
-let uyandirmaAcik = true;
-try { uyandirmaAcik = localStorage.getItem("kurmay-uyandirma") !== "0"; } catch {}
+let uyandirmaAcik = false; // varsayılan kapalı (kullanıcı isteği: her seferinde "Kurmay" demek istemedi)
+try { uyandirmaAcik = localStorage.getItem("kurmay-uyandirma") === "1"; } catch {}
 const uyandirmaGerekli = () => uyandirmaAcik && !gorevYazimi && !yorumYazimi && !komutOnay && Date.now() > uyanik;
 function beklemeYazisi() { return uyandirmaGerekli() ? "“Kurmay” de, sonra komutunu söyle" : "dinliyorum"; }
 function uyandir() {

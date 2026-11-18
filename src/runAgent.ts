@@ -1364,6 +1364,7 @@ async function runAgentInner(
     output: result.text,
     structured: result.structured,
     metrics: result.metrics,
+    sessionId: result.sessionId,
   });
   return result;
 }

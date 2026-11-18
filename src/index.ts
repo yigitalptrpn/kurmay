@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
+import { deleteSession as deleteSdkSession, getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -336,6 +336,34 @@ async function main() {
   const runsDir = path.join(configRoot, "runs");
   const securityReports = new SecurityReportStore(path.join(runsDir, "guvenlik"));
   fs.mkdirSync(runsDir, { recursive: true });
+  /** Oturum silinince diskteki izleri de silinir: koşu kayıtları (runs/*.jsonl), görev ekleri
+   *  (runs/ekler/<oturum>/) ve ajanların konuşma kayıtları (~/.claude/projects/…/<kimlik>.jsonl —
+   *  Analist'inki oturumda, diğer ajanlarınki koşu kayıtlarındaki agent_finished olaylarında).
+   *  Başka bir oturumun hâlâ kullandığı konuşmaya dokunulmaz. Güvenlik raporları kalır (ayrı sayfa). */
+  const removeSessionFiles = (e: SessionEntry): void => {
+    const ids = new Set<string>();
+    if (e.sdkSessionId) ids.add(e.sdkSessionId);
+    for (const name of e.runLogs ?? []) {
+      const f = path.join(runsDir, path.basename(name));
+      try {
+        for (const line of fs.readFileSync(f, "utf8").split("\n")) {
+          if (!line.includes('"agent_finished"') || !line.includes('"sessionId"')) continue;
+          try {
+            const ev = JSON.parse(line) as { type?: string; sessionId?: unknown };
+            if (ev.type === "agent_finished" && typeof ev.sessionId === "string") ids.add(ev.sessionId);
+          } catch {
+            /* bozuk satır */
+          }
+        }
+      } catch {
+        /* kayıt yok */
+      }
+      fs.rmSync(f, { force: true });
+    }
+    if (/^[\w-]+$/.test(e.id)) fs.rmSync(path.join(runsDir, "ekler", e.id), { recursive: true, force: true });
+    for (const other of sessions.all()) if (other.sdkSessionId) ids.delete(other.sdkSessionId);
+    for (const sid of ids) void deleteSdkSession(sid).catch(() => {});
+  };
 
   // Oturum kataloğu (runs/sessions.json) + oturum başına çalışma zamanları. Sunucu
   // modunda onaylar yalnızca panelden (exclusive): birden çok oturum aynı anda
@@ -1674,8 +1702,10 @@ async function main() {
       },
       deleteSession: (id) => {
         if (runtimes.peek(id)?.busy) return false;
+        const entry = sessions.get(id);
         runtimes.delete(id);
         const ok = sessions.remove(id);
+        if (ok && entry) removeSessionFiles(entry);
         runtimes.notify();
         return ok;
       },
