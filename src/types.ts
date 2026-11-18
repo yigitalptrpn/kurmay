@@ -420,6 +420,13 @@ export interface SpeechConfig {
   ttsModel?: string;
   /** Okuma modelinin ses adı (modele göre; boş = modelin varsayılanı) */
   ttsVoice?: string;
+  /** Sesli asistan bilgisayarda iş yapabilsin (komut modeliyle): klasör açma, dosya okuma/yazma,
+   *  silme ve komut çalıştırma (bu ikisi önce sorulur). Yalnızca panel aynı bilgisayardan açıldıysa. */
+  computer?: boolean;
+  /** Sözlük: ses tanımaya ipucu olarak giden terimler (sınıf, ürün, kısaltma…; virgül ya da satırla) */
+  terms?: string;
+  /** Görev yazdırırken metni komut modeliyle düzelt (yanlış duyulan terimler, noktalama) */
+  fixDictation?: boolean;
 }
 
 export interface AgentDefinition {

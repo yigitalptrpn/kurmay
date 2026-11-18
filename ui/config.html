@@ -297,7 +297,22 @@ input.sw:disabled { opacity:.5; cursor:default; }
   <div style="margin-top:10px">
     <label class="minl" for="spCmd">Komutları anlayan model</label>
     <select id="spCmd" style="width:100%"><option value="">kapalı — yalnızca sabit komut listesi</option></select>
-    <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider; model onu listedeki bir komuta çevirir (“bugün bana ne iş var” → bana atananları göster). Model kendisi bir şey yapmaz, uymayan cümlede hiçbir şey olmaz; onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
+    <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider. Model cümleyi anlayıp listedeki bir komutu seçer (“bugün bana ne iş var” → bana atananları göster) ya da kısa bir cevap verir (“günaydın”). Onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
+    <label class="spPc" style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
+      <input type="checkbox" id="spPc" style="margin-top:3px">
+      <span><b>Bilgisayarda iş yapabilsin</b>
+        <span class="fhint" style="display:block;font-size:12.5px">Model senin yerine klasörü Dosya Gezgini'nde açar, dosyaları listeler, okur, yazar, taşır (“bulunduğun dizini aç”, “buraya notlar diye klasör aç”). <b>Silme, komut çalıştırma ve program açma önce sorulur</b>; Windows'ta silinen Geri Dönüşüm Kutusu'na gider. Yalnızca panel bu bilgisayardan (<code>localhost</code>) açıldığında çalışır. Model yanlış dosyayı seçebilir — soruları okuyarak onayla.</span></span>
+    </label>
+    <label style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
+      <input type="checkbox" id="spFix" style="margin-top:3px">
+      <span><b>Görev metnini modelle düzelt</b>
+        <span class="fhint" style="display:block;font-size:12.5px">Sesle yazdırdığın görev bitince (“tamam”, “başlat” ya da 🎙 düğmesi) metin yukarıdaki modele gider: yanlış duyulan teknik terimler, noktalama ve büyük harf düzeltilir, anlam değiştirilmez. Kutudaki metin değişir; notta özgün metin ve “Geri al” görünür. Bir iki saniye bekletir.</span></span>
+    </label>
+  </div>
+  <div style="margin-top:10px">
+    <label class="minl" for="spTerms">Sözlük (terimler)</label>
+    <textarea id="spTerms" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="SiparisServisi, FaturaKdv, endpoint, Kafka, kurmay, …"></textarea>
+    <div class="fhint" style="font-size:12.5px">Ses tanımanın bilmediği kelimeler: sınıf, servis, ürün adları, kısaltmalar (virgül ya da satırla ayır). Konuşurken modele ipucu olarak gider, böyle yazar. Depo, dal ve değişen dosya adları zaten kendiliğinden eklenir. “Kaydet” ile kaydedilir.</div>
   </div>
   <div class="gbar" style="margin-top:10px">
     <div class="grow">
@@ -986,12 +1001,15 @@ function fillSpeech(){
   $("spLang").value = t.language || "tr";
   if (!$("spLang").value) $("spLang").value = "tr";
   spCmdSecenek(t.commandModel || "");
+  $("spPc").checked = !!t.computer;
+  $("spFix").checked = !!t.fixDictation;
+  $("spTerms").value = t.terms || "";
   spTtsSecenek(t.ttsModel || "");
   $("spVoice").value = t.ttsVoice || "";
   renderSpeechCard();
 }
 const spForm = ()=> ({ model: $("spModel").value.trim(), language: $("spLang").value, commandModel: $("spCmd").value,
-  ttsModel: $("spTts").value, ttsVoice: $("spVoice").value.trim() });
+  ttsModel: $("spTts").value, ttsVoice: $("spVoice").value.trim(), terms: $("spTerms").value.trim() });
 /** Okuma modeli seçicisi: ses tanıma modelleri hariç sunucudaki modeller; adı ses üretmeyi andıranlar önde */
 function spTtsSecenek(secili){
   const sesli = (m)=> /tts|speech|voice|audio|sound|kokoro|piper|xtts|orpheus|vits/i.test(m);
@@ -1017,7 +1035,7 @@ function renderSpeechCard(){
     ? `Sunucu: <code>${esc(t.generalUrl)}</code> (Bağlantı bölümündeki adres ve anahtar)`
     : `<span style="color:var(--red)">Bağlantı bölümünde sunucu adresi yok — önce onu gir.</span>`;
   $("spSave").disabled = f.model === (t.model || "") && f.language === (t.language || "tr") && f.commandModel === (t.commandModel || "")
-    && f.ttsModel === (t.ttsModel || "") && f.ttsVoice === (t.ttsVoice || "");
+    && f.ttsModel === (t.ttsModel || "") && f.ttsVoice === (t.ttsVoice || "") && f.terms === (t.terms || "");
   $("spDinle").disabled = !t.generalUrl;
 }
 const spMsg = (html, renk)=> { $("spMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
@@ -1029,6 +1047,7 @@ $("spLang").addEventListener("change", ()=>{ spMsg(""); renderSpeechCard(); });
 $("spCmd").addEventListener("change", ()=>{ spMsg(""); renderSpeechCard(); });
 $("spTts").addEventListener("change", ()=>{ spMsg(""); $("spDinleMsg").textContent = ""; renderSpeechCard(); });
 $("spVoice").addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
+$("spTerms").addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
 let spCalan = null;
 /** Seçili modeli (ya da tarayıcı sesini) kaydetmeden dener */
 $("spDinle").addEventListener("click", async ()=>{
@@ -1068,11 +1087,28 @@ async function spPost(url, body){
 function spCfgEsitle(){
   if (!cfg || !spSaved) return;
   const t = spSaved, dil = t.language && t.language !== "tr";
-  if (t.enabled || t.model || dil || t.commandModel || t.ttsModel || t.ttsVoice)
+  if (t.enabled || t.model || dil || t.commandModel || t.ttsModel || t.ttsVoice || t.computer || t.terms || t.fixDictation)
     cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}), ...(t.commandModel ? { commandModel: t.commandModel } : {}),
-      ...(t.ttsModel ? { ttsModel: t.ttsModel } : {}), ...(t.ttsVoice ? { ttsVoice: t.ttsVoice } : {}) };
+      ...(t.ttsModel ? { ttsModel: t.ttsModel } : {}), ...(t.ttsVoice ? { ttsVoice: t.ttsVoice } : {}), ...(t.computer ? { computer: true } : {}),
+      ...(t.terms ? { terms: t.terms } : {}), ...(t.fixDictation ? { fixDictation: true } : {}) };
   else delete cfg.speech;
 }
+$("spFix").addEventListener("change", async ()=>{
+  const ac = $("spFix").checked;
+  spMsg("");
+  const r = await spPost("/speech", { fixDictation: ac });
+  if (!r.ok){ $("spFix").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg(ac ? (spSaved.commandModel ? "✓ Sesle yazılan görev metni modelle düzeltilecek" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı", "teal");
+});
+$("spPc").addEventListener("change", async ()=>{
+  const ac = $("spPc").checked;
+  spMsg("");
+  const r = await spPost("/speech", { computer: ac });
+  if (!r.ok){ $("spPc").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg(ac ? (spSaved.commandModel ? "✓ Model artık bilgisayarda iş yapabilir — silme ve komut önce sorulur" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı — model yalnızca panel komutlarını seçer", "teal");
+});
 $("spSw").addEventListener("change", async ()=>{
   const ac = $("spSw").checked;
   spMsg("");

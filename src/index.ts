@@ -3,6 +3,8 @@ import { getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { GitOps, type GitOpKind } from "./gitOps.js";
+import { Assistant, type AssistantReply, type AssistantRequest } from "./assistant.js";
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
@@ -43,6 +45,7 @@ import {
   synthesize,
   transcribe,
   understandCommand,
+  fixDictation,
 } from "./speech.js";
 import {
   prepareWorkItemTask,
@@ -1167,11 +1170,54 @@ async function main() {
 
   /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
+  const assistant = new Assistant();
+  // Git işleri: uzak depo TFS sunucusundaysa kimlik TFS anahtarından (yoksa kullanıcının kendi git kimliği)
+  const gitOps = new GitOps(async (remoteUrl) => {
+    let c;
+    try {
+      c = tfsConn();
+    } catch {
+      return {};
+    }
+    return authEnv(c, remoteUrl);
+  });
+  const GIT_OPS = new Set(["dal", "guncelle", "yeniDal", "kaydet", "sakla", "geriGetir"]);
+  const gitApi = {
+    status: async (dir?: string) => {
+      const d = dir && fs.existsSync(dir) ? dir : cwd;
+      try {
+        return { ok: true, dir: d, repos: await gitOps.status(d) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    plan: async (r: Record<string, unknown>) => {
+      const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string) : undefined);
+      const op = s("op");
+      if (!op || !GIT_OPS.has(op)) return { ok: false, error: "geçersiz git işi" };
+      try {
+        return await gitOps.plan({
+          dir: s("dir") || cwd,
+          op: op as GitOpKind,
+          repo: s("repo"),
+          branch: s("branch"),
+          message: s("message"),
+        });
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    apply: (id: string) => gitOps.apply(id),
+  };
   const speechApi = {
     view: () => speechView(cfg.speech, cfg),
     save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
       const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
-      if (input.enabled !== undefined && typeof input.enabled !== "boolean")
+      if (
+        (input.enabled !== undefined && typeof input.enabled !== "boolean") ||
+        (input.computer !== undefined && typeof input.computer !== "boolean") ||
+        (input.fixDictation !== undefined && typeof input.fixDictation !== "boolean")
+      )
         return { ok: false, error: "geçersiz istek" };
       const prev = fs.readFileSync(resolvedConfigPath, "utf8");
       try {
@@ -1185,6 +1231,9 @@ async function main() {
           commandModel = pick("commandModel"),
           ttsModel = pick("ttsModel"),
           ttsVoice = pick("ttsVoice");
+        const computer = typeof input.computer === "boolean" ? input.computer : !!old.computer;
+        const fixDictation = typeof input.fixDictation === "boolean" ? input.fixDictation : !!old.fixDictation;
+        const terms = ("terms" in input ? str("terms") : (old.terms ?? "")).slice(0, 2000);
         // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
         const sp: SpeechConfig = {
           enabled,
@@ -1193,11 +1242,24 @@ async function main() {
           ...(commandModel ? { commandModel } : {}),
           ...(ttsModel ? { ttsModel } : {}),
           ...(ttsVoice ? { ttsVoice } : {}),
+          ...(computer ? { computer } : {}),
+          ...(terms ? { terms } : {}),
+          ...(fixDictation ? { fixDictation } : {}),
         };
         if (enabled && !generalConnection(cfg).url) {
           return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
         }
-        if (enabled || model || commandModel || ttsModel || ttsVoice || (language && language !== "tr"))
+        if (
+          enabled ||
+          model ||
+          commandModel ||
+          ttsModel ||
+          ttsVoice ||
+          computer ||
+          terms ||
+          fixDictation ||
+          (language && language !== "tr")
+        )
           parsed.speech = sp;
         else delete parsed.speech;
         fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
@@ -1219,7 +1281,7 @@ async function main() {
         });
       return probeSpeech(conn.url, conn.token);
     },
-    transcribe: (audio: Buffer, mime: string, previous?: string) => {
+    transcribe: (audio: Buffer, mime: string, previous?: string, terms?: string) => {
       const conn = generalConnection(cfg);
       if (!speechEnabled(cfg.speech) || !conn.url) {
         return Promise.resolve({
@@ -1227,7 +1289,23 @@ async function main() {
           error: "Sesle görev yazma kapalı ya da sunucu adresi yok (Ayarlar → Sesle görev yazma, Bağlantı).",
         });
       }
-      return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous);
+      // Sözlük: Ayarlar'daki terimler önce (kullanıcının seçtikleri), panelin kendiliğinden eklediği adlar sonra
+      const sozluk = [cfg.speech?.terms, terms]
+        .filter(Boolean)
+        .join(", ")
+        .replace(/\s*[\n;]+\s*/g, ", ");
+      return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous, sozluk);
+    },
+    /** Görev metnini komut modeliyle düzeltir (Ayarlar → Görev metnini modelle düzelt) */
+    fix: (text: string, terms?: string) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+        });
+      return fixDictation(conn.url, conn.token, m, text, [cfg.speech?.terms, terms].filter(Boolean).join(", "));
     },
     /** Sabit listede bulunmayan sesli komutu modelle anlamaya çalışır (Ayarlar'da model seçiliyse) */
     understand: (text: string, patterns: string[]) => {
@@ -1238,7 +1316,21 @@ async function main() {
           ok: false,
           error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
         });
-      return understandCommand(conn.url, conn.token, m, text, patterns);
+      return understandCommand(conn.url, conn.token, m, text, patterns, cfg.userPrompt);
+    },
+    /** Sesli asistan: komut modeli adım adım iş yapar (bilgisayar araçları yalnızca yerel panelde) */
+    assistant: (req: AssistantRequest, local: boolean, answer?: { id: string; yes: boolean }) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve<AssistantReply>({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+          done: [],
+        });
+      const c = { url: conn.url, token: conn.token, model: m, userPrompt: cfg.userPrompt };
+      const yerel = local && !!cfg.speech?.computer;
+      return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, yerel);
     },
     /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
     say: (text: string, model?: string, voice?: string) => {
@@ -1852,6 +1944,7 @@ async function main() {
       // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
       tfs: tfsApi,
       speech: speechApi,
+      git: gitApi,
       setToggle,
       getMcpStatus: mcpView,
       getMcpTools: async (name) => {

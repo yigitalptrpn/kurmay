@@ -254,13 +254,23 @@ export function loadAgents(
     } else if (data.output && typeof data.output === "object") {
       outputSchema = data.output as Record<string, unknown>;
     }
+    // Oturuma kısa ad: başlangıç ajanının şemasında "title" yoksa (eski "kurmay init" kopyası — şema
+    // additionalProperties:false olduğu için model başlık veremiyordu) çalışırken eklenir; talimat da.
+    let persona = content.trim();
+    const props = outputSchema?.properties as Record<string, unknown> | undefined;
+    if (key === workflow.entry && props && !props.title) {
+      outputSchema = { ...outputSchema, properties: { ...props, title: { type: "string" } } };
+      persona +=
+        "\n\n- `title`: görevin 2-5 kelimelik kısa adı; kullanıcı oturumları bununla ayırt eder. " +
+        'Görevi tekrar etme, özünü söyle ("Sipariş iptaline yetki kontrolü"). Dosya yolu, tırnak ve nokta koyma.';
+    }
 
     agents.set(key, {
       key,
       name: (data.name as string) ?? key,
       description: (data.description as string) ?? "",
       systemPrompt: composeSystemPrompt(
-        content.trim(),
+        persona,
         rules,
         skills,
         config.tools.filter((t) => t.startsWith("mcp__") && !isOffMcpTool(t, off.mcpServers ?? [])),

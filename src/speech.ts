@@ -40,6 +40,9 @@ export function speechView(s: SpeechConfig | undefined, g: GeneralConnection) {
     commandModel: s?.commandModel ?? "",
     ttsModel: s?.ttsModel ?? "",
     ttsVoice: s?.ttsVoice ?? "",
+    computer: !!s?.computer,
+    terms: s?.terms ?? "",
+    fixDictation: !!s?.fixDictation,
   };
 }
 
@@ -48,7 +51,8 @@ export function speechBase(url: string): string {
   return url.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
 }
 
-const authHeaders = (token?: string): Record<string, string> => (token ? { authorization: `Bearer ${token}` } : {});
+export const authHeaders = (token?: string): Record<string, string> =>
+  token ? { authorization: `Bearer ${token}` } : {};
 
 /** Sunucunun hata metnini kısaltır (JSON ise içindeki mesajı alır) */
 function serverText(body: string): string {
@@ -67,7 +71,7 @@ function serverText(body: string): string {
 }
 
 /** HTTP hatasını sade Türkçe açıklamaya çevirir; sunucunun kendi metni sona eklenir */
-function httpError(status: number, body: string): string {
+export function httpError(status: number, body: string): string {
   const raw = serverText(body);
   const tail = raw ? ` Sunucunun yanıtı: ${raw}` : "";
   if (status === 401 || status === 403)
@@ -85,7 +89,7 @@ function httpError(status: number, body: string): string {
 }
 
 /** Bağlantı/zaman aşımı hatası → Türkçe */
-function netError(e: unknown, base: string): string {
+export function netError(e: unknown, base: string): string {
   const err = e as { name?: string; message?: string; cause?: { code?: string; message?: string } };
   if (err?.name === "TimeoutError" || err?.name === "AbortError") return `Sunucu zamanında yanıt vermedi (${base}).`;
   const code = err?.cause?.code;
@@ -128,6 +132,8 @@ export async function transcribe(
   mime: string,
   /** Uzun kayıt parça parça gönderilirken önceki parçanın metni — model cümleyi oradan sürdürür */
   previous?: string,
+  /** Sözlük: Ayarlar'daki terimler + panelin verdiği depo/dal/dosya adları (yanlış duymayı azaltır) */
+  terms?: string,
 ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }> {
   const base = speechBase(s.url);
   const form = new FormData();
@@ -136,10 +142,15 @@ export async function transcribe(
   if (s.model) form.append("model", s.model);
   const lang = s.language ?? "tr";
   if (lang && lang !== "auto") form.append("language", lang); // "auto": dili model kendisi bulur
-  // İpucu: önceki parçanın son kısmı (cümle parça sınırında kopmasın) + panelin verdiği komut
-  // kelimeleri. Model ipucunun yalnızca son ~224 jetonunu kullanır; toplam 600 karakterle sınırlı
-  const prev = previous?.replace(/\s+/g, " ").trim().slice(-300) ?? "";
-  const prompt = prev.slice(-600);
+  // İpucu: sözlük (terimler) başta, önceki metin sonda — model ipucunun yalnızca son ~224 jetonunu
+  // kullanır, en önemlisi (cümlenin devamı) sonda kalsın; toplam 600 karakterle sınırlı
+  const prev = previous?.replace(/\s+/g, " ").trim().slice(-330) ?? "";
+  const sozluk =
+    terms
+      ?.replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 600 - prev.length - 2) ?? "";
+  const prompt = [sozluk, prev].filter(Boolean).join(". ").slice(-600);
   if (prompt) form.append("prompt", prompt);
   form.append("response_format", "json");
   form.append("temperature", "0");
@@ -184,7 +195,8 @@ export async function understandCommand(
   model: string,
   text: string,
   patterns: string[],
-): Promise<{ ok: boolean; command?: string; error?: string; seconds?: number }> {
+  userPrompt?: string,
+): Promise<{ ok: boolean; command?: string; reply?: string; error?: string; seconds?: number }> {
   const base = speechBase(url);
   const sentence = text.replace(/\s+/g, " ").trim().slice(0, 500);
   const list = patterns
@@ -196,13 +208,21 @@ export async function understandCommand(
     "Sen bir yazılım panelinin sesli komut çözücüsüsün. Kullanıcının Türkçe cümlesini aşağıdaki komut " +
     "kalıplarından tam olarak BİRİNE çevir. Kalıptaki <...> yerlerine cümledeki değeri yaz (sayıları rakamla). " +
     "Kalıbın kelimelerini değiştirme. Cümle hiçbir kalıba açıkça uymuyorsa, sohbet ya da başka bir konuşmaysa " +
-    'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\nKomut kalıpları:\n' +
+    'komut olarak "yok" yaz. Yeni komut uydurma, tahmin yürütme.\n\n' +
+    'Komut "yok" ise ve cümle sana söylenmiş bir selam, teşekkür, soru ya da sohbetse "cevap" alanına kısa, ' +
+    "sıcak, sade Türkçe bir cevap yaz (en fazla iki kısa cümle; sesli okunacak, madde işareti ve emoji kullanma). " +
+    "Ne yapabildiğini sorarsa kalıplardan bir iki örnek ver. Görevler, kod, çekme istekleri ya da iş öğeleri " +
+    "hakkında bilgi UYDURMA — bilmiyorsan ilgili komutu söylemesini öner. Cümle başka birine söylenmiş ya da " +
+    'yarım bir konuşma gibiyse "cevap" boş kalsın. Komut bulduysan "cevap" boş kalsın.\n\nKomut kalıpları:\n' +
     list.map((p) => `- ${p}`).join("\n") +
-    '\n\nYalnızca şu biçimde JSON yaz: {"komut": "..."}';
+    (userPrompt?.trim()
+      ? `\n\nKullanıcının talimatları (cevabın üslubu için):\n${userPrompt.trim().slice(0, 1000)}`
+      : "") +
+    '\n\nYalnızca şu biçimde JSON yaz: {"komut": "...", "cevap": "..."}';
   const body = (schema: boolean) => ({
     model,
     temperature: 0,
-    max_tokens: 120,
+    max_tokens: 200,
     messages: [
       { role: "system", content: system },
       { role: "user", content: sentence },
@@ -215,8 +235,8 @@ export async function understandCommand(
               name: "komut",
               schema: {
                 type: "object",
-                properties: { komut: { type: "string" } },
-                required: ["komut"],
+                properties: { komut: { type: "string" }, cevap: { type: "string" } },
+                required: ["komut", "cevap"],
                 additionalProperties: false,
               },
             },
@@ -257,10 +277,12 @@ export async function understandCommand(
     }
     // İçerik JSON değilse (şemasız yanıt) metindeki ilk {...} denenir
     let command = "";
+    let reply = "";
     const m = /\{[\s\S]*\}/.exec(content);
     try {
-      const j = JSON.parse(m ? m[0] : content) as { komut?: unknown };
+      const j = JSON.parse(m ? m[0] : content) as { komut?: unknown; cevap?: unknown };
       if (typeof j.komut === "string") command = j.komut;
+      if (typeof j.cevap === "string") reply = j.cevap.replace(/\s+/g, " ").trim().slice(0, 400);
     } catch {
       command = content;
     }
@@ -268,8 +290,97 @@ export async function understandCommand(
       .replace(/\s+/g, " ")
       .trim()
       .replace(/^["“]|["”]$/g, "");
-    if (!command) return { ok: false, error: "Model boş yanıt verdi.", seconds };
-    return { ok: true, command: /^yok\.?$/i.test(command) ? "" : command, seconds };
+    if (!command && !reply) return { ok: false, error: "Model boş yanıt verdi.", seconds };
+    const none = !command || /^yok\.?$/i.test(command);
+    return { ok: true, command: none ? "" : command, reply: none ? reply : "", seconds };
+  } catch (e) {
+    return { ok: false, error: netError(e, base) };
+  }
+}
+
+/**
+ * Görev yazdırırken ses tanımanın çıktısını modelle düzeltir (Ayarlar → "Görev metnini modelle düzelt"):
+ * yanlış duyulmuş kelimeler (özellikle teknik terimler), noktalama, büyük harf. Anlam değişmesin diye
+ * sıkı talimat + uzunluk denetimi; şüpheli sonuçta özgün metin döner (changed:false).
+ */
+export async function fixDictation(
+  url: string,
+  token: string | undefined,
+  model: string,
+  text: string,
+  terms?: string,
+): Promise<{ ok: boolean; text?: string; changed?: boolean; error?: string; seconds?: number }> {
+  const base = speechBase(url);
+  const src = text.trim().slice(0, 6000);
+  if (!src) return { ok: false, error: "Düzeltilecek metin yok." };
+  const system =
+    "Sen ses tanıma çıktısını düzelten bir yardımcısın. Aşağıdaki metin bir yazılımcının Türkçe konuşmasından " +
+    "otomatik olarak yazıya çevrildi; bir yazılım geliştirme görevi anlatıyor. Yalnızca şunları düzelt: yanlış " +
+    "duyulmuş kelimeler (özellikle teknik terimler, sınıf, dosya, dal ve depo adları — aşağıdaki listeye bak), " +
+    "noktalama, büyük-küçük harf, Türkçe yazım. Anlamı DEĞİŞTİRME, cümle ekleme ya da çıkarma, özetleme, " +
+    "görevi yapma ya da cevaplama, İngilizce terimleri Türkçeye çevirme. Emin olmadığın yeri olduğu gibi bırak." +
+    (terms?.trim() ? `\n\nBu projede geçen terimler: ${terms.trim().slice(0, 1500)}` : "") +
+    '\n\nYalnızca şu biçimde JSON yaz: {"metin": "..."}';
+  const body = (schema: boolean) => ({
+    model,
+    temperature: 0,
+    max_tokens: Math.min(4000, Math.ceil(src.length / 2) + 200),
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: src },
+    ],
+    ...(schema
+      ? {
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "duzeltme",
+              schema: {
+                type: "object",
+                properties: { metin: { type: "string" } },
+                required: ["metin"],
+                additionalProperties: false,
+              },
+            },
+          },
+        }
+      : {}),
+  });
+  const t0 = Date.now();
+  const ask = async (schema: boolean) => {
+    const r = await fetch(`${base}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(body(schema)),
+      signal: AbortSignal.timeout(60_000),
+    });
+    return { status: r.status, ok: r.ok, text: await r.text() };
+  };
+  try {
+    let r = await ask(true);
+    if (!r.ok && r.status === 400 && /response_format|json_schema|guided/i.test(r.text)) r = await ask(false);
+    const seconds = (Date.now() - t0) / 1000;
+    if (!r.ok) return { ok: false, error: httpError(r.status, r.text), seconds };
+    let content = "";
+    try {
+      const c = (JSON.parse(r.text) as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message
+        ?.content;
+      if (typeof c === "string") content = c;
+    } catch {
+      /* aşağıda */
+    }
+    let out = "";
+    const m = /\{[\s\S]*\}/.exec(content);
+    try {
+      const j = JSON.parse(m ? m[0] : content) as { metin?: unknown };
+      if (typeof j.metin === "string") out = j.metin.trim();
+    } catch {
+      out = "";
+    }
+    // Şüpheli sonuç (boş, çok kısa/uzun — model özetlemiş ya da cevap yazmış olabilir): özgünü koru
+    const oran = out.length / src.length;
+    if (!out || oran < 0.6 || oran > 1.5) return { ok: true, text: src, changed: false, seconds };
+    return { ok: true, text: out, changed: out !== src, seconds };
   } catch (e) {
     return { ok: false, error: netError(e, base) };
   }
