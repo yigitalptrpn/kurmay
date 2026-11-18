@@ -323,7 +323,8 @@ mark.srch.cur { outline:2px solid var(--md-primary); }
 .ses-not button { min-height:32px; padding:4px 14px; text-transform:none; }
 .ses-not button[data-oturum] { margin:6px 6px 0 0; }
 .ses-not .ses-liste { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
-.ses-not .pr-durum button { text-align:left; display:block; width:100%; padding:6px 10px; }
+.ses-not .ses-liste.pr-durum { max-height:min(46vh, 420px); overflow:auto; padding-right:2px; }
+.ses-not .pr-durum button { text-align:left; display:block; width:100%; padding:6px 10px; flex-shrink:0; }
 .ses-not .pr-durum button b { display:block; overflow-wrap:anywhere; }
 .ses-not .pr-durum button small { margin-top:2px; }
 .ses-not .ses-notlar { margin:6px 0 0; padding:6px 8px; max-height:30vh; overflow:auto; white-space:pre-wrap; font:inherit; font-size:12.5px; background:var(--md-surface-container, transparent); border-radius:var(--md-shape-sm, 6px); }
@@ -4483,14 +4484,16 @@ function planSoz(e) {
   return t + (e.endsFlow ? " Bitirmek için bitir de." : " Onaylamak için onayla, reddetmek için reddet, çünkü diye başla.");
 }
 /** Okumayı teklif eden soru — yalnızca Türkçe ses varsa; başka bir soru açıksa onu ezmez */
-function okumaTeklif(soru, metin, ipucu = "") {
+function okumaTeklif(soru, metin, ipucu = "", { ek = "", soz, sonra } = {}) {
   if (!konusabilir() || komutOnay) return false;
-  onayIste(`${soru} Okumamı ister misin?${ipucu ? `<small>${ipucu}</small>` : ""}`, () => { sesNotKapat(); konus(typeof metin === "function" ? metin() : metin); },
-    { evetAd: "Oku", hayirAd: "Gerek yok", hayir: () => sesNotKapat() });
+  // ek: soru ile düğmeler arasında ekranda kalan içerik (ör. liste); sonra: cevaptan sonra notu yeniden çizer (yoksa kapanır)
+  const kapat = () => (sonra ? sonra() : sesNotKapat());
+  onayIste(`${soru} Okumamı ister misin?${ek}${ipucu ? `<small>${ipucu}</small>` : ""}`, () => { kapat(); konus(typeof metin === "function" ? metin() : metin); },
+    { evetAd: "Oku", hayirAd: "Gerek yok", hayir: kapat, soz: soz && `${soz} Okumamı ister misin?` });
   return true;
 }
 /** "oku": ekranda o an ne varsa (onay kartı, açık liste, seçili iş öğesi / çekme isteği, son cevap) */
-let sonOnayOlay = null, sonCevap = null;
+let sonOnayOlay = null, sonCevap = null, sonPrDurum = null;
 function baglamOku() {
   if (!konusabilir()) return olmaz(sesliYanit ? "Okuma sesi yok: bu bilgisayarda Türkçe ses bulunamadı, Ayarlar'da okuma modeli de seçili değil." : "Sesli yanıt kapalı — “sesli yanıtı aç” de.");
   sesNotKapat();
@@ -4498,6 +4501,7 @@ function baglamOku() {
   if (!$("wiMenu").classList.contains("hidden") && wiItems.length) return konus(listeSoz(wiItems));
   if (wiSel) return konus(wiSoz(wiSel));
   if (prSel) return konus(prSoz(prSel));
+  if (sonPrDurum && Date.now() - sonPrDurum.t < 600000) return konus(sonPrDurum.soz);
   if (sonCevap) return konus(cevapSoz(sonCevap));
   sesNot("Okunacak bir şey yok — onay bekleyen plan, açık liste ya da seçili iş öğesi yok.");
 }
@@ -5154,9 +5158,32 @@ async function prDurumSesle() {
     for (const it of bekleyen) satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b><small>${esc([it.createdBy && `${it.createdBy} açtı`, it.activeThreads && `${it.activeThreads} açık yorum`].filter(Boolean).join(" · "))}</small></button>`);
   }
   soz.push("Birini açmak için, örneğin, " + (mine[0] || bekleyen[0]).id + " numaralı çekme isteğini aç de.");
-  sesNot(`<b>Çekme isteklerin</b><span class="ses-liste pr-durum">${satir.join("")}</span>` +
-    `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı çekme isteğini aç” de.</small>` +
-    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz.join(" "));
+  const liste = `<span class="ses-liste pr-durum">${satir.join("")}</span>`;
+  const not = `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı çekme isteğini aç” de.</small>`;
+  sonPrDurum = { soz: soz.join(" "), t: Date.now() };
+  // Önce kısa özet; ayrıntıyı (her isteği tek tek) okumadan önce sorar — 10 istek art arda okunmasın
+  const ozet = prDurumOzet(mine, bekleyen);
+  const goster = (soyle) => sesNot(`<b>Çekme isteklerin</b>${liste}${not}` +
+    `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soyle);
+  if (okumaTeklif(`<b>Çekme isteklerin</b> ${esc(ozet)}`, sonPrDurum.soz, "", { ek: liste + not, soz: ozet, sonra: () => goster(false) })) return;
+  goster(sonPrDurum.soz);
+}
+/** Tek cümlelik özet: kaç istek, kaçına yeni yorum gelmiş, oylar, çakışma, incelemeni bekleyenler */
+function prDurumOzet(mine, bekleyen) {
+  const ok = mine.filter((it) => !it.error);
+  const say = (f) => ok.filter(f).length;
+  const yeni = say((it) => it.newComments), onay = say((it) => it.reviewers.some((r) => r.vote >= 5) && !it.reviewers.some((r) => r.vote < 0));
+  const duz = say((it) => it.reviewers.some((r) => r.vote < 0)), cak = say((it) => it.conflicts), hata = mine.length - ok.length;
+  const p = [];
+  if (yeni) p.push(`${yeni} tanesine yeni yorum gelmiş`);
+  if (onay) p.push(`${onay} tanesi onaylanmış`);
+  if (duz) p.push(`${duz} tanesinde düzeltme ya da ret var`);
+  if (cak) p.push(`${cak} tanesinde çakışma var`);
+  if (hata) p.push(`${hata} tanesi okunamadı`);
+  if (mine.length && !yeni) p.push("yeni yorum yok");
+  let t = mine.length ? `${mine.length} açık çekme isteğin var` + (p.length ? `: ${veIle(p)}.` : ".") : "Açtığın açık çekme isteği yok.";
+  if (bekleyen.length) t += ` ${bekleyen.length} çekme isteği incelemeni bekliyor.`;
+  return t;
 }
 const SIRA = { ilk: 1, birinci: 1, ikinci: 2, ucuncu: 3, dorduncu: 4, besinci: 5, altinci: 6, yedinci: 7, sekizinci: 8, dokuzuncu: 9, onuncu: 10 };
 function tfsListedenSec(sira) {
