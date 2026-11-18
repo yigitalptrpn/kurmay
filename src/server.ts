@@ -1327,7 +1327,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         if (parsed.workItem !== undefined && parsed.workItem !== null && parsed.workItem !== "") {
           workItem = typeof parsed.workItem === "number" ? parsed.workItem : parseWorkItemRef(String(parsed.workItem));
           if (!workItem || !Number.isInteger(workItem) || workItem < 1)
-            return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "work item numarası anlaşılamadı" });
         }
         // TFS: çekme isteği numarası ("!45", PR adresi) + kip
         let pr: number | undefined;
@@ -1338,11 +1338,11 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
               : (parsePrRef(String(parsed.pr)) ??
                 (/^\d+$/.test(String(parsed.pr).trim()) ? Number(parsed.pr) : undefined));
           if (!pr || !Number.isInteger(pr) || pr < 1)
-            return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
         }
         const prMode = parsed.prMode === "incele" ? "incele" : "yorum";
         if (workItem !== undefined && pr !== undefined)
-          return json(res, 400, { ok: false, error: "aynı görevde hem iş öğesi hem çekme isteği seçilemez" });
+          return json(res, 400, { ok: false, error: "aynı görevde hem work item hem pull request seçilemez" });
         if (!task && workItem === undefined && pr === undefined)
           return json(res, 400, { ok: false, error: "görev boş olamaz" });
         const session = typeof parsed.session === "string" && parsed.session ? parsed.session : undefined;
@@ -1399,7 +1399,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       if (req.method === "GET" && p === "/tfs/is-ogesi") {
         const id = parseWorkItemRef(url.searchParams.get("id") ?? "");
-        if (!id) return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+        if (!id) return json(res, 400, { ok: false, error: "work item numarası anlaşılamadı" });
         tfs.preview(id).then((item) => json(res, 200, { ok: true, item }), fail);
         return;
       }
@@ -1458,7 +1458,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       if (req.method === "GET" && p === "/tfs/pr") {
         const raw = url.searchParams.get("id") ?? "";
         const id = parsePrRef(raw) ?? (/^\d+$/.test(raw.trim()) ? Number(raw.trim()) : undefined);
-        if (!id) return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+        if (!id) return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
         tfs
           .prPreview(id, url.searchParams.get("dizin") || undefined)
           .then((pr) => json(res, 200, { ok: true, pr }), fail);
@@ -1488,7 +1488,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         readJson(req, (b) => {
           const id = typeof b?.id === "number" ? b.id : Number(b?.id);
           if (!Number.isInteger(id) || id < 1)
-            return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
           tfs
             .prCheckout(id, typeof b?.dizin === "string" ? b.dizin : undefined)
             .then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);

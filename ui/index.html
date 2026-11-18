@@ -456,6 +456,13 @@ body.dinlemede .ses-not { top:60px; }
 .rbox { background:var(--md-surface-container-lowest); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:12px; }
 .rbox h4 { display:flex; justify-content:space-between; gap:8px; margin:0 0 10px; font:700 11.5px var(--font-ui); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
 .rbox h4 span { text-transform:none; letter-spacing:0; font-family:var(--font-mono); }
+/* Açılır-kapanır kutular: başlığa tıkla; kapalılar localStorage'da (kurmay-kutular-kapali) */
+.rbox h4 { cursor:pointer; user-select:none; }
+.rbox h4::before { content:"▾"; display:inline-block; width:12px; flex:none; margin-right:-4px; transition:transform .15s; }
+.rbox.kapali h4::before { transform:rotate(-90deg); }
+.rbox.kapali h4 { margin-bottom:0; }
+.rbox.kapali > :not(h4) { display:none !important; }
+.rbox h4:focus-visible { outline:2px solid var(--md-primary); outline-offset:3px; }
 /* Eklenti durum ışıkları — renkler temadan bağımsız (yeşil/kırmızı/sarı her temada aynı anlam) */
 .mcp-row { display:flex; align-items:center; gap:9px; padding:4px 0; font-size:12.5px; min-width:0; }
 .mcp-row b { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
@@ -927,15 +934,15 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 
       <!-- TFS modu: PR görevi bitti — yorumlara cevap, "düzeltildi", commit, yeni yorumlar (Ayarlar'da "sorarak") -->
       <div class="card hidden" id="prCard">
-        <div class="card-head"><span class="cicon">🔀</span><div class="label" id="prTitle">Sonucu çekme isteğine yaz</div></div>
+        <div class="card-head"><span class="cicon">🔀</span><div class="label" id="prTitle">Sonucu pull request'e yaz</div></div>
         <div class="tfs-sub" id="prSub"></div>
         <div id="prCommit"></div>
         <div id="prItems"></div>
         <h5>Genel yorum</h5>
-        <textarea id="prGeneral" spellcheck="false" aria-label="Çekme isteğine yazılacak genel yorum"></textarea>
+        <textarea id="prGeneral" spellcheck="false" aria-label="Pull request'e yazılacak genel yorum"></textarea>
         <div class="row">
-          <button class="primary" id="btnPrWrite">Çekme isteğine yaz</button>
-          <button id="btnPrSkip" title="Bu sonucu çekme isteğine yazma — kart kapanır">Şimdilik yazma</button>
+          <button class="primary" id="btnPrWrite">Pull request'e yaz</button>
+          <button id="btnPrSkip" title="Bu sonucu pull request'e yazma — kart kapanır">Şimdilik yazma</button>
           <span id="prMsg" role="status"></span>
         </div>
       </div>
@@ -944,10 +951,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
       <div class="card hidden" id="tfsCard">
         <div class="card-head"><span class="cicon">📌</span><div class="label" id="tfsTitle">Sonucu TFS'e yaz</div></div>
         <div class="tfs-sub" id="tfsSub"></div>
-        <textarea id="tfsText" spellcheck="false" aria-label="İş öğesine yazılacak not"></textarea>
+        <textarea id="tfsText" spellcheck="false" aria-label="Work item'a yazılacak not"></textarea>
         <div class="tfs-pr hidden" id="tfsPrRow">
-          <label><input type="checkbox" id="tfsPrOpen"> Değişiklikleri yeni dala gönder ve çekme isteği aç</label>
-          <input type="text" id="tfsPrTarget" spellcheck="false" placeholder="hedef dal (boşsa deponun varsayılanı)" aria-label="Çekme isteğinin hedef dalı">
+          <label><input type="checkbox" id="tfsPrOpen"> Yeni branch'e commit + push yap ve pull request aç</label>
+          <input type="text" id="tfsPrTarget" spellcheck="false" placeholder="hedef branch (boşsa deponun varsayılanı)" aria-label="Pull request'in hedef branch'i">
           <label><input type="checkbox" id="tfsPrDraft"> taslak</label>
           <small id="tfsPrInfo"></small>
         </div>
@@ -955,7 +962,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
           <label for="tfsState" class="label" style="margin:0">Durum</label>
           <select id="tfsState"><option value="">değiştirme</option></select>
           <button class="primary" id="btnTfsWrite">TFS'e yaz</button>
-          <button id="btnTfsSkip" title="Bu sonucu iş öğesine yazma — kart kapanır">Şimdilik yazma</button>
+          <button id="btnTfsSkip" title="Bu sonucu work item'a yazma — kart kapanır">Şimdilik yazma</button>
           <span id="tfsMsg" role="status"></span>
         </div>
       </div>
@@ -978,10 +985,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
       <div class="wi-row hidden" id="wiRow">
         <span class="dirpick">
           <span class="wi-in"><span aria-hidden="true">📌</span><input type="text" id="wiInput" autocomplete="off" spellcheck="false"
-            placeholder="İş öğesi (#123) ya da çekme isteği (!45): numara, adres ya da başlıkta ara…" aria-label="TFS iş öğesi ya da çekme isteği" aria-controls="wiMenu" aria-expanded="false"></span>
-          <div class="dmenu hidden" id="wiMenu" role="listbox" aria-label="İş öğeleri"></div>
+            placeholder="Work item (#123) ya da pull request (!45): numara, adres ya da başlıkta ara…" aria-label="TFS work item ya da pull request" aria-controls="wiMenu" aria-expanded="false"></span>
+          <div class="dmenu hidden" id="wiMenu" role="listbox" aria-label="Work item'lar"></div>
         </span>
-        <button type="button" class="wi-mine" id="wiMine" title="TFS'te sana atanmış, bitmemiş iş öğeleri ve açık çekme isteklerin">Bana atananlar ▾</button>
+        <button type="button" class="wi-mine" id="wiMine" title="TFS'te sana atanmış, bitmemiş work item'lar ve açık pull request'lerin">Bana atananlar ▾</button>
         <span class="wi-info" id="wiInfo" role="status"></span>
       </div>
       <div class="wi-card hidden" id="wiCard"></div>
@@ -1039,11 +1046,11 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <h4>Mıntıkalar <span id="repoSum"></span></h4>
     <div id="repoList"></div>
   </div>
-  <div class="rbox">
+  <div class="rbox" id="filesBox">
     <h4>Değişen dosyalar <span id="filesSum"></span></h4>
     <div id="fileList"><div class="empty">Henüz dosya değişmedi</div></div>
   </div>
-  <div class="rbox">
+  <div class="rbox" id="sessBox">
     <h4>Oturum</h4>
     <div class="kv"><span>Model</span><select id="modelSel" title="Model — sıradaki görevde kullanılır"></select></div>
     <div class="kv"><span>Akıl yürütme</span><select id="effortSel" title="Akıl yürütme derinliği — sıradaki görevde kullanılır"></select></div>
@@ -1063,10 +1070,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <div id="gitList"></div>
     <div class="git-ctl">
       <select id="gitScope" aria-label="Hangi depolarda"></select>
-      <div class="git-row"><input type="text" id="gitBranch" list="gitBranches" placeholder="dal adı" spellcheck="false" autocomplete="off" aria-label="Dal adı"><datalist id="gitBranches"></datalist>
-        <button type="button" data-git="dal" title="Bu dala geç">Geç</button><button type="button" data-git="yeniDal" title="Bu adla yeni dal aç ve ona geç">Yeni dal</button></div>
-      <div class="git-row"><button type="button" data-git="guncelle" title="Sunucudan çek (yalnızca hızlı ileri)">Güncelle</button><button type="button" data-git="sakla" title="Kaydedilmemiş değişiklikleri sakla (stash)">Sakla</button><button type="button" data-git="geriGetir" title="Saklananları geri getir">Geri getir</button></div>
-      <div class="git-row"><input type="text" id="gitMsg" placeholder="kayıt mesajı" aria-label="Kayıt mesajı"><button type="button" data-git="kaydet" title="Değişiklikleri kaydet (commit) ve gönder (push)">Kaydet ve gönder</button></div>
+      <div class="git-row"><input type="text" id="gitBranch" list="gitBranches" placeholder="branch" spellcheck="false" autocomplete="off" aria-label="Branch adı"><datalist id="gitBranches"></datalist>
+        <button type="button" data-git="dal" title="Bu branch'e checkout yap">Checkout</button><button type="button" data-git="yeniDal" title="Bu adla yeni branch aç ve ona checkout yap">New branch</button></div>
+      <div class="git-row"><button type="button" data-git="guncelle" title="Pull (yalnızca fast-forward)">Pull</button><button type="button" data-git="sakla" title="Commit edilmemiş değişiklikleri stash'le">Stash</button><button type="button" data-git="geriGetir" title="Son stash'i geri getir">Stash pop</button></div>
+      <div class="git-row"><input type="text" id="gitMsg" placeholder="commit mesajı" aria-label="Commit mesajı"><button type="button" data-git="kaydet" title="Değişiklikleri commit et ve push yap">Commit + Push</button></div>
     </div>
     <div class="fhint-git">Her iş önce ne olacağını gösterir, onaylayınca yapılır.</div>
   </div>
@@ -1094,10 +1101,10 @@ let fanoutMeta = {};
 let scheduleCancelled = false;
 // TFS modu durumu (ayrıntı: aşağıdaki "TFS modu" bölümü) — olay işleyicileri de kullandığı için en üstte
 let tfs = { enabled: false, ready: false };
-let wiSel = null;          // seçili iş öğesinin önizlemesi (GET /tfs/is-ogesi)
+let wiSel = null;          // seçili work item'ın önizlemesi (GET /tfs/is-ogesi)
 let tfsPending = null;     // yazılmayı bekleyen sonuç (tfs_writeback olayı)
 let startBusy = false;     // görev isteği sürüyor (TFS'ten okuma birkaç saniye sürebilir)
-let prSel = null;          // seçili çekme isteğinin özeti (GET /tfs/pr) — iş öğesiyle birlikte seçilmez
+let prSel = null;          // seçili pull request'in özeti (GET /tfs/pr) — work item ile birlikte seçilmez
 let prMode = "yorum";      // PR kipi: yorum (açık yorumları ele al) | incele (yorum yaz)
 let prPending = null;      // PR'a yazılmayı bekleyen taslak (tfs_pr_writeback olayı)
 function tfsOn() { return !!(tfs.enabled && tfs.ready); }
@@ -2059,8 +2066,8 @@ function handleEvent(e) {
           // Görev bir çekme isteğinden: başlık + kip + ekibe giden metin (açılır) + kullanıcının notu
           me.classList.add("wi-me");
           me.innerHTML = prHeadHtml(pr, false) +
-            `<div class="wi-skip">${pr.mode === "incele" ? "İnceleme — kod değişmez, bulgular çekme isteğine yorum olarak yazılacak" : `Açık yorumlar ele alınacak — ${(pr.threads || []).length} yorum, dal ${esc(pr.source)}`}</div>` +
-            (pr.text ? `<details class="wi-more"><summary>Çekme isteğinin içeriği — ekibe giden metin</summary><div class="wi-body md">${renderMarkdown(pr.text)}</div></details>` : "") +
+            `<div class="wi-skip">${pr.mode === "incele" ? "İnceleme — kod değişmez, bulgular pull request'e yorum olarak yazılacak" : `Açık yorumlar ele alınacak — ${(pr.threads || []).length} yorum, dal ${esc(pr.source)}`}</div>` +
+            (pr.text ? `<details class="wi-more"><summary>Pull request'in içeriği — ekibe giden metin</summary><div class="wi-body md">${renderMarkdown(pr.text)}</div></details>` : "") +
             (pr.note ? `<div class="wi-note">${esc(pr.note)}</div>` : "");
         } else if (pr) {
           const k = document.createElement("div");
@@ -2071,7 +2078,7 @@ function handleEvent(e) {
           // Görev bir TFS iş öğesinden: başlık + ajanlara giden metin (açılır) + kullanıcının notu
           me.classList.add("wi-me");
           me.innerHTML = wiHeadHtml(wi, false) +
-            (wi.text ? `<details class="wi-more"><summary>İş öğesinin içeriği — ekibe giden metin</summary><div class="wi-body md">${renderMarkdown(wi.text)}</div></details>` : "") +
+            (wi.text ? `<details class="wi-more"><summary>Work item'ın içeriği — ekibe giden metin</summary><div class="wi-body md">${renderMarkdown(wi.text)}</div></details>` : "") +
             (wi.note ? `<div class="wi-note">${esc(wi.note)}</div>` : "") +
             (wi.skipped?.length ? `<div class="wi-skip">İndirilemeyen ekler: ${esc(wi.skipped.join("; "))}</div>` : "");
         } else if (wi) {
@@ -2499,14 +2506,14 @@ function handleEvent(e) {
         $("tfsCard").classList.add("hidden");
       }
       for (const p of e.prs || []) {
-        if (p.id) addLog(e.ts, `🔀 Çekme isteği ${p.existed ? "zaten açıktı" : "açıldı"}: <a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">!${p.id}</a> · ${esc(p.repo)} · dal ${esc(p.branch || "")}`, "ok");
-        else addLog(e.ts, `🔀 ${esc(p.repo)}: çekme isteği açılamadı — ${esc(p.error || "")}${p.branch ? ` (dal ${esc(p.branch)} gönderilmiş olabilir)` : ""}`, "err");
+        if (p.id) addLog(e.ts, `🔀 Pull request ${p.existed ? "zaten açıktı" : "açıldı"}: <a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">!${p.id}</a> · ${esc(p.repo)} · branch ${esc(p.branch || "")}`, "ok");
+        else addLog(e.ts, `🔀 ${esc(p.repo)}: pull request açılamadı — ${esc(p.error || "")}${p.branch ? ` (branch ${esc(p.branch)} push edilmiş olabilir)` : ""}`, "err");
       }
       if (e.ok) {
         addLog(e.ts, `📌 Sonuç TFS'e yazıldı → <a href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">#${e.id}</a>` +
           `${e.state ? ` · durum: ${esc(wiState(e.state))}` : ""}${e.auto ? " (kendiliğinden)" : ""}`, "ok");
       } else if (e.skipped) {
-        addLog(e.ts, `📌 Sonuç #${e.id} iş öğesine yazılmadı`, "muted");
+        addLog(e.ts, `📌 Sonuç #${e.id} work item'a yazılmadı`, "muted");
       } else {
         addLog(e.ts, `📌 Sonuç TFS'e yazılamadı (#${e.id}): ${esc(e.error || "bilinmeyen hata")}`, "err");
       }
@@ -2521,14 +2528,14 @@ function handleEvent(e) {
         prPending = null;
         $("prCard").classList.add("hidden");
       }
-      if (e.skipped) { addLog(e.ts, `🔀 Sonuç !${e.id} çekme isteğine yazılmadı`, "muted"); break; }
+      if (e.skipped) { addLog(e.ts, `🔀 Sonuç !${e.id} pull request'e yazılmadı`, "muted"); break; }
       const parca = [];
-      if (e.pushed) parca.push(`değişiklikler ${esc(e.pushed.branch)} dalına gönderildi (kayıt ${esc(e.pushed.commit.slice(0, 8))})`);
+      if (e.pushed) parca.push(`${esc(e.pushed.branch)} branch'ine push edildi (commit ${esc(e.pushed.commit.slice(0, 8))})`);
       if (e.replied) parca.push(`${e.replied} yoruma cevap yazıldı`);
       if (e.resolved) parca.push(`${e.resolved} yorum düzeltildi olarak işaretlendi`);
       if (e.created) parca.push(`${e.created} yeni yorum yazıldı`);
       if (e.general) parca.push("genel yorum yazıldı");
-      if (parca.length) addLog(e.ts, `🔀 <a href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">!${e.id}</a> çekme isteğine yazıldı: ${parca.join(" · ")}${e.auto ? " (kendiliğinden)" : ""}`, "ok");
+      if (parca.length) addLog(e.ts, `🔀 <a href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">!${e.id}</a> pull request'e yazıldı: ${parca.join(" · ")}${e.auto ? " (kendiliğinden)" : ""}`, "ok");
       for (const er of e.errors || []) addLog(e.ts, `🔀 !${e.id}: ${esc(er)}`, parca.length ? "warn" : "err");
       break;
     }
@@ -2795,10 +2802,10 @@ function updateTaskCtx() {
   $("taskCardTitle").textContent = s ? "Bu oturumda yeni görev" : "Yeni görev";
   let wiNote = "";
   if (tfsOn()) {
-    if (wiSel) wiNote = ` · 📌 görev #${wiSel.id} iş öğesinden kurulacak`;
-    else if (prSel) wiNote = ` · 🔀 görev !${prSel.pr.id} çekme isteğinden kurulacak (${prMode === "incele" ? "inceleme" : "yorumları ele al"})`;
-    else if (s && s.workItem) wiNote = ` · 📌 iş öğesi seçmezsen görev #${s.workItem.id}'in devamı sayılır, sonuç ona yazılır`;
-    else if (s && s.pr) wiNote = ` · 🔀 seçim yapmazsan görev !${s.pr.id} çekme isteğinin devamı sayılır, sonuç ona yazılır`;
+    if (wiSel) wiNote = ` · 📌 görev #${wiSel.id} work item'dan kurulacak`;
+    else if (prSel) wiNote = ` · 🔀 görev !${prSel.pr.id} pull request'ten kurulacak (${prMode === "incele" ? "inceleme" : "yorumları ele al"})`;
+    else if (s && s.workItem) wiNote = ` · 📌 work item seçmezsen görev #${s.workItem.id}'in devamı sayılır, sonuç ona yazılır`;
+    else if (s && s.pr) wiNote = ` · 🔀 seçim yapmazsan görev !${s.pr.id} pull request'in devamı sayılır, sonuç ona yazılır`;
   }
   $("taskCtx").textContent = (s
     ? (taskDir
@@ -2849,8 +2856,8 @@ function sessRow(s) {
   }
   return `<div class="sess" data-id="${esc(s.id)}"><div class="sess-main"><div class="nm" title="${esc(s.task || s.name)}">${esc(s.name)}</div>` +
     `<div class="meta"><span class="st ${st}">${sessionStatusLabels[st] || st}</span>${fmt(Date.parse(s.updatedAt))}${ctx}` +
-    `${s.workItem ? `<span class="wib" title="TFS iş öğesi: ${esc(wiType(s.workItem.type))} · ${esc(wiState(s.workItem.state))}">#${s.workItem.id}</span>` : ""}` +
-    `${s.pr ? `<span class="wib" title="TFS çekme isteği: ${esc(s.pr.repository)} · ${s.pr.mode === "incele" ? "inceleme" : "yorumlar"}">!${s.pr.id}</span>` : ""}</div></div>` +
+    `${s.workItem ? `<span class="wib" title="TFS work item: ${esc(wiType(s.workItem.type))} · ${esc(wiState(s.workItem.state))}">#${s.workItem.id}</span>` : ""}` +
+    `${s.pr ? `<span class="wib" title="TFS pull request: ${esc(s.pr.repository)} · ${s.pr.mode === "incele" ? "inceleme" : "yorumlar"}">!${s.pr.id}</span>` : ""}</div></div>` +
     `<button type="button" class="sess-more" data-more="${esc(s.id)}" title="Oturum seçenekleri" aria-label="Oturum seçenekleri" aria-haspopup="menu" aria-expanded="false">⋯</button></div>`;
 }
 const grupAdlari = () => [...new Set(Object.values(sessionsById).map((s) => s.group).filter(Boolean))]
@@ -3967,7 +3974,7 @@ async function startTask() {
   if (!task && !wi && !pr) return;
   if (startBusy) return;
   if (pr && prMode === "yorum" && pr.local && !pr.local.onBranch) {
-    $("taskError").textContent = pr.local.error || `Bilgisayardaki kopya çekme isteğinin dalında değil — karttaki "Dala geç" düğmesine bas`;
+    $("taskError").textContent = pr.local.error || `Bilgisayardaki kopya pull request'in branch'inde değil — karttaki "Checkout" düğmesine bas`;
     return;
   }
   if (dirMissing && !taskDir) { $("taskError").textContent = "Hedef dizin bulunamadı — önce geçerli bir dizin seç"; return; }
@@ -4017,7 +4024,7 @@ async function startTask() {
         (data.resetResume ? " · Analist bu oturumda yeni konuşmayla başlıyor (önceki konuşma eski dizine bağlı)" : ""), "ok");
     }
     applyViewDir();
-    if (wi || pr) clearWi(); // iş öğesi / PR bu göreve verildi; sıradaki görev yeniden seçer
+    if (wi || pr) clearWi(); // work item / PR bu göreve verildi; sıradaki görev yeniden seçer
     if (data.session && data.session !== viewSessionId) {
       sessionsById[data.session] ??= { id: data.session, name: data.display || task, updatedAt: new Date().toISOString(), status: "running", busy: true, targetDir: gorevDizini, dirExists: true };
       openSession(data.session);
@@ -4482,7 +4489,7 @@ const dosyaAdi = (p) => String(p || "").split(/[\\/]/).pop();
 /** Okunacak metinler: liste, iş öğesi, çekme isteği, plan, cevap */
 function listeSoz(items) {
   const ilk = items.slice(0, 6).map((x, i) => x.kind === "pr"
-    ? `${SIRA_AD[i]}: çekme isteği ${x.id}, ${x.title}.`
+    ? `${SIRA_AD[i]}: pull request ${x.id}, ${x.title}.`
     : `${SIRA_AD[i]}: ${wiType(x.type)} ${x.id}, ${x.title}. Durumu ${wiState(x.state)}.`);
   return ilk.join(" ") + (items.length > 6 ? ` ${items.length - 6} kayıt daha var, ekranda.` : "") + " Seçmek için, örneğin, ikinciyi seç de.";
 }
@@ -4501,9 +4508,9 @@ function wiSoz(w) {
 }
 function prSoz(d) {
   const p = d.pr, acik = d.threads.filter((t) => t.status === "active" || t.status === "pending").length;
-  let t = `Çekme isteği ${p.id}: ${p.title}. ${p.source} dalından ${p.target} dalına. ${acik} açık yorum, ${d.changes.length} değişen dosya.`;
+  let t = `Pull request ${p.id}: ${p.title}. ${p.source} branch'inden ${p.target} branch'ine. ${acik} açık yorum, ${d.changes.length} değişen dosya.`;
   if (p.description && p.description.trim()) t += " Açıklama: " + mdSoz(p.description, 800);
-  if (d.local && !d.local.error && !d.local.onBranch) t += ` Dikkat: yerel depo şu an ${d.local.branch || "başka bir"} dalında.`;
+  if (d.local && !d.local.error && !d.local.onBranch) t += ` Dikkat: yerel depo şu an ${d.local.branch || "başka bir"} branch'inde.`;
   return t + (acik ? " Yorumları ele almak için başlat de; yalnızca incelemek için incele de." : " İncelemek için başlat de.");
 }
 function cevapSoz(st) {
@@ -4543,7 +4550,7 @@ function baglamOku() {
   if (prSel) return konus(prSoz(prSel));
   if (sonPrDurum && Date.now() - sonPrDurum.t < 600000) return konus(sonPrDurum.soz);
   if (sonCevap) return konus(cevapSoz(sonCevap));
-  sesNot("Okunacak bir şey yok — onay bekleyen plan, açık liste ya da seçili iş öğesi yok.");
+  sesNot("Okunacak bir şey yok — onay bekleyen plan, açık liste ya da seçili work item yok.");
 }
 /** Bu oturumda onay kartı açıldı (canlı) — sesle çalışılıyorsa okumayı teklif et */
 function onayDuyur(e) {
@@ -4820,16 +4827,16 @@ const KOMUTLAR = [
   { ornek: "yeni oturum aç", re: /^yeni (bir )?(oturum|gorev)( ac| baslat| olustur)?$/, yap: () => { openSession(""); tamam("Yeni oturum taslağı açıldı — görevi yaz ya da söyle"); } },
   { grup: "TFS" },
   { ornek: "TFS ayarlarını aç", re: /^(tfs|tefes) (ayarlari(ni)?|ayari(ni)?|ayarlarina git|kartini ac)( ac)?$/, yap: () => sayfaAc("/config#tfsCard", "TFS ayarları") },
-  { ornek: "çekme isteklerimin durumu · çekme isteklerime yorum gelmiş mi", re: /^((benim )?(acik )?cekme isteklerim(in|e|i|de)?|(acik )?pr\s*(lar)?(im|imin|ima|imi|imda)?)(\s+(durumu|durumlari|ne durumda|ne alemde|nasil|neler var|yeni ne var|yorum (gelmis|geldi|var)( mi)?|yorumlari))?(\s+(goster|soyle|getir|oku|nedir))?$/, yap: () => prDurumSesle() },
+  { ornek: "pull request'lerimin durumu · pull request'lerime yorum gelmiş mi", re: /^((benim )?(acik )?cekme isteklerim(in|e|i|de)?|(benim )?(acik )?pull ?request\s*(ler)?(im|imin|ime|imi|imde)?|(acik )?pr\s*(lar)?(im|imin|ima|imi|imda)?)(\s+(durumu|durumlari|ne durumda|ne alemde|nasil|neler var|yeni ne var|yorum (gelmis|geldi|var)( mi)?|yorumlari))?(\s+(goster|soyle|getir|oku|nedir))?$/, yap: () => prDurumSesle() },
   { ornek: "TFS modunu aç / kapat", re: /^(tfs|tefes)( modu(nu)?)? (?<is>ac|kapat|etkinlestir|devre disi birak)$/, yap: (m) => tfsModSesle(/ac|etkin/.test(m.groups.is)) },
-  { ornek: "1201 numaralı maddeyi çek", re: /^(?<no>.+?) (numarali )?(is ogesini|is ogesi|maddeyi|maddesini|kaydi|kaydini|isi) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), false) },
-  { re: /^(is ogesi|madde|kayit) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), false) },
-  { ornek: "45 numaralı çekme isteğini aç", re: /^(?<no>.+?) (numarali )?(cekme istegini|cekme istegi|pr yi|pr i|pri) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), true) },
-  { re: /^(cekme istegi|pr) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), true) },
+  { ornek: "1201 numaralı work item'ı çek", re: /^(?<no>.+?) (numarali )?(is ogesini|is ogesi|maddeyi|maddesini|kaydi|kaydini|isi|work ?item\s*(i|ini)?) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), false) },
+  { re: /^(is ogesi|madde|kayit|work ?item) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), false) },
+  { ornek: "45 numaralı pull request'i aç", re: /^(?<no>.+?) (numarali )?(cekme istegini|cekme istegi|pr yi|pr i|pri|pull ?request\s*(i|ini)?) (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 1), true) },
+  { re: /^(cekme istegi|pr|pull ?request) (?<no>.+?)( (i|yi|u|yu|nu|ni|numarayi))? (cek|getir|ac|sec|yukle|al)$/d, yap: (m, ham) => tfsSecSesle(serbest(ham, m, 2), true) },
   { ornek: "bana atananları göster", re: /^(bana atananlar(i)?|atananlar(i)?|benim islerim(i)?|bana atanan isler(i)?)( (goster|getir|ac|listele))?$/, yap: () => tfsAtananlar() },
   { ornek: "ikinciyi seç (listeden)", re: /^(?<sira>ilk(i|ini)?|son(uncu)?(yu|u|unu)?|birinci(yi|si)?|ikinci(yi|si)?|ucuncu(yu|su)?|dorduncu(yu|su)?|besinci(yi|si)?|altinci(yi|si)?|yedinci(yi|si)?|sekizinci(yi|si)?|dokuzuncu(yu|su)?|onuncu(yu|su)?|\d+)( (siradakini|sirayi|olani|maddeyi|numarayi))?( (sec|ac|cek|al))?$/, yap: (m) => tfsListedenSec(m.groups.sira) },
-  { ornek: "seçimi kaldır (iş öğesi)", re: /^(secimi|is ogesini|maddeyi|cekme istegini) (kaldir|temizle|birak)$/, yap: () => { if (!wiSel && !prSel) return sesNot("Seçili iş öğesi ya da çekme isteği yok."); clearWi(); tamam("Seçim kaldırıldı"); } },
-  { ornek: "yorumları ele al · incele (çekme isteği)", re: /^((acik )?yorumlari ele al|yorumlari duzelt|incele|incelemeye al|sadece incele)$/, yap: (m) => tfsPrKipi(/incele/.test(m[0]) ? "incele" : "yorum") },
+  { ornek: "seçimi kaldır (work item)", re: /^(secimi|is ogesini|maddeyi|cekme istegini|work ?item\s*i|pull ?request\s*i) (kaldir|temizle|birak)$/, yap: () => { if (!wiSel && !prSel) return sesNot("Seçili work item ya da pull request yok."); clearWi(); tamam("Seçim kaldırıldı"); } },
+  { ornek: "yorumları ele al · incele (pull request)", re: /^((acik )?yorumlari ele al|yorumlari duzelt|incele|incelemeye al|sadece incele)$/, yap: (m) => tfsPrKipi(/incele/.test(m[0]) ? "incele" : "yorum") },
   { grup: "Plan onayı" },
   { ornek: "onay beklemeden devam et · onay beklesin", re: /^((plan )?onay beklesin|(plan )?onayi bekle|(onaysiz|otomatik) iletmeyi kapat|onay beklemeden (devam etmeyi|ilerlemeyi|gecmeyi) kapat)$/, yap: () => fwdSesle(false) },
   { re: /^(plan )?(onay beklemeden (devam et|ilerle|gec|ilet|gonder)|onaysiz (ilet|gec|devam et)|otomatik ilet(meyi ac)?)$/, yap: () => fwdSesle(true) },
@@ -4845,14 +4852,16 @@ const KOMUTLAR = [
   { ornek: "başlat", re: /^(baslat|gonder|gorevi baslat|gorevi gonder)$/, yap: () => gorevBaslatSesle() },
   { ornek: "kutuyu temizle", re: /^(kutuyu temizle|gorevi temizle|yaziyi sil|temizle)$/, yap: () => { $("taskInput").value = ""; $("taskInput").dispatchEvent(new Event("input")); tamam("Görev kutusu temizlendi"); } },
   { grup: "Git" },
-  { ornek: "git durumu · hangi daldayım", re: /^(git durumu(nu goster)?|(depolarin|repolarin|depolar|repolar) (durumu|ne durumda)|hangi (daldayim|dallardayim|daldayiz)|dallari goster)$/, yap: () => gitDurumSesle() },
-  { ornek: "tüm repolarda develop dalına geç · c reposunda feature/132 dalına geç", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?<dal>.+?) (?:dal|branch|brans|branc)\w* (?:gec|al)\w*$/d, yap: (m, ham) => gitSesle("dal", m, ham) },
-  { ornek: "tüm repoları güncelle · c reposunu güncelle", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:guncelle|cek|pull yap|git pull)$/d, yap: (m, ham) => gitSesle("guncelle", m, ham) },
-  { ornek: "c reposunda feature/140 dalı aç", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:yeni )?(?<dal>.+?) (?:dal|branch|brans|branc)\w* (?:ac|olustur|yarat)$/d, yap: (m, ham) => gitSesle("yeniDal", m, ham) },
-  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?yeni (?:dal|branch|brans)\w* (?:ac|olustur|yarat) (?<dal>.+)$/d, yap: (m, ham) => gitSesle("yeniDal", m, ham) },
-  { ornek: "değişiklikleri kaydet ve gönder, mesaj …", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:kaydet ve gonder|kaydet gonder|commit (?:et|yap )?(?:ve )?(?:push|gonder)\w*|commitle ve gonder)(?: (?:mesaj|mesaji|aciklama|aciklamasi|mesajla)(?: ile)? (?<msg>.+))?$/d, yap: (m, ham) => gitSesle("kaydet", m, ham) },
-  { ornek: "değişiklikleri sakla · saklananları geri getir", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:sakla|stash (?:et|yap)|kenara (?:al|koy))$/d, yap: (m, ham) => gitSesle("sakla", m, ham) },
-  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:saklananlari|sakladiklarimi|saklanan degisiklikleri|stash\w*) (?:geri (?:getir|al|yukle)|pop\w*)$|^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?stash pop$/d, yap: (m, ham) => gitSesle("geriGetir", m, ham) },
+  { ornek: "git durumu · git status · hangi branch'teyim", re: /^(git (durumu(nu goster)?|status)|(depolarin|repolarin|depolar|repolar) (durumu|ne durumda)|hangi (daldayim|dallardayim|daldayiz|branch\w*)|(dallari|branchleri|branch leri) goster)$/, yap: () => gitDurumSesle() },
+  { ornek: "tüm repolarda develop'a checkout yap · c reposunda feature/132 branch'ine geç", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?<dal>.+?) (?:dal|branch|brans|branc)\w*(?: (?:ine|ina|ini|in|e|a|i|ye|ya|na|ne))? (?:gec|al|checkout)\w*(?: (?:yap|et))?$/d, yap: (m, ham) => gitSesle("dal", m, ham) },
+  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?<dal>.+?)(?: (?:a|e|ya|ye))? (?:checkout|cekaut|cek out)\w*(?: (?:yap|et|ol))?$/d, yap: (m, ham) => gitSesle("dal", m, ham) },
+  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:git )?(?:checkout|cekaut|cek out) (?<dal>.+)$/d, yap: (m, ham) => gitSesle("dal", m, ham) },
+  { ornek: "tüm repoları pull et · c reposunu güncelle", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:guncelle|cek|git pull|pull|pul)(?: (?:yap|et|cek))?$/d, yap: (m, ham) => gitSesle("guncelle", m, ham) },
+  { ornek: "c reposunda feature/140 adında new branch aç", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:yeni )?(?<dal>.+?) (?:diye |adinda |isimli )?(?:dal|branch|brans|branc|new branch|yeni branch|yeni dal)\w*(?: (?:i|ini|in))? (?:ac|olustur|yarat)$/d, yap: (m, ham) => gitSesle("yeniDal", m, ham) },
+  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:yeni|new) (?:dal|branch|brans)\w*(?: (?:ac|olustur|yarat))? (?<dal>.+)$/d, yap: (m, ham) => gitSesle("yeniDal", m, ham) },
+  { ornek: "commit ve push yap, mesaj …", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:kaydet ve gonder|kaydet gonder|commit\w*(?: (?:et|yap))?(?: ve)? (?:push|pus|gonder)\w*(?: (?:et|yap))?|push\w*(?: (?:et|yap))?)(?: (?:mesaj|mesaji|aciklama|aciklamasi|mesajla|commit mesaji)(?: ile)? (?<msg>.+))?$/d, yap: (m, ham) => gitSesle("kaydet", m, ham) },
+  { ornek: "değişiklikleri stash'le · stash pop", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:sakla|stash\w*(?: (?:et|yap|le))?|kenara (?:al|koy))$/d, yap: (m, ham) => gitSesle("sakla", m, ham) },
+  { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:saklananlari|sakladiklarimi|saklanan degisiklikleri|stash\w*) (?:geri (?:getir|al|yukle)|pop\w*)|stash pop\w*|pop (?:et|yap))(?: (?:et|yap))?$/d, yap: (m, ham) => gitSesle("geriGetir", m, ham) },
   { grup: "Sayfalar ve görünüm" },
   { ornek: "ayarları aç", re: /^(ayarlar(i)?( ac)?|ayarlara (git|gec))$/, yap: () => sayfaAc("/config", "Ayarlar") },
   { ornek: "aç kapat sayfasını aç", re: /^(ac kapat( sayfasi(ni)?)?( ac)?|anahtarlar(i)?( ac)?)$/, yap: () => sayfaAc("/toggles", "Aç / Kapat") },
@@ -4861,6 +4870,12 @@ const KOMUTLAR = [
   { ornek: "kenar çubuğunu kapat", re: /^(kenar cubugu(nu)?|sol cubu(gu)?|oturum listesi(ni)?) (?<is>kapat|gizle|ac|goster)$/, yap: (m) => {
     const ac = /ac|goster/.test(m.groups.is); const kapali = $("sidebar").classList.contains("collapsed");
     if (ac === kapali) $("btnSidebar").click(); tamam(ac ? "Kenar çubuğu açık" : "Kenar çubuğu kapalı"); } },
+  { ornek: "git kutusunu kapat · tüm kutuları aç", re: /^(?:(?<tum>tum|butun) kutulari|(?<ad>.+?) (?:kutusunu|kutusu|bolumunu|panelini))\s+(?<is>ac|kapat|gizle|goster|daralt|genislet)$/d, yap: (m, ham) => {
+    const ac = /ac|goster|genislet/.test(m.groups.is);
+    if (m.groups.tum) { for (const k of document.querySelectorAll(".rail .rbox")) kutuDurum(k, ac); return tamam(ac ? "Tüm kutular açık" : "Tüm kutular kapalı"); }
+    const k = kutuBul(serbest(ham, m, 2));
+    if (!k) return olmaz(`“${esc(serbest(ham, m, 2))}” adında kutu yok. Kutular: ${[...document.querySelectorAll(".rail .rbox h4")].map((h) => esc(kutuAd(h.closest(".rbox")))).join(", ")}.`);
+    kutuDurum(k, ac); tamam(`${esc(kutuAd(k))} ${ac ? "açık" : "kapalı"}`); } },
   { ornek: "temayı radar yap", re: /^(temayi\s+(.+?)\s+yap|(.+?)\s+temasi(na gec)?|tema\s+(.+))$/d, yap: (m, ham) => {
     const ad = komutSade(serbest(ham, m, m.indices[2] ? 2 : m.indices[3] ? 3 : 5)).trim(); const id = TEMA[ad];
     const b = id && document.querySelector(`.tsw[data-t="${id}"]`);
@@ -4877,6 +4892,11 @@ const KOMUTLAR = [
   { ornek: "oturumu … olarak adlandır", re: /^(oturumun adini|oturumu|bu oturumu)\s+(.+?)\s+(yap|olarak adlandir|diye adlandir)$|^oturumu yeniden adlandir\s+(.+)$/d, yap: (m, ham) => adSesle(serbest(ham, m, m.indices[2] ? 2 : 4)) },
   { ornek: "oturumu … grubuna taşı", re: /^(bu )?oturumu\s+(.+?)\s+grubuna\s+(tasi|koy|ekle|al)$/d, yap: (m, ham) => grupSesle(serbest(ham, m, 2)) },
   { re: /^(bu )?oturumu gruptan (cikar|al)$/, yap: () => grupSesle("") },
+  { ornek: "tüm oturumlarda … ara · bu oturumda … ara", re: /^(?:(?<tum>tum|butun|her) oturumlarda|her yerde|(?<bu>bu oturumda|oturumda|burada|bu oturumun icinde))(?:\s+(?:ara|bul))?\s+(?<q>.+?)(?:\s+(?:diye ara|ara|aramasi yap|bul))$|^(?:(?<tum2>tum|butun) oturumlarda|her yerde|(?<bu2>bu oturumda|oturumda|burada)) (?:ara|bul) (?<q2>.+)$/d, yap: (m, ham) => {
+    const ix = m.indices.groups.q || m.indices.groups.q2; aramaSesle(ham.slice(ix[0], ix[1]).trim().replace(/[.!?]+$/, ""), m.groups.bu || m.groups.bu2 ? "here" : "all"); } },
+  { re: /^(?<q>.+?)\s+(?:i|yi|u|yu|ı|yı)?\s*(?:(?<tum>tum|butun) oturumlarda|her yerde|(?<bu>bu oturumda|oturumda|burada))\s+(?:ara|bul)$/d, yap: (m, ham) => {
+    const ix = m.indices.groups.q; aramaSesle(ham.slice(ix[0], ix[1]).trim().replace(/['’]\S*$/, ""), m.groups.bu ? "here" : "all"); } },
+  { ornek: "aramayı temizle", re: /^(aramayi|arama) (temizle|kapat|sil|birak)$/, yap: () => { clearSearch(); tamam("Arama temizlendi"); } },
   { ornek: "… ara", re: /^(ara\s+(.+)|(.+?)\s+(diye ara|ara|aramasi yap))$/d, yap: (m, ham) => aramaSesle(serbest(ham, m, m.indices[2] ? 2 : 3)) },
   { ornek: "sonraki oturum · önceki oturum", re: /^((bir )?(sonraki|siradaki|ileri)|(bir )?(onceki|geri))\s+oturum(a gec|a don|u ac|a git)?$/, yap: (m) => oturumSirala(/onceki|geri/.test(m[1]) ? -1 : 1) },
   { ornek: "onay bekleyen oturumu aç", re: /^(siradaki )?onay bekleyen(ler(i)?| oturum(u|a|lari)?)?(\s+(ac|gec|git|goster))?$/, yap: () => onayBekleyeneGec() },
@@ -4953,9 +4973,9 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
 let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
 const KALIPLAR = [
   "yardım", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
-  "<numara> numaralı maddeyi çek", "<numara> numaralı çekme isteğini aç", "bana atananları göster",
+  "<numara> numaralı work item'ı çek", "<numara> numaralı pull request'i aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
-  "çekme isteklerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
+  "pull request'lerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
   "onayla", "bitir", "reddet", "reddet çünkü <gerekçe>", "tekrar plan yap", "yorum yap <yorum>", "not ekle <not>", "<dosya adı> için yorum <yorum>", "durdur", "şimdi çalıştır", "başlat", "kutuyu temizle",
   "ayarları aç", "aç kapat sayfasını aç", "güvenlik raporlarını aç", "sürüm notlarını aç",
   "kenar çubuğunu aç", "kenar çubuğunu kapat", "temayı <evrak|radar|harita|karargah|sade|gece> yap",
@@ -4965,12 +4985,40 @@ const KALIPLAR = [
   "oturumu gruptan çıkar", "<aranacak metin> ara", "sonraki oturum", "önceki oturum", "onay bekleyen oturumu aç",
   "çalışan oturumları göster", "<oturum adı> oturumunu aç", "<oturum adı> oturumunu durdur", "bu oturumu durdur",
   "oku", "tekrarla", "sus", "sesli yanıtı kapat", "sesli yanıtı aç", "panele dön",
+  "tüm oturumlarda <aranan> ara", "bu oturumda <aranan> ara", "aramayı temizle", "<kutu adı> kutusunu kapat", "<kutu adı> kutusunu aç", "tüm kutuları kapat",
   "sözlüğe <kelime> ekle", "metin düzeltmeyi aç", "metin düzeltmeyi kapat",
   "yeni görev <görev metni>", "tüm oturumları sil", "<oturum adı> oturumunu sil", "bu oturumu sil", "<grup> grubundaki oturumları sil",
-  "git durumu", "tüm repolarda <dal> dalına geç", "<repo> reposunda <dal> dalına geç", "tüm repoları güncelle", "<repo> reposunu güncelle",
-  "<repo> reposunda <dal> dalı aç", "değişiklikleri kaydet ve gönder mesaj <mesaj>", "<repo> reposundaki değişiklikleri kaydet ve gönder mesaj <mesaj>",
-  "değişiklikleri sakla", "<repo> reposundaki değişiklikleri sakla", "saklananları geri getir",
+  "git durumu", "tüm repolarda <branch> branch'ine geç", "<repo> reposunda <branch> branch'ine geç", "tüm repoları pull et", "<repo> reposunu pull et",
+  "<repo> reposunda <branch> branch'i aç", "commit ve push yap mesaj <mesaj>", "<repo> reposunda commit ve push yap mesaj <mesaj>",
+  "değişiklikleri stash'le", "<repo> reposundaki değişiklikleri stash'le", "stash pop",
 ];
+// ── Sağ sütun kutuları: başlığa tıkla (ya da Enter/Boşluk) → aç/kapa; kapalılar hatırlanır ──
+const KUTU_ANAHTAR = "kurmay-kutular-kapali";
+let kapaliKutular = new Set();
+try { kapaliKutular = new Set(JSON.parse(localStorage.getItem(KUTU_ANAHTAR) || "[]")); } catch {}
+const kutuAd = (k) => (k.querySelector("h4")?.firstChild?.textContent || "").trim();
+function kutuDurum(k, ac) {
+  k.classList.toggle("kapali", !ac);
+  k.querySelector("h4")?.setAttribute("aria-expanded", String(ac));
+  if (k.id) { if (ac) kapaliKutular.delete(k.id); else kapaliKutular.add(k.id); }
+  try { localStorage.setItem(KUTU_ANAHTAR, JSON.stringify([...kapaliKutular])); } catch {}
+}
+function kutuBul(ad) {
+  const s = sik(ad);
+  const kutular = [...document.querySelectorAll(".rail .rbox")];
+  return kutular.find((k) => sik(kutuAd(k)) === s) || kutular.find((k) => sik(kutuAd(k)).startsWith(s) || s.startsWith(sik(kutuAd(k))));
+}
+for (const k of document.querySelectorAll(".rail .rbox")) {
+  const h = k.querySelector("h4");
+  if (!h) continue;
+  h.setAttribute("role", "button"); h.tabIndex = 0;
+  h.setAttribute("aria-expanded", String(!kapaliKutular.has(k.id)));
+  if (kapaliKutular.has(k.id)) k.classList.add("kapali");
+  const degis = (ev) => { if (ev.target.closest("button, a, select, input")) return; kutuDurum(k, k.classList.contains("kapali")); };
+  h.addEventListener("click", degis);
+  h.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); degis(ev); } });
+}
+
 // ── Git (sunucu src/gitOps.ts) ───────────────────────────────────────────
 // Sağ sütunda Git kutusu (elle) ve sesli komutlar aynı yoldan gider: önce plan (ne olacağı depo depo,
 // hiçbir şey değişmez) → onay (sesle evet/hayır ya da düğme) → uygula. Kaydedilmemiş değişikliği olan
@@ -5015,7 +5063,7 @@ document.querySelector(".git-ctl").addEventListener("click", (ev) => {
   if (!b) return;
   gitPlanla({ op: b.dataset.git, repo: $("gitScope").value || undefined, branch: $("gitBranch").value.trim(), message: $("gitMsg").value.trim() });
 });
-const GIT_SOZ = { dal: "Dal değiştirme", guncelle: "Güncelleme", yeniDal: "Yeni dal", kaydet: "Kaydet ve gönder", sakla: "Saklama", geriGetir: "Geri getirme" };
+const GIT_SOZ = { dal: "Checkout", guncelle: "Pull", yeniDal: "New branch", kaydet: "Commit + Push", sakla: "Stash", geriGetir: "Stash pop" };
 /** Planı ister, ne olacağını gösterip sorar; onaylanırsa uygular */
 async function gitPlanla(istek) {
   sesNot("⏳ Git depoları okunuyor…", "bilgi", true, false);
@@ -5057,8 +5105,8 @@ function gitSesle(op, m, ham) {
 async function gitDurumSesle() {
   await gitYukle();
   if (!gitRepolar.length) return olmaz(`Bu dizinde git deposu yok: ${esc(viewDir().dir || "")}`);
-  const satir = gitRepolar.map((r) => `<div><b>${esc(r.name)}</b>: <code>${esc(r.branch)}</code>${r.dirty ? ` · ${r.dirty} kaydedilmemiş değişiklik` : ""}${r.ahead ? ` · ${r.ahead} gönderilmemiş kayıt` : ""}${r.behind ? ` · sunucuda ${r.behind} yeni kayıt` : ""}</div>`).join("");
-  const soz = `${gitRepolar.length} depo. ` + gitRepolar.slice(0, 8).map((r) => `${r.name}, ${r.branch} dalında${r.dirty ? `, ${r.dirty} kaydedilmemiş değişiklik` : ""}`).join(". ") + ".";
+  const satir = gitRepolar.map((r) => `<div><b>${esc(r.name)}</b>: <code>${esc(r.branch)}</code>${r.dirty ? ` · ${r.dirty} commit edilmemiş değişiklik` : ""}${r.ahead ? ` · ${r.ahead} push edilmemiş commit` : ""}${r.behind ? ` · sunucuda ${r.behind} yeni commit` : ""}</div>`).join("");
+  const soz = `${gitRepolar.length} depo. ` + gitRepolar.slice(0, 8).map((r) => `${r.name}, ${r.branch} branch'inde${r.dirty ? `, ${r.dirty} commit edilmemiş değişiklik` : ""}`).join(". ") + ".";
   sesNot(`<b>Git durumu</b><span class="git-plan">${satir}</span><span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz);
 }
 window.addEventListener("focus", () => gitYukle());
@@ -5338,10 +5386,13 @@ async function grupSesle(grup) {
     tamam(g ? `Oturum <b>${esc(g)}</b> grubuna taşındı` : "Oturum gruptan çıkarıldı");
   }
 }
-function aramaSesle(q) {
+function aramaSesle(q, kapsam) {
+  if (!q || q.length < 2) return olmaz("Aranacak sözü söyle: “tüm oturumlarda fatura ara”.");
+  if (kapsam === "here" && !viewSessionId) return olmaz("Açık bir oturum yok — “tüm oturumlarda … ara” de ya da önce bir oturum aç.");
   if ($("sidebar").classList.contains("collapsed")) $("btnSidebar").click();
+  if (kapsam && $("srchScope").value !== kapsam) { $("srchScope").value = kapsam; $("srchScope").dispatchEvent(new Event("change")); }
   $("srchQ").value = q; $("srchQ").dispatchEvent(new Event("input")); runSearch();
-  tamam(`“${esc(q)}” aranıyor`);
+  tamam(`“${esc(q)}” aranıyor <small>${$("srchScope").value === "here" ? "bu oturumda — sonuçlar arasında ↑↓ ile gezersin" : "tüm oturumlarda — sonuca tıkla, oturum açılır"}</small>`);
 }
 // ── TFS sesli komut yardımcıları — paneldeki seçicinin kendi işlevlerini çağırır (elle seçimle aynı yol) ──
 const SAYI = { sifir: 0, bir: 1, iki: 2, uc: 3, dort: 4, bes: 5, alti: 6, yedi: 7, sekiz: 8, dokuz: 9, on: 10, yirmi: 20, otuz: 30,
@@ -5385,7 +5436,7 @@ async function tfsSecSesle(no, pr) {
   await (pr ? selectPr(id) : selectWi(id));
   const sec = pr ? prSel?.pr : wiSel;
   if (sec && Number(sec.id) === id) {
-    const ad = pr ? `Çekme isteği ${id}` : `${wiType(sec.type)} ${id}`;
+    const ad = pr ? `Pull request ${id}` : `${wiType(sec.type)} ${id}`;
     if (okumaTeklif(`${esc(ad)} seçildi: <b>${esc(sec.title || "")}</b>.`, () => pr ? prSoz(prSel) : wiSoz(wiSel),
       `Göndermek için “başlat” · ek talimat için “görev …”${pr ? " · kip: “yorumları ele al” ya da “incele”" : ""}`)) return;
     tamam(`${isaret}${id} · <b>${esc(sec.title || "")}</b> seçildi <small>Göndermek için “başlat” · ek talimat için “görev …”${pr ? " · kip: “yorumları ele al” ya da “incele”" : ""}</small>`);
@@ -5399,7 +5450,7 @@ async function tfsAtananlar() {
   if ($("wiMenu").classList.contains("hidden")) return olmaz(`Liste alınamadı: ${esc($("wiInfo").textContent || "TFS'ten cevap gelmedi")}`);
   const liste = wiItems.slice();
   if (n && okumaTeklif(`${n} kayıt listelendi.`, () => listeSoz(liste), "Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”")) return;
-  tamam(n ? `${n} kayıt listelendi <small>Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”</small>` : "Sana atanmış açık iş öğesi ya da çekme isteği yok.");
+  tamam(n ? `${n} kayıt listelendi <small>Seçmek için “birinciyi seç”, “ikinciyi seç”… ya da numarasıyla “… numaralı maddeyi çek”</small>` : "Sana atanmış açık work item ya da pull request yok.");
 }
 // ── Çekme isteklerimin durumu: oylar, açık / yeni yorumlar, çakışma — sesle özet + tıklanır liste ──
 // "Yeni yorum" = son bakıştan beri başkalarının yazdığı (sistem kayıtları ve kendi yorumların hariç);
@@ -5422,7 +5473,7 @@ function prDurumParcalari(it) {
 }
 async function prDurumSesle() {
   if (!tfsOn()) return olmaz("TFS modu kapalı ya da ayarları eksik. “TFS modunu aç” de ya da “TFS ayarlarını aç” deyip bağlantıyı gir.");
-  sesNot("⏳ Çekme isteklerin TFS'ten okunuyor…", "bilgi", true);
+  sesNot("⏳ Pull request'lerin TFS'ten okunuyor…", "bilgi", true);
   let bakis = {};
   try { bakis = JSON.parse(localStorage.getItem(PR_BAKIS) || "{}") || {}; } catch {}
   const simdi = new Date().toISOString();
@@ -5432,17 +5483,17 @@ async function prDurumSesle() {
       body: JSON.stringify({ since: bakis, fallback: new Date(Date.now() - 864e5).toISOString() }) });
     r = await res.json().catch(() => ({ ok: false, error: "sunucu yanıtı okunamadı" }));
   } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
-  if (!r.ok) return olmaz("Çekme istekleri okunamadı: " + esc(r.error || "bilinmeyen hata"));
+  if (!r.ok) return olmaz("Pull request'ler okunamadı: " + esc(r.error || "bilinmeyen hata"));
   // Son bakış: yalnızca okunabilenler; kapanan istekler listeden kendiliğinden düşer
   const yeniBakis = {};
   for (const it of r.items) yeniBakis[it.id] = it.error ? bakis[it.id] || "" : simdi;
   try { localStorage.setItem(PR_BAKIS, JSON.stringify(yeniBakis)); } catch {}
   const mine = r.items.filter((it) => it.role === "acan");
   const bekleyen = r.items.filter((it) => it.role === "inceleyen" && !it.error && !(it.myVote ?? 0));
-  if (!mine.length && !bekleyen.length) return sesNot("Açtığın açık çekme isteği yok, incelemeni bekleyen de yok.");
+  if (!mine.length && !bekleyen.length) return sesNot("Açtığın açık pull request yok, incelemeni bekleyen de yok.");
   const soz = [], satir = [];
-  if (mine.length) soz.push(`${mine.length} açık çekme isteğin var.`);
-  else soz.push("Açtığın açık çekme isteği yok.");
+  if (mine.length) soz.push(`${mine.length} açık pull request'in var.`);
+  else soz.push("Açtığın açık pull request yok.");
   for (const it of mine.slice(0, 6)) {
     if (it.error) { soz.push(`${it.id} okunamadı.`); satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b><small>⚠ okunamadı: ${esc(it.error)}</small></button>`); continue; }
     const p = prDurumParcalari(it);
@@ -5452,19 +5503,19 @@ async function prDurumSesle() {
   if (mine.length > 6) soz.push(`${mine.length - 6} tane daha var, ekranda.`);
   for (const it of mine.slice(6)) satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b></button>`);
   if (bekleyen.length) {
-    soz.push(`İncelemeni bekleyen ${bekleyen.length} çekme isteği var: ` + bekleyen.slice(0, 4).map((it) => `${it.id}, ${it.title}${it.createdBy ? `, ${it.createdBy} açtı` : ""}`).join("; ") + ".");
+    soz.push(`İncelemeni bekleyen ${bekleyen.length} pull request var: ` + bekleyen.slice(0, 4).map((it) => `${it.id}, ${it.title}${it.createdBy ? `, ${it.createdBy} açtı` : ""}`).join("; ") + ".");
     satir.push(`<span class="ses-alt">İncelemeni bekleyenler</span>`);
     for (const it of bekleyen) satir.push(`<button type="button" data-pr="${it.id}"><b>!${it.id} · ${esc(it.title)}</b><small>${esc([it.createdBy && `${it.createdBy} açtı`, it.activeThreads && `${it.activeThreads} açık yorum`].filter(Boolean).join(" · "))}</small></button>`);
   }
-  soz.push("Birini açmak için, örneğin, " + (mine[0] || bekleyen[0]).id + " numaralı çekme isteğini aç de.");
+  soz.push("Birini açmak için, örneğin, " + (mine[0] || bekleyen[0]).id + " numaralı pull request'i aç de.");
   const liste = `<span class="ses-liste pr-durum">${satir.join("")}</span>`;
-  const not = `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı çekme isteğini aç” de.</small>`;
+  const not = `<small>“Yeni” = son bakışından beri başkalarının yazdığı yorumlar (ilk bakışta son 24 saat). Tıkla ya da “… numaralı pull request'i aç” de.</small>`;
   sonPrDurum = { soz: soz.join(" "), t: Date.now() };
   // Önce kısa özet; ayrıntıyı (her isteği tek tek) okumadan önce sorar — 10 istek art arda okunmasın
   const ozet = prDurumOzet(mine, bekleyen);
-  const goster = (soyle) => sesNot(`<b>Çekme isteklerin</b>${liste}${not}` +
+  const goster = (soyle) => sesNot(`<b>Pull request'lerin</b>${liste}${not}` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soyle);
-  if (okumaTeklif(`<b>Çekme isteklerin</b> ${esc(ozet)}`, sonPrDurum.soz, "", { ek: liste + not, soz: ozet, sonra: () => goster(false) })) return;
+  if (okumaTeklif(`<b>Pull request'lerin</b> ${esc(ozet)}`, sonPrDurum.soz, "", { ek: liste + not, soz: ozet, sonra: () => goster(false) })) return;
   goster(sonPrDurum.soz);
 }
 /** Tek cümlelik özet: kaç istek, kaçına yeni yorum gelmiş, oylar, çakışma, incelemeni bekleyenler */
@@ -5480,8 +5531,8 @@ function prDurumOzet(mine, bekleyen) {
   if (cak) p.push(`${cak} tanesinde çakışma var`);
   if (hata) p.push(`${hata} tanesi okunamadı`);
   if (mine.length && !yeni) p.push("yeni yorum yok");
-  let t = mine.length ? `${mine.length} açık çekme isteğin var` + (p.length ? `: ${veIle(p)}.` : ".") : "Açtığın açık çekme isteği yok.";
-  if (bekleyen.length) t += ` ${bekleyen.length} çekme isteği incelemeni bekliyor.`;
+  let t = mine.length ? `${mine.length} açık pull request'in var` + (p.length ? `: ${veIle(p)}.` : ".") : "Açtığın açık pull request yok.";
+  if (bekleyen.length) t += ` ${bekleyen.length} pull request incelemeni bekliyor.`;
   return t;
 }
 const SIRA = { ilk: 1, birinci: 1, ikinci: 2, ucuncu: 3, dorduncu: 4, besinci: 5, altinci: 6, yedinci: 7, sekizinci: 8, dokuzuncu: 9, onuncu: 10 };
@@ -5494,12 +5545,12 @@ function tfsListedenSec(sira) {
   tfsSecSesle(String(it.id), it.kind === "pr");
 }
 function tfsPrKipi(kip) {
-  if (!prSel) return olmaz("Seçili çekme isteği yok — önce “45 numaralı çekme isteğini aç” gibi söyle.");
+  if (!prSel) return olmaz("Seçili pull request yok — önce “45 numaralı pull request'i aç” gibi söyle.");
   prMode = kip;
   renderWi();
   const r = document.querySelector(`input[name="prKip"][value="${kip}"]`);
   if (r) r.checked = true;
-  tamam(kip === "incele" ? "Kip: incele — kod değişmez, bulgular çekme isteğine yorum olarak yazılır" : "Kip: açık yorumları ele al — kod düzeltilir, yorumlara cevap yazılır");
+  tamam(kip === "incele" ? "Kip: incele — kod değişmez, bulgular pull request'e yorum olarak yazılır" : "Kip: açık yorumları ele al — kod düzeltilir, yorumlara cevap yazılır");
 }
 /** Oturumu açar; kapalı bir gruptaysa grubu da açar (görünsün) */
 function oturumGit(id) {
@@ -5568,7 +5619,7 @@ function oturumSesle(ad) {
 function komutYardim() {
   const satir = KOMUTLAR.filter((k) => k.ornek || k.grup).map((k) => k.grup ? `<li class="grp">${esc(k.grup)}</li>` : `<li>${esc(k.ornek)}</li>`).join("");
   sesNot(`<b>Sesli komutlar</b> <small>Ctrl+Boşluk'u basılı tut, söyle, bırak — ya da kısa bas, dinleme açık kalsın</small><ul class="ses-yardim">${satir}</ul>` +
-    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Plana yorum: “yorum yap …”, “not ekle …” ya da “Toplam.java için yorum …” de, istediğin kadar cümle söyle, bitince “tekrar plan yap”. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / iş öğesini okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
+    `<small>“Görev …” de: söylediklerin görev kutusuna yazılır, sonra “başlat” (gönder), “tamam” (kutuda bırak) ya da “iptal”. Görev yazılırken söylenenler komut sayılmaz. Listede olmayan cümle için hiçbir şey yapılmaz. Plana yorum: “yorum yap …”, “not ekle …” ya da “Toplam.java için yorum …” de, istediğin kadar cümle söyle, bitince “tekrar plan yap”. Onayla, reddet, bitir ve durdur önce sorar. Ctrl+Boşluk'a kısa bas: dinleme modu. Bilgisayarda Türkçe ses varsa sonuçları sesle de söylerim, listeyi / planı / work item'ı okumayı teklif ederim — “oku”, “tekrarla”; konuşurken Ctrl+Boşluk ya da Esc susturur. Ayarlar panelin içinde açılır: “panele dön”. Ayarlar'da komutları anlayan model seçiliyse listede olmayan cümleyi ona sorarım.</small>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, "Komut listesi ekranda.");
 }
 // Basılı tut = tek komut (bas-konuş); kısa bas = dinleme modunu aç / kapat.
@@ -5748,7 +5799,7 @@ loadSpeech();
 // görev iş öğesinden kurulur — sunucu TFS'ten okur, ekleri indirir; kutudaki metin ek talimat olur.
 // İş bitince "Sonucu TFS'e yaz" kartı (Ayarlar'da "sorarak") notu ve durumu iş öğesine yazar.
 // TFS'ten gelen hiçbir HTML olduğu gibi çizilmez: sunucu Markdown'a çevirir, renderMarkdown kaçışlar.
-const WI_TYPES = { "Product Backlog Item": "Ürün iş öğesi", Bug: "Hata", Task: "Görev", Feature: "Özellik", Epic: "Büyük özellik",
+const WI_TYPES = { "Product Backlog Item": "Backlog item", Bug: "Hata", Task: "Görev", Feature: "Özellik", Epic: "Büyük özellik",
   "User Story": "Kullanıcı hikâyesi", Requirement: "Gereksinim", Issue: "Sorun", Impediment: "Engel", "Test Case": "Test durumu",
   "Change Request": "Değişiklik isteği", Risk: "Risk", Review: "Gözden geçirme" };
 const WI_STATES = { New: "Yeni", Approved: "Onaylandı", Committed: "Üstlenildi", Done: "Bitti", Removed: "Kaldırıldı", Active: "Etkin",
@@ -5779,10 +5830,10 @@ function renderWi() {
   if (!on && (wiSel || prSel)) { wiSel = null; prSel = null; $("wiCard").innerHTML = ""; }
   $("wiCard").classList.toggle("hidden", !(on && (wiSel || prSel)));
   $("taskInput").placeholder = on && wiSel
-    ? `Ek talimat (isteğe bağlı) — #${wiSel.id} iş öğesinin içeriği görev olarak gider; Enter başlatır`
+    ? `Ek talimat (isteğe bağlı) — #${wiSel.id} work item'ın içeriği görev olarak gider; Enter başlatır`
     : on && prSel
-      ? `Ek talimat (isteğe bağlı) — !${prSel.pr.id} ${prMode === "incele" ? "incelenecek" : "çekme isteğinin açık yorumları ele alınacak"}; Enter başlatır`
-      : on ? "Ekibe bir görev ver ya da yukarıdan bir iş öğesi / çekme isteği seç… (Enter gönderir)" : TASK_PH;
+      ? `Ek talimat (isteğe bağlı) — !${prSel.pr.id} ${prMode === "incele" ? "incelenecek" : "pull request'in açık yorumları ele alınacak"}; Enter başlatır`
+      : on ? "Ekibe bir görev ver ya da yukarıdan bir work item / pull request seç… (Enter gönderir)" : TASK_PH;
   updateTaskCtx();
 }
 /** İş öğesi başlık satırı (önizleme kartı, görev balonu) */
@@ -5790,14 +5841,14 @@ function wiHeadHtml(w, closable) {
   return `<div class="wi-head"><span class="wi-type ${wiTypeCls(w.type)}">${esc(wiType(w.type))}</span>` +
     `<a class="wi-id" href="${esc(safeUrl(w.url || w.webUrl))}" target="_blank" rel="noopener" title="TFS'te aç">#${Number(w.id)}</a>` +
     `<b>${esc(w.title)}</b><span class="wi-state">${esc(wiState(w.state))}</span>` +
-    (closable ? `<button type="button" class="wi-x" id="wiClear" title="İş öğesini kaldır" aria-label="İş öğesini kaldır">×</button>` : "") + `</div>`;
+    (closable ? `<button type="button" class="wi-x" id="wiClear" title="Work item'ı kaldır" aria-label="Work item'ı kaldır">×</button>` : "") + `</div>`;
 }
 /** PR başlık satırı (seçici kartı, görev balonu) */
 function prHeadHtml(p, closable) {
-  return `<div class="wi-head"><span class="wi-type pr">Çekme isteği</span>` +
+  return `<div class="wi-head"><span class="wi-type pr">Pull request</span>` +
     `<a class="wi-id" href="${esc(safeUrl(p.url || p.webUrl))}" target="_blank" rel="noopener" title="TFS'te aç">!${Number(p.id)}</a>` +
     `<b>${esc(p.title)}</b><span class="wi-state">${esc(p.repository && p.repository.name ? p.repository.name : p.repository || "")}</span>` +
-    (closable ? `<button type="button" class="wi-x" id="wiClear" title="Çekme isteğini kaldır" aria-label="Çekme isteğini kaldır">×</button>` : "") + `</div>`;
+    (closable ? `<button type="button" class="wi-x" id="wiClear" title="Pull request'i kaldır" aria-label="Pull request'i kaldır">×</button>` : "") + `</div>`;
 }
 const VOTES = { "10": "onayladı", "5": "önerilerle onayladı", "0": "oy vermedi", "-5": "düzeltme bekliyor", "-10": "reddetti" };
 const THREAD_ST = { active: "açık", pending: "beklemede", fixed: "düzeltildi", wontFix: "düzeltilmeyecek", closed: "kapatıldı", byDesign: "tasarım gereği", unknown: "?" };
@@ -5812,12 +5863,12 @@ function renderPrCard() {
     p.reviewers.length && `İnceleyenler: ${p.reviewers.map((r) => `${r.name} (${VOTES[String(r.vote)] || r.vote})`).join(", ")}`].filter(Boolean);
   let yerel;
   if (L.error) yerel = `<div class="pr-yerel hata">⚠ ${esc(L.error)}</div>`;
-  else if (L.onBranch) yerel = `<div class="pr-yerel">📁 ${esc(L.rel === "." ? "hedef dizin" : L.rel)} — <b>${esc(p.source)}</b> dalında ✓${L.dirty ? ` · kaydedilmemiş ${L.dirty} değişiklik` : ""}${L.behind ? ` · sunucudakinin ${L.behind} kayıt gerisinde` : ""}</div>`;
-  else yerel = `<div class="pr-yerel uyari">⚠ ${esc(L.rel === "." ? "hedef dizin" : L.rel)} şu an <b>${esc(L.branch || "?")}</b> dalında; çekme isteğinin dalı <b>${esc(p.source)}</b>` +
-    ` <button type="button" id="prCheckout" title="Dalı sunucudan alır ve ona geçer (kaydedilmemiş değişiklik yoksa)">Dala geç</button></div>`;
+  else if (L.onBranch) yerel = `<div class="pr-yerel">📁 ${esc(L.rel === "." ? "hedef dizin" : L.rel)} — <b>${esc(p.source)}</b> branch'inde ✓${L.dirty ? ` · commit edilmemiş ${L.dirty} değişiklik` : ""}${L.behind ? ` · sunucudakinin ${L.behind} kayıt gerisinde` : ""}</div>`;
+  else yerel = `<div class="pr-yerel uyari">⚠ ${esc(L.rel === "." ? "hedef dizin" : L.rel)} şu an <b>${esc(L.branch || "?")}</b> branch'inde; pull request'in branch'i <b>${esc(p.source)}</b>` +
+    ` <button type="button" id="prCheckout" title="Branch'i sunucudan alır ve ona geçer (commit edilmemiş değişiklik yoksa)">Checkout</button></div>`;
   const kip = `<div class="pr-kip" role="radiogroup" aria-label="Ne yapılsın">` +
     `<label><input type="radio" name="prKip" value="yorum"${prMode === "yorum" ? " checked" : ""}> Açık yorumları ele al (${acik.length}) — kodu düzelt, yorumlara cevap yaz</label>` +
-    `<label><input type="radio" name="prKip" value="incele"${prMode === "incele" ? " checked" : ""}> İncele — kod değişmez, bulgular çekme isteğine yorum olarak yazılır</label></div>`;
+    `<label><input type="radio" name="prKip" value="incele"${prMode === "incele" ? " checked" : ""}> İncele — kod değişmez, bulgular pull request'e yorum olarak yazılır</label></div>`;
   let body = "";
   if (d.threads.length) {
     body += `<h4>Yorumlar (${acik.length} açık / ${d.threads.length})</h4>` + d.threads.map((t) =>
@@ -5825,10 +5876,10 @@ function renderPrCard() {
       t.comments.map((c) => `<div><small>${esc(c.author)}:</small> ${mdInline(c.content.length > 400 ? c.content.slice(0, 400) + "…" : c.content)}</div>`).join("") + `</div>`).join("");
   }
   if (p.description && p.description.trim()) body += `<h4>Açıklama</h4>${renderMarkdown(p.description)}`;
-  if (d.workItems.length) body += `<h4>Bağlı iş öğeleri</h4>${renderMarkdown(d.workItems.map((w) => `- #${w.id}${w.title ? ` (${wiType(w.type)}, ${wiState(w.state)}) ${w.title}` : ""}`).join("\n"))}`;
+  if (d.workItems.length) body += `<h4>Bağlı work item'lar</h4>${renderMarkdown(d.workItems.map((w) => `- #${w.id}${w.title ? ` (${wiType(w.type)}, ${wiState(w.state)}) ${w.title}` : ""}`).join("\n"))}`;
   if (d.changes.length) body += `<h4>Değişen dosyalar (${d.changes.length})</h4><div class="pr-dosyalar">${d.changes.slice(0, 80).map((c) => esc(`${c.change}: ${c.path}`)).join("<br>")}${d.changes.length > 80 ? "<br>…" : ""}</div>`;
   el.innerHTML = prHeadHtml(p, true) + `<div class="wi-meta">${esc(meta.join(" · "))}</div>` + yerel + kip +
-    `<details class="wi-more"><summary>İçerik: ${acik.length} açık yorum · ${d.changes.length} değişen dosya${d.workItems.length ? ` · ${d.workItems.length} bağlı iş öğesi` : ""}</summary><div class="wi-body md">${body || "<p>(boş)</p>"}</div></details>`;
+    `<details class="wi-more"><summary>İçerik: ${acik.length} açık yorum · ${d.changes.length} değişen dosya${d.workItems.length ? ` · ${d.workItems.length} bağlı work item` : ""}</summary><div class="wi-body md">${body || "<p>(boş)</p>"}</div></details>`;
   renderWi();
 }
 async function selectPr(id) {
@@ -5839,7 +5890,7 @@ async function selectPr(id) {
   if (!r) return;
   wiSel = null;
   prSel = r.pr;
-  $("taskError").textContent = ""; // önceki "dalda değil" uyarısı kalmasın
+  $("taskError").textContent = ""; // önceki "branch'te değil" uyarısı kalmasın
   const acik = r.pr.threads.filter((t) => t.status === "active" || t.status === "pending").length;
   prMode = acik ? "yorum" : "incele";
   $("wiInput").value = "";
@@ -5933,9 +5984,9 @@ function showWiMenu(items, head, mine, done, prs, prErr) {
     return `<button type="button" role="option" data-i="${i}" class="${i === 0 ? "on" : ""}" aria-selected="${i === 0}">${ust}</button>`;
   };
   let html = `<div class="dh">${esc(head)}</div>` + (items.length ? items.map((it) => satir({ ...it, kind: "wi" })).join("") : `<div class="dh">Bulunamadı.</div>`);
-  if (mine) html += `<button type="button" data-done="${done ? 0 : 1}"><span class="dt"><b>${done ? "Yalnızca bitmemiş iş öğelerini göster" : "Biten iş öğelerini de göster"}</b></span></button>`;
+  if (mine) html += `<button type="button" data-done="${done ? 0 : 1}"><span class="dt"><b>${done ? "Yalnızca bitmemiş work item'ları göster" : "Biten work item'ları da göster"}</b></span></button>`;
   if (prs || prErr) {
-    html += `<hr><div class="dh">Açık çekme isteklerin</div>` + (prErr ? `<div class="dh">⚠ ${esc(prErr)}</div>` : prs.length ? prs.map((it) => satir({ ...it, kind: "pr" })).join("") : `<div class="dh">Yok.</div>`);
+    html += `<hr><div class="dh">Açık pull request'lerin</div>` + (prErr ? `<div class="dh">⚠ ${esc(prErr)}</div>` : prs.length ? prs.map((it) => satir({ ...it, kind: "pr" })).join("") : `<div class="dh">Yok.</div>`);
   }
   $("wiMenu").innerHTML = html;
   $("wiMenu").classList.remove("hidden");
@@ -5954,7 +6005,7 @@ async function mineWi(done) {
   const r = await wiFetch(`/tfs/benimkiler${done ? "?tumu=1" : ""}`, "Sana atananlar getiriliyor…");
   if (!r) return;
   const p = await prsP;
-  showWiMenu(r.items, done ? "Sana atanan iş öğeleri (bitenler dahil)" : "Sana atanan, bitmemiş iş öğeleri", true, done, p.ok ? p.items : [], p.ok ? undefined : p.error);
+  showWiMenu(r.items, done ? "Sana atanan work item'lar (bitenler dahil)" : "Sana atanan, bitmemiş work item'lar", true, done, p.ok ? p.items : [], p.ok ? undefined : p.error);
 }
 $("wiInput").addEventListener("input", () => {
   clearTimeout(wiTimer);
@@ -6015,9 +6066,9 @@ $("wiCard").addEventListener("click", async (ev) => {
   if (dal && prSel) {
     dal.disabled = true;
     $("wiInfo").className = "wi-info";
-    $("wiInfo").textContent = `${prSel.pr.source} dalına geçiliyor…`;
+    $("wiInfo").textContent = `${prSel.pr.source} branch'ine geçiliyor…`;
     const r = await tfsPost("/tfs/pr-dal", { id: prSel.pr.id, ...(taskRunDir() ? { dizin: taskRunDir() } : {}) });
-    if (!r.ok) { wiErr(r.error || "dala geçilemedi"); dal.disabled = false; return; }
+    if (!r.ok) { wiErr(r.error || "checkout yapılamadı"); dal.disabled = false; return; }
     $("wiInfo").textContent = "";
     const mode = prMode;
     await selectPr(prSel.pr.id); // yerel durumu tazele
@@ -6040,7 +6091,7 @@ function showTfsCard() {
   if (!p) return;
   $("tfsTitle").textContent = `Sonucu TFS'e yaz — #${p.id}`;
   $("tfsSub").innerHTML = `${esc(wiType(p.workItemType))} · <a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">${esc(p.title)}</a>` +
-    ` — notu istediğin gibi düzenle; durum seçersen o da değişir. Gönderince iş öğesinin tartışmasına eklenir.`;
+    ` — notu istediğin gibi düzenle; durum seçersen o da değişir. Gönderince work item'ın tartışmasına eklenir.`;
   $("tfsText").value = p.text;
   $("tfsMsg").textContent = "";
   $("tfsState").innerHTML = `<option value="">değiştirme (${esc(wiState(p.state))})</option>`;
@@ -6050,7 +6101,7 @@ function showTfsCard() {
   $("tfsPrOpen").checked = false;
   $("tfsPrDraft").checked = false;
   $("tfsPrTarget").value = "";
-  $("tfsPrInfo").textContent = dosya ? `${dosya} değişen dosya · dal: kurmay/${p.id}-… · çalışma kopyası yeni dalda kalır` : "";
+  $("tfsPrInfo").textContent = dosya ? `${dosya} değişen dosya · branch: kurmay/${p.id}-… · çalışma kopyası yeni branch'te kalır` : "";
   $("tfsCard").classList.remove("hidden");
   if (!replaying) { loadTfsStates(); scrollChat(true); }
 }
@@ -6077,7 +6128,7 @@ $("btnTfsWrite").addEventListener("click", async () => {
   $("tfsMsg").style.color = "";
   $("tfsMsg").textContent = "TFS'e yazılıyor…";
   const acPr = !$("tfsPrRow").classList.contains("hidden") && $("tfsPrOpen").checked;
-  if (acPr) $("tfsMsg").textContent = "Dala gönderiliyor, çekme isteği açılıyor…";
+  if (acPr) $("tfsMsg").textContent = "Push yapılıyor, pull request açılıyor…";
   const r = await tfsPost("/tfs/yaz", {
     session: viewSessionId, text: $("tfsText").value, state: $("tfsState").value || undefined,
     ...(acPr ? { pr: { open: true, target: $("tfsPrTarget").value.trim() || undefined, draft: $("tfsPrDraft").checked } } : {}),
@@ -6095,11 +6146,11 @@ $("btnTfsSkip").addEventListener("click", async () => {
 function showPrCard() {
   const p = prPending;
   if (!p) return;
-  $("prTitle").textContent = `Sonucu çekme isteğine yaz — !${p.id}`;
-  $("prSub").innerHTML = `<a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">${esc(p.title)}</a> · ${esc(p.repository)} · dal ${esc(p.source)} — ` +
+  $("prTitle").textContent = `Sonucu pull request'e yaz — !${p.id}`;
+  $("prSub").innerHTML = `<a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">${esc(p.title)}</a> · ${esc(p.repository)} · branch ${esc(p.source)} — ` +
     `metinleri istediğin gibi düzenle; işaretli olanlar yazılır. Önce değişiklikler gönderilir, sonra yorumlar yazılır.`;
   $("prCommit").innerHTML = p.commit
-    ? `<h5>Kod</h5><label class="chkl"><input type="checkbox" id="prPush" checked> Değişiklikleri kaydet ve <b>${esc(p.source)}</b> dalına gönder</label>` +
+    ? `<h5>Kod</h5><label class="chkl"><input type="checkbox" id="prPush" checked> Commit + push: <b>${esc(p.source)}</b> branch'ine</label>` +
       `<textarea id="prCommitMsg" spellcheck="false" aria-label="Kaydın açıklaması">${esc(p.commit.message)}</textarea>` +
       `<div class="pr-dosyalar">${p.commit.files.map(esc).join(" · ")}</div>`
     : "";

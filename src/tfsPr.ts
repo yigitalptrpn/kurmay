@@ -146,7 +146,7 @@ export async function getPullRequest(c: TfsConnection, id: number, signal?: Abor
     try {
       return normalizePr(
         c,
-        await tfsCall<RawPr>(c, "GET", p, { query: { "api-version": v }, what: `!${id} çekme isteği`, signal }),
+        await tfsCall<RawPr>(c, "GET", p, { query: { "api-version": v }, what: `!${id} pull request`, signal }),
       );
     } catch (e) {
       last = e;
@@ -154,7 +154,7 @@ export async function getPullRequest(c: TfsConnection, id: number, signal?: Abor
     }
   }
   if (last instanceof TfsError && last.status === 404)
-    throw new TfsError(`!${id} çekme isteği bulunamadı ya da okuma yetkin yok`, 404, last.code);
+    throw new TfsError(`!${id} pull request bulunamadı ya da okuma yetkin yok`, 404, last.code);
   throw last;
 }
 
@@ -293,7 +293,7 @@ export async function getPrWorkItems(c: TfsConnection, pr: TfsPullRequest, signa
   try {
     const r = await tfsCall<{ value?: Array<{ id?: string | number }> }>(c, "GET", `${prBase(pr)}/workitems`, {
       query: { "api-version": v },
-      what: `!${pr.id} iş öğeleri`,
+      what: `!${pr.id} work item'lar`,
       signal,
     });
     return (r?.value ?? []).map((w) => Number(w.id)).filter((n) => Number.isInteger(n) && n > 0);
@@ -340,11 +340,11 @@ export interface TfsPrListItem {
 export async function myPullRequests(c: TfsConnection, signal?: AbortSignal): Promise<TfsPrListItem[]> {
   const v = await ver(c, signal);
   const id = await myId(c, signal);
-  if (!id) throw new TfsError("kimliğin okunamadı — çekme isteği listesi için gerekli");
+  if (!id) throw new TfsError("kimliğin okunamadı — pull request listesi için gerekli");
   const list = async (key: string, role: TfsPrListItem["role"]) => {
     const r = await tfsCall<{ value?: RawPr[] }>(c, "GET", `/${enc(c.project)}/_apis/git/pullrequests`, {
       query: { "api-version": v, [crit(v, "status")]: "active", [crit(v, key)]: id, $top: 50 },
-      what: "çekme isteği listesi",
+      what: "pull request listesi",
       signal,
     });
     return (r?.value ?? []).map((x) => {
@@ -510,10 +510,10 @@ export async function createPullRequest(
         ...(o.workItems.length ? { workItemRefs: o.workItems.map((id) => ({ id: String(id) })) } : {}),
         ...(o.draft && Number(v) >= 5 ? { isDraft: true } : {}),
       },
-      what: "çekme isteği açma",
+      what: "pull request açma",
       signal,
     });
-    if (typeof r?.pullRequestId !== "number") throw new TfsError("çekme isteği açıldı ama numarası okunamadı");
+    if (typeof r?.pullRequestId !== "number") throw new TfsError("pull request açıldı ama numarası okunamadı");
     return { id: r.pullRequestId, webUrl: web(r.pullRequestId), ...(r.artifactId ? { artifactId: r.artifactId } : {}) };
   } catch (e) {
     // Aynı kaynak/hedef için açık istek var (409, TF401179 / GitPullRequestExistsException): onu bul.
@@ -529,7 +529,7 @@ export async function createPullRequest(
           [crit(v, "targetRefName")]: dst,
           $top: 100,
         },
-        what: "açık çekme isteği",
+        what: "açık pull request",
         signal,
       }).catch(() => undefined);
       const hit = (r?.value ?? []).find((p) => p.sourceRefName === src && p.targetRefName === dst);
