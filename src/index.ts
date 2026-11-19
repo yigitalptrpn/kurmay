@@ -8,8 +8,9 @@ import { Assistant, type AssistantReply, type AssistantRequest, type McpBridge }
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
-import { activeMcpServers, disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
+import { disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
 import { callMcpTool, listMcpTools, mcpStatus, probeMcp, type McpToolInfo } from "./mcpStatus.js";
+import { assistantLimits, assistantMcpEnabled } from "./assistantLimits.js";
 import { compactPercent, contextInfo } from "./context.js";
 import { fetchModels, refreshModelContext } from "./models.js";
 import { RESILIENCE_LIMIT_KEYS, RESILIENCE_RETRY_KEYS, setLiveResilience } from "./resilience.js";
@@ -89,6 +90,7 @@ import {
   TFS_WRITE_BACK,
   type AgentDefinition,
   type AppConfig,
+  type McpServerJson,
   type SpeechConfig,
   type TfsConfig,
   type WorkflowConfig,
@@ -1199,18 +1201,37 @@ async function main() {
   /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
    *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
   const assistant = new Assistant();
-  /** Sesli asistanın eklenti köprüsü: Aç/Kapat'ta kapalı olanlar hariç config'teki eklentiler.
-   *  Bağlanamayan eklenti 60 sn yeniden denenmez (her cümlede 20 sn beklenmesin). */
+  /** Sesli asistanın eklentileri: Ayarlar → Asistan'daki ayar, yoksa genel Aç/Kapat (ajanlar için
+   *  kapalı eklenti asistana açık olabilir). `disabled` alanı atılır (bağlantı havuzunun anahtarı sabit kalsın). */
+  const assistantServers = (): Record<string, McpServerJson> => {
+    const out: Record<string, McpServerJson> = {};
+    for (const [name, server] of Object.entries(cfg.mcpServers ?? {})) {
+      if (!assistantMcpEnabled(cfg, name)) continue;
+      const { disabled: _, ...rest } = server;
+      out[name] = rest as McpServerJson;
+    }
+    return out;
+  };
+  /** Araç asistana açık mı: eklentinin araç listesi ve "yalnızca okuyan" ayarı */
+  const assistantToolAllowed = (server: string, tool: McpToolInfo): boolean => {
+    const a = cfg.assistant?.mcp?.[server];
+    if (a?.tools && !a.tools.includes(tool.name)) return false;
+    if (a?.readOnly && !tool.readOnly) return false;
+    return true;
+  };
+  /** Sesli asistanın eklenti köprüsü. Bağlanamayan eklenti 60 sn yeniden denenmez
+   *  (her cümlede 20 sn beklenmesin). */
   const mcpFail = new Map<string, number>();
   const mcpBridge: McpBridge = {
     tools: async () => {
-      const servers = activeMcpServers(cfg) ?? {};
+      const servers = assistantServers();
       const out: Array<{ server: string; tool: McpToolInfo }> = [];
       await Promise.all(
         Object.entries(servers).map(async ([name, server]) => {
           if ((mcpFail.get(name) ?? 0) > Date.now()) return;
           try {
-            for (const tool of await listMcpTools(name, server, mcpProbeDir())) out.push({ server: name, tool });
+            for (const tool of await listMcpTools(name, server, mcpProbeDir()))
+              if (assistantToolAllowed(name, tool)) out.push({ server: name, tool });
             mcpFail.delete(name);
           } catch {
             mcpFail.set(name, Date.now() + 60_000);
@@ -1220,9 +1241,12 @@ async function main() {
       return out.sort((a, b) => a.server.localeCompare(b.server) || a.tool.name.localeCompare(b.tool.name));
     },
     call: async (name, tool, args) => {
-      const server = activeMcpServers(cfg)?.[name];
-      if (!server) return { ok: false, text: `"${name}" eklentisi yok ya da kapalı.` };
-      return callMcpTool(name, server, mcpProbeDir(), tool, args);
+      const server = assistantServers()[name];
+      if (!server) return { ok: false, text: `"${name}" eklentisi yok ya da asistana kapalı.` };
+      const info = (await listMcpTools(name, server, mcpProbeDir()).catch(() => [])).find((t) => t.name === tool);
+      if (info && !assistantToolAllowed(name, info))
+        return { ok: false, text: `"${tool}" aracı asistana kapalı (Ayarlar → Asistan).` };
+      return callMcpTool(name, server, mcpProbeDir(), tool, args, assistantLimits(cfg).mcpMs);
     },
   };
   // Git işleri: uzak depo TFS sunucusundaysa kimlik TFS anahtarından (yoksa kullanıcının kendi git kimliği)
@@ -1388,10 +1412,10 @@ async function main() {
         token: conn.token,
         model: m,
         userPrompt: cfg.userPrompt,
+        limits: assistantLimits(cfg),
         ...(local ? { mcp: mcpBridge } : {}),
       };
-      const yerel = local && !!cfg.speech?.computer;
-      return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, yerel);
+      return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, local);
     },
     /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
     say: (text: string, model?: string, voice?: string) => {
@@ -1404,6 +1428,52 @@ async function main() {
   };
 
   /** Kullanıcı talimatı (Ayarlar): config.json'a yazar, sıradaki görevde her ajanın prompt'una eklenir */
+  /** Ayarlar → Asistan: görünüm (etkin sınırlar + eklentiler) */
+  const getAssistantSettings = () => ({
+    ok: true,
+    limits: assistantLimits(cfg),
+    raw: cfg.assistant ?? {},
+    legacyComputer: !!cfg.speech?.computer,
+    servers: Object.entries(cfg.mcpServers ?? {}).map(([name, s]) => ({
+      name,
+      globalDisabled: !!s.disabled,
+      enabled: assistantMcpEnabled(cfg, name),
+      own: cfg.assistant?.mcp?.[name] ?? null,
+    })),
+  });
+  /** Ayarlar → Asistan kaydı: verilen alanlar değişir, null olan silinir; mcp eklenti eklenti birleşir.
+   *  Canlı (yeniden başlatma yok); geçersizse dosya geri alınır. */
+  const setAssistantSettings = (patch: Record<string, unknown>) => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      const a = { ...(parsed.assistant ?? {}) } as Record<string, unknown>;
+      for (const [k, v] of Object.entries(patch)) {
+        if (!["mcp", "computer", "confirm", "maxSteps", "timeouts"].includes(k)) continue;
+        if (v === null) delete a[k];
+        else if (k === "mcp" && v && typeof v === "object") {
+          const m = { ...((a.mcp as Record<string, unknown>) ?? {}) };
+          for (const [ad, o] of Object.entries(v as Record<string, unknown>)) {
+            if (o === null) delete m[ad];
+            else m[ad] = o;
+          }
+          if (Object.keys(m).length) a.mcp = m;
+          else delete a.mcp;
+        } else a[k] = v;
+      }
+      if (Object.keys(a).length) parsed.assistant = a as AppConfig["assistant"];
+      else delete parsed.assistant;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      const fresh = loadAppConfig(resolvedConfigPath);
+      if (fresh.assistant) cfg.assistant = fresh.assistant;
+      else delete cfg.assistant;
+      return { ...getAssistantSettings(), config: parsed };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev);
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   const setUserPrompt = (text: string): { ok: boolean; error?: string; text?: string } => {
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     const value = text.trim();
@@ -1978,6 +2048,8 @@ async function main() {
       setAutoForward,
       setMaxParallel,
       setUserPrompt,
+      getAssistantSettings,
+      setAssistantSettings,
       setPlanWebhook,
       getPlanTarget: () => (cfg.planWebhook?.url ? cfg.planWebhook : undefined),
       search: (q, session, kind) => {
@@ -2013,7 +2085,7 @@ async function main() {
       getMcpTools: async (name) => {
         const server = cfg.mcpServers?.[name];
         if (!server) return { ok: false, error: "eklenti bulunamadı" };
-        if (server.disabled) return { ok: false, error: "eklenti kapalı" };
+        if (server.disabled && !assistantMcpEnabled(cfg, name)) return { ok: false, error: "eklenti kapalı" };
         try {
           return { ok: true, tools: await listMcpTools(name, server, mcpProbeDir()) };
         } catch (e) {

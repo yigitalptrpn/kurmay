@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLI_STALL_MIN_MS } from "./resilience.js";
+import { checkAssistantLimits } from "./assistantLimits.js";
 import {
   EFFORT_LEVELS,
   isCommandNode,
@@ -162,6 +163,8 @@ export function loadAppConfig(configPath: string): AppConfig {
       );
     }
   }
+
+  if (cfg.assistant !== undefined) checkAssistantLimits(cfg.assistant);
 
   if (cfg.tfs !== undefined) {
     const t = cfg.tfs as Record<string, unknown> | null;
