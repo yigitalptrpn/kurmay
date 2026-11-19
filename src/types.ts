@@ -382,10 +382,66 @@ export interface TfsConfig {
   caFile?: string;
 }
 
+/** İş öğesi açılacak en düşük önem (gece denetimi) */
+export const NIGHTLY_MIN_SEVERITY = ["critical", "high", "medium"] as const;
+
+/**
+ * Gece güvenlik denetimi (Ayarlar): her gece belirlenen saatte kök klasördeki tüm git
+ * depolarını sırayla denetler; sabah özeti (sayfa + e-posta) ve kritik/yüksek bulgu için
+ * TFS iş öğesi üretir.
+ */
+export interface NightlyAuditConfig {
+  enabled?: boolean;
+  /** Depoların arandığı kök klasör (altındaki git depoları, en fazla iki kat derinlik) */
+  root?: string;
+  /** Başlama saati "SS:DD" (Kurmay'ın çalıştığı bilgisayarın saati). Varsayılan "00:00" */
+  time?: string;
+  /** Bu saatten sonra yeni depo denetimi başlamaz "SS:DD". Yoksa "07:00"; null = sınır yok */
+  stopAt?: string | null;
+  /** Denetlenmeyecek depolar (köke göre göreli yol, "/" ayraçlı). Yeni depo kendiliğinden girer */
+  exclude?: string[];
+  /** Kritik/yüksek bulgu için TFS iş öğesi (TFS modu hazır olmalı) */
+  workItems?: {
+    enabled?: boolean;
+    /** İş öğesi türü (varsayılan "Bug") */
+    type?: string;
+    /** Bu önem ve üstü için açılır (varsayılan "high" = kritik + yüksek) */
+    minSeverity?: (typeof NIGHTLY_MIN_SEVERITY)[number];
+    /** Alan yolu (boş = projenin varsayılanı) */
+    areaPath?: string;
+  };
+  /** Sabah özeti e-postası (gönderim "smtp" ayarıyla) */
+  email?: {
+    enabled?: boolean;
+    to?: string[];
+    /** Kurmay'ın ağdaki adresi (http://10.0.0.5:4141) — e-postadaki bağlantılar için; boş = bağlantı yok */
+    panelUrl?: string;
+  };
+}
+
+/** Giden e-posta sunucusu (SMTP). Parola config.json'da DURMAZ: `.gizli/smtp.json` ya da KURMAY_SMTP_PAROLA */
+export interface SmtpConfig {
+  host?: string;
+  /** Varsayılan: güvenliğe göre 587 (starttls), 465 (tls), 25 (none) */
+  port?: number;
+  /** starttls: düz bağlanıp şifrelemeye geçer; tls: baştan şifreli; none: şifresiz (yalnızca iç ağ) */
+  security?: "starttls" | "tls" | "none";
+  /** Kullanıcı adı (boş = kimliksiz gönderim; iç ağ aktarıcısı) */
+  user?: string;
+  /** Gönderen adresi */
+  from?: string;
+  /** Sertifika doğrulamasını atla (kendinden imzalı iç ağ sunucusu) */
+  insecureTls?: boolean;
+}
+
 /** Tek config dosyasının tamamı: bağlantı bilgileri + iş akışı grafı */
 export interface AppConfig extends ProviderConfig {
   /** TFS modu (Ayarlar): iş öğesini TFS'ten alıp görev yapar, sonucu iş öğesine yazar */
   tfs?: TfsConfig;
+  /** Gece güvenlik denetimi (Ayarlar) */
+  nightlyAudit?: NightlyAuditConfig;
+  /** Giden e-posta sunucusu (gece denetimi sabah özeti) */
+  smtp?: SmtpConfig;
   workflow: WorkflowConfig;
   /** İzleme paneli portu (varsayılan 4141; CLI --port bayrağı bunu ezer) */
   uiPort?: number;

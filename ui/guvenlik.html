@@ -227,6 +227,36 @@ ol.steps { list-style:none; margin:0; padding:0; }
 .dp input { background:#060a13; color:var(--text); border:1px solid var(--line2); border-radius:8px; padding:7px 10px; }
 .dp .dp-item { cursor:pointer; }
 
+/* Gece güvenlik denetimi: sabah özeti */
+.rep.gece .t { -webkit-line-clamp:1; }
+.rep.gece.failed { border-color:rgba(229,72,77,.45); }
+.stats.ng { grid-template-columns:repeat(5,minmax(0,1fr)); max-width:none; }
+.nrepos { display:flex; flex-direction:column; }
+.nrepo { display:grid; grid-template-columns:minmax(0,1fr) 130px 150px 64px auto; gap:8px 14px; align-items:center; padding:10px 0; border-top:1px solid var(--line); }
+.nrepo:first-child { border-top:none; }
+.nrepo .nm b { font:600 13.5px/1.35 var(--mono); overflow-wrap:anywhere; display:block; }
+.nrepo .nm span { font:12px/1.5 var(--mono); color:var(--faint); overflow-wrap:anywhere; }
+.nrepo .nm .warn { color:var(--med); font-style:normal; }
+.nrepo .st { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+.nrepo .st .durum { display:inline-flex; align-items:center; gap:6px; }
+.nrepo .st .bad { color:#ff9ea1; }
+.nrepo .dots { margin-left:0; }
+.nrepo .nw { font:600 13px var(--mono); text-align:right; color:var(--faint); }
+.nrepo .nw.yeni { color:var(--high); }
+.nrepo .ac { display:flex; gap:6px; justify-content:flex-end; }
+.nrepo .wis { grid-column:1 / -1; font-size:12.5px; color:var(--muted); margin-top:-2px; }
+.btn.sm { padding:5px 10px; font-size:12.5px; }
+.hl { display:flex; flex-direction:column; gap:8px; }
+.hl .h { padding:10px 14px; border:1px solid var(--line); border-left:3px solid var(--c); border-radius:10px; background:var(--panel); }
+.hl .h .tp { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.hl .h .tt { font-weight:600; margin-top:5px; overflow-wrap:anywhere; }
+.hl .h .lc { font:12px/1.5 var(--mono); color:var(--accent); overflow-wrap:anywhere; margin-top:2px; }
+.chip { font:700 10.5px/1 var(--sans); letter-spacing:.06em; padding:3px 7px; border-radius:6px; border:1px solid var(--line2); color:var(--text); }
+.chip.yeni { border-color:rgba(90,169,230,.5); color:#9fd0ff; }
+.probs { margin:0; padding-left:20px; font-size:13.5px; line-height:1.6; color:#f6d79a; }
+.probs li { overflow-wrap:anywhere; }
+.ngset { font-size:13.5px; color:var(--muted); line-height:1.6; }
+.ngset b { color:var(--text); font-weight:500; }
 @media (max-width:1100px) { .kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:860px) {
   .wrap { grid-template-columns:1fr; padding:16px; gap:16px; }
@@ -243,6 +273,11 @@ ol.steps { list-style:none; margin:0; padding:0; }
   .top .back span { display:none; } /* dar ekranda yalnızca ok — "Yeni denetim" sığsın */
   .logo small { display:none; }
   .stats b { font-size:20px; }
+  .stats.ng { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .nrepo { grid-template-columns:minmax(0,1fr) auto; }
+  .nrepo .dots, .nrepo .nw { grid-column:auto; }
+  .nrepo .nw { text-align:left; }
+  .top #btnGece span { display:none; }
   .card { padding:18px 16px; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -258,6 +293,7 @@ ol.steps { list-style:none; margin:0; padding:0; }
     <div>Kurmay<small>Güvenlik denetimi</small></div>
   </div>
   <span class="sp"></span>
+  <button class="btn" id="btnGece" title="Gece güvenlik denetimi — sabah özetleri"><svg class="i" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><span>Gece denetimi</span></button>
   <button class="btn primary" id="btnNew" title="Bir proje dizinindeki kod tabanının tamamını denetle"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Yeni denetim</button>
   <a class="back" href="/" title="İzleme paneli"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg><span>İzleme paneli</span></a>
 </header>
@@ -331,6 +367,8 @@ const I = {
   download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
   mail:  '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
   copy:  '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  moon:  '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
+  ticket:'<path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/>',
 };
 const fmtDate = (iso) => new Date(iso).toLocaleString("tr-TR", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
@@ -339,6 +377,9 @@ let list = [], current = null, filter = "all";
 let jobs = [], dirs = [], defaultDir = "", auditModel = "", auditError = "";
 let launchDir = "";          // başlatma görünümünde seçili dizin
 let viewJob = null;          // açık iş görünümü (kimlik)
+// Gece güvenlik denetimi (GET /gece): ayar, sonraki başlama, süren ve son koşular
+let night = null, nightError = "";
+let viewNight = null;        // açık sabah özeti: koşu kimliği ya da "son"
 const baseName = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() || String(p);
 const fmtDur = (ms) => {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -358,17 +399,28 @@ function renderList() {
   // Süren ve düşen bağımsız denetimler raporların üstünde (bitenler zaten rapor olarak listede)
   const active = jobs.filter((j) => j.status === "running" || j.status === "failed");
   const jobsHtml = active.length ? `<h2>Denetimler</h2>` + active.map((j) => `<button class="rep job${j.status === "failed" ? " failed" : ""}${viewJob === j.id ? " on" : ""}" data-job="${esc(j.id)}">
-      <div class="t">Kod tabanı: ${esc(baseName(j.dir))}</div>
+      <div class="t">${j.nightly ? "Gece" : "Kod tabanı"}: ${esc(baseName(j.dir))}</div>
       <div class="m"><span class="st">${j.status === "running" ? `<i class="spin"></i>${j.stopping ? "durduruluyor" : "denetleniyor"}` : `${icon(I.alert)}düştü`}</span>
         <span>${esc(fmtDur((j.finishedAt ? Date.parse(j.finishedAt) : Date.now()) - Date.parse(j.startedAt)))}</span>
         <span>· ${j.filesRead} dosya</span></div>
     </button>`).join("") : "";
-  $("side").innerHTML = jobsHtml + `<h2>Raporlar</h2>` + (list.length ? list.map((r) => {
+  const runs = (night && night.runs) || [];
+  const nightHtml = runs.length ? `<h2>Gece denetimleri</h2>` + runs.slice(0, 5).map((r) => {
+    const sum = (sv) => nDone(r).reduce((a, x) => a + ((x.counts && x.counts[sv]) || 0), 0);
+    const dots = ["critical", "high"].filter((sv) => sum(sv) > 0).map((sv) => `<span style="--c:${SEV[sv].c}" title="${SEV[sv].ad}">${sum(sv)}</span>`).join("");
+    const on = viewNight && (viewNight === r.id || (viewNight === "son" && r === runs[0]));
+    return `<button class="rep gece${r.status === "failed" ? " failed" : ""}${on ? " on" : ""}" data-gece="${esc(r.id)}">
+      <div class="t">${icon(I.moon)} ${esc(nDay(r))}</div>
+      <div class="m"><span class="st">${r.status === "running" ? `<i class="spin"></i>` : ""}${esc(NSTAT[r.status] || r.status)}</span>
+        <span>· ${nDone(r).length}/${r.repos.length} depo</span><span class="dots">${dots}</span></div>
+    </button>`;
+  }).join("") : "";
+  $("side").innerHTML = jobsHtml + nightHtml + `<h2>Raporlar</h2>` + (list.length ? list.map((r) => {
     const rk = RISK[r.risk];
     const dots = ORDER.filter((s) => r.counts[s] > 0 && s !== "info")
       .map((s) => `<span style="--c:${SEV[s].c}" title="${SEV[s].ad}">${r.counts[s]}</span>`).join("");
     return `<button class="rep${current && current.id === r.id ? " on" : ""}" data-id="${esc(r.id)}">
-      <div class="t">${esc(r.task)}</div>
+      <div class="t">${r.nightly ? icon(I.moon) + " " : ""}${esc(r.task)}</div>
       <div class="m">${icon(I.clock)}${esc(fmtDate(r.createdAt))}
         ${rk ? `<span class="sev" style="--c:${rk.c};padding:2px 7px;font-size:10.5px">${esc(rk.ad)}</span>` : ""}
         <span class="dots">${dots}</span></div>
@@ -408,6 +460,8 @@ function renderReport(r) {
         <div>${icon(I.folder)}<b>${esc(r.targetDir)}</b></div>
         ${r.model ? `<div>${icon(I.cpu)}<b>${esc(r.model)}</b></div>` : ""}
         <div>${icon(I.file)}<b>${r.files.length} dosya ${r.standalone ? "incelendi" : "denetlendi"}</b></div>
+        ${r.nightly ? `<div>${icon(I.moon)}<b>Gece denetimi${r.nightly.ref ? ` · ${esc(r.nightly.ref)}${r.nightly.commit ? ` @ ${esc(r.nightly.commit)}` : ""}` : ""}</b>
+          <a href="#${esc(r.nightly.run)}" data-gece="${esc(r.nightly.run)}">sabah özeti →</a></div>` : ""}
       </div>
       <div class="actions" style="margin-top:16px">
         <button class="btn primary" data-pdf="${esc(r.id)}">${icon(I.download)}PDF indir</button>
@@ -487,7 +541,7 @@ function renderEmpty() {
 
 // ── Bağımsız denetim: başlatma görünümü ──
 function renderLaunch() {
-  current = null; viewJob = null;
+  current = null; viewJob = null; viewNight = null;
   if (location.hash !== "#yeni") history.replaceState(null, "", "#yeni");
   renderList();
   document.documentElement.style.setProperty("--glow", "rgba(56,189,248,.18)");
@@ -537,7 +591,7 @@ const STEP = { Read: [I.file, "okundu"], Grep: [I.search, "arandı"], Glob: [I.f
 function renderJob(id) {
   const j = jobs.find((x) => x.id === id);
   if (!j) { toast("Denetim bulunamadı — servis yeniden başlamış olabilir"); return list.length ? open(list[0].id) : renderEmpty(); }
-  current = null; viewJob = id;
+  current = null; viewJob = id; viewNight = null;
   if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
   renderList();
   const run = j.status === "running";
@@ -604,7 +658,13 @@ let pollT;
 async function poll() {
   clearTimeout(pollT);
   let data;
+  const wasNight = night && night.running;
   try { data = await (await fetch("/security-audits")).json(); } catch {}
+  await pollNight();
+  // Gece koşusu bitti ya da bir depo bitti: rapor listesi tazelensin
+  if (wasNight && (!night || !night.running || nDone(night.running).length !== nDone(wasNight).length)) {
+    try { list = await (await fetch("/security-reports")).json(); } catch {}
+  }
   if (data && Array.isArray(data.jobs)) {
     const before = new Map(jobs.map((j) => [j.id, j.status]));
     jobs = data.jobs; dirs = data.dirs || []; defaultDir = data.defaultDir || ""; auditModel = data.model || ""; auditError = "";
@@ -616,6 +676,7 @@ async function poll() {
       if (goster && goster.reportId) { open(goster.reportId); toast("Denetim bitti — rapor hazır"); }
     }
     if (viewJob) renderJob(viewJob);
+    else if (viewNight) renderNight(viewNight);
     else {
       renderList();
       if (location.hash === "#yeni" && !document.querySelector("#main .dirbox")) renderLaunch();
@@ -623,7 +684,179 @@ async function poll() {
   } else if (data && data.error) {
     auditError = data.error; // CLI görevli mod: bağımsız denetim yok
   }
-  pollT = setTimeout(poll, jobs.some((j) => j.status === "running") ? 1500 : 10000);
+  pollT = setTimeout(poll, jobs.some((j) => j.status === "running") || (night && night.running) ? 2000 : 10000);
+}
+
+// ── Gece güvenlik denetimi: sabah özeti ──
+const NSTAT = { running:"Sürüyor", finished:"Bitti", stopped:"Süre doldu", cancelled:"Durduruldu", failed:"Düştü", interrupted:"Yarıda kaldı" };
+const RSTAT = { waiting:"sırada", preparing:"hazırlanıyor", running:"denetleniyor", done:"denetlendi", failed:"düştü", timeout:"süre doldu — sıra gelmedi", cancelled:"durduruldu" };
+const nDone = (r) => r.repos.filter((x) => x.status === "done");
+const nDay = (r) => new Date(r.startedAt).toLocaleDateString("tr-TR", { day:"numeric", month:"long", year:"numeric" });
+const nTime = (iso) => new Date(iso).toLocaleTimeString("tr-TR", { hour:"2-digit", minute:"2-digit" });
+const nWhen = (iso) => new Date(iso).toLocaleString("tr-TR", { weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit" });
+const wiLink = (w) => w.url && /^https?:\/\//.test(w.url) ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">#${w.id}</a>` : `#${w.id}`;
+
+function nightSettingsHtml() {
+  const st = night.settings;
+  const parts = [st.enabled
+    ? `Her gece başlama saati <b>${esc(st.time)}</b>${st.stopAt ? ` · yeni depo başlatma sınırı <b>${esc(st.stopAt)}</b>` : ""} · kök: <b>${esc(st.root || "—")}</b>`
+    : `Zamanlanmış çalışma <b>kapalı</b>${st.root ? ` · kök: <b>${esc(st.root)}</b>` : ""}`];
+  if (st.enabled && night.next) parts.push(`sonraki: <b>${esc(nWhen(night.next))}</b>`);
+  parts.push(st.workItems.enabled ? `TFS work item: <b>açık</b> (${st.workItems.minSeverity === "critical" ? "yalnızca kritik" : st.workItems.minSeverity === "medium" ? "kritik, yüksek, orta" : "kritik ve yüksek"})` : "TFS work item: kapalı");
+  parts.push(st.email.enabled ? `e-posta: <b>${esc(st.email.to.join(", "))}</b>` : "e-posta: kapalı");
+  return `<div class="ngset">${parts.join(" · ")} — <a href="/config">Ayarlar</a></div>`;
+}
+
+function renderNight(id) {
+  current = null; viewJob = null; viewNight = id || "son";
+  const runs = (night && night.runs) || [];
+  const r = viewNight !== "son" ? runs.find((x) => x.id === viewNight) : runs[0];
+  const hash = r ? r.id : "gece";
+  if (location.hash.slice(1) !== hash) history.replaceState(null, "", "#" + hash);
+  renderList();
+  document.documentElement.style.setProperty("--glow", "rgba(56,189,248,.18)");
+  if (!night) {
+    $("main").innerHTML = `<section class="card empty"><h3>Gece denetimi kullanılamıyor</h3><div>${esc(nightError || "Gece denetimi yalnızca sunucu modunda çalışır.")}</div></section>`;
+    return;
+  }
+  const st = night.settings;
+  const running = !!night.running;
+  if (!r) {
+    $("main").innerHTML = `<section class="card empty">
+      <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      <h3>Henüz gece denetimi yapılmadı</h3>
+      <div>Gece denetimi her gece kök klasördeki bütün git depolarını sırayla denetler; sabah özeti burada görünür.</div>
+      <div style="margin-top:14px">${nightSettingsHtml()}</div>
+      <div class="actions" style="justify-content:center">
+        <button class="btn primary" data-nrun${st.root && !running ? "" : " disabled"}>${icon(I.play)}Şimdi başlat</button>
+        <a class="btn" href="/config">Ayarlar</a>
+      </div>
+    </section>`;
+    return;
+  }
+  const done = nDone(r);
+  const sum = (sv) => done.reduce((a, x) => a + ((x.counts && x.counts[sv]) || 0), 0);
+  const worst = RISK_ORDER.slice().reverse().find((k) => done.some((x) => x.risk === k));
+  const rk = worst ? RISK[worst] : null;
+  const isRun = r.status === "running";
+  const color = r.status === "failed" ? "var(--crit)" : rk ? rk.c : "var(--accent)";
+  document.documentElement.style.setProperty("--glow", rk ? `color-mix(in srgb, ${rk.c} 30%, transparent)` : "rgba(56,189,248,.18)");
+  const yeni = done.reduce((a, x) => a + (x.newFindings || 0), 0);
+  const ilk = done.length && done.every((x) => x.firstAudit);
+  const end = r.finishedAt ? Date.parse(r.finishedAt) : Date.now();
+  const wi = r.workItems;
+  const mail = r.email
+    ? r.email.ok
+      ? `<div class="warnline" style="color:var(--good)">${icon(I.mail)}<span>Sabah özeti e-postayla gönderildi: ${esc(r.email.to.join(", "))} (${esc(nTime(r.email.at))})${r.email.error ? ` — ${esc(r.email.error)}` : ""}</span></div>`
+      : `<div class="note bad">${icon(I.mail)}<span>Sabah özeti e-postası gönderilemedi: ${esc(r.email.error || "bilinmeyen hata")}</span></div>`
+    : "";
+  const actions = isRun
+    ? `<button class="btn danger" data-ncancel>${icon(I.stop)}Durdur</button>`
+    : `<button class="btn primary" data-nrun${st.root && !running ? "" : " disabled"}>${icon(I.play)}Şimdi yeniden başlat</button><a class="btn" href="/config">Ayarlar</a>`;
+  const hero = `<section class="card hero">
+    <div class="shield${isRun ? " scan" : ""}">${shieldSvg(color)}${isRun ? `<i class="sweep"></i>` : ""}
+      <div class="lv"><b style="color:${color}">${rk ? esc(rk.ad) : esc(NSTAT[r.status] || "")}</b><span>${rk ? "en yüksek risk" : "durum"}</span></div></div>
+    <div>
+      <div class="label">${icon(I.moon)}Gece güvenlik denetimi · sabah özeti</div>
+      <div class="task">${esc(nDay(r))}</div>
+      <div class="meta">
+        <div>${icon(I.folder)}<b>${esc(r.root)}</b></div>
+        <div>${icon(I.clock)}<b>${esc(nTime(r.startedAt))} → ${r.finishedAt ? esc(nTime(r.finishedAt)) : "sürüyor"} · ${esc(fmtDur(end - Date.parse(r.startedAt)))}</b></div>
+        <div>${icon(I.play)}<b>${r.trigger === "elle" ? "elle başlatıldı" : "zamanlanmış"}${r.resumed ? ` · ${r.resumed} kez sürdürüldü` : ""} · ${esc(NSTAT[r.status] || r.status)}</b></div>
+      </div>
+      <div class="stats ng">
+        <div><b>${done.length}/${r.repos.length}</b><span>depo denetlendi</span></div>
+        <div><b style="color:${sum("critical") ? "var(--crit)" : "inherit"}">${sum("critical")}</b><span>kritik</span></div>
+        <div><b style="color:${sum("high") ? "var(--high)" : "inherit"}">${sum("high")}</b><span>yüksek</span></div>
+        <div><b>${ilk ? "—" : yeni}</b><span>${ilk ? "ilk denetim" : "yeni bulgu"}</span></div>
+        <div><b>${wi ? wi.created : "—"}</b><span>${wi ? `work item açıldı${wi.existing ? ` · ${wi.existing} zaten açık` : ""}` : "TFS work item"}</span></div>
+      </div>
+      ${r.error ? `<div class="note bad">${icon(I.alert)}<span>${esc(r.error)}</span></div>` : ""}
+      ${mail}
+      <div class="actions">${actions}</div>
+    </div>
+  </section>`;
+
+  const rows = r.repos.map((x) => {
+    const xr = x.risk ? RISK[x.risk] : null;
+    const stHtml = x.status === "done"
+      ? (xr ? `<span class="sev" style="--c:${xr.c};padding:3px 8px;font-size:11px">${esc(xr.ad)}</span>` : `<span>risk belirlenemedi</span>`)
+      : `<span class="durum${x.status === "failed" ? " bad" : ""}">${["preparing", "running"].includes(x.status) ? `<i class="spin"></i>` : ""}${esc(RSTAT[x.status] || x.status)}</span>`;
+    const dots = x.counts ? ORDER.filter((sv) => sv !== "info").map((sv) => `<span style="--c:${SEV[sv].c}" title="${SEV[sv].ad}">${x.counts[sv]}</span>`).join("") : "";
+    const nw = x.status !== "done" ? "" : x.firstAudit ? `<span title="ilk denetim">ilk</span>` : x.newFindings ? `+${x.newFindings}` : "0";
+    const acts = x.reportId
+      ? `<button class="btn sm" data-report="${esc(x.reportId)}">${icon(I.shield)}Rapor</button>`
+      : x.jobId && ["running", "preparing"].includes(x.status) && jobs.some((j) => j.id === x.jobId)
+        ? `<button class="btn sm" data-job="${esc(x.jobId)}">${icon(I.search)}İzle</button>` : "";
+    const ref = x.ref ? `${esc(x.ref)}${x.commit ? ` @ ${esc(x.commit)}` : ""}` : "";
+    const sub = [ref, x.fetchError ? `<i class="warn" title="${esc(x.fetchError)}">sunucudan güncellenemedi — eldeki son hâl</i>` : "", x.status === "failed" && x.error ? `<i class="warn" title="${esc(x.error)}">${esc(x.error.slice(0, 120))}</i>` : ""].filter(Boolean).join(" · ");
+    const wis = (x.workItems || []).length
+      ? `<div class="wis">${icon(I.ticket)} TFS: ${x.workItems.map((w) => `${wiLink(w)}${w.existing ? " (zaten açık)" : ""}`).join(", ")}</div>`
+      : x.workItemError ? `<div class="wis" style="color:#ff9ea1">${icon(I.alert)} TFS work item açılamadı: ${esc(x.workItemError)}</div>` : "";
+    return `<div class="nrepo">
+      <div class="nm"><b>${esc(x.name)}</b>${sub ? `<span>${sub}</span>` : ""}</div>
+      <div class="st">${stHtml}</div>
+      <div class="dots">${dots}</div>
+      <div class="nw${x.newFindings ? " yeni" : ""}" title="önceki geceye göre yeni bulgu">${nw}</div>
+      <div class="ac">${acts}</div>
+      ${wis}
+    </div>`;
+  }).join("");
+  const repos = `<section class="card"><div class="label">${icon(I.list)}Depolar · ${r.repos.length}</div>
+    ${r.repos.length ? `<div class="nrepos">${rows}</div>` : `<div style="color:var(--muted)">Depo listesi henüz çıkarılmadı.</div>`}
+    ${(r.excluded || []).length ? `<div class="ngset" style="margin-top:10px">Hariç tutulan: ${r.excluded.map((e) => `<b>${esc(e)}</b>`).join(", ")}</div>` : ""}
+  </section>`;
+
+  const hls = done.flatMap((x) => (x.highlights || []).map((h) => ({ x, h })))
+    .sort((a, b) => Number(!!b.h.isNew) - Number(!!a.h.isNew) || ORDER.indexOf(a.h.severity) - ORDER.indexOf(b.h.severity));
+  const highlights = hls.length ? `<section class="card"><div class="label">${icon(I.alert)}Kritik ve yüksek bulgular · ${hls.length}</div><div class="hl">${hls.map(({ x, h }) => `
+      <div class="h" style="--c:${SEV[h.severity].c}">
+        <div class="tp"><span class="sev" style="--c:${SEV[h.severity].c};padding:2px 7px;font-size:10.5px">${icon(SEV[h.severity].ic)}${SEV[h.severity].ad}</span>
+          ${h.isNew ? `<span class="chip yeni">YENİ</span>` : ""}<span>${esc(x.name)}</span>
+          ${h.workItem ? `<span>· TFS ${wiLink(h.workItem)}${h.workItem.existing ? " (zaten açık)" : " (bu gece açıldı)"}</span>` : ""}
+          ${x.reportId ? `<a href="#${esc(x.reportId)}" data-report="${esc(x.reportId)}" style="margin-left:auto">rapor →</a>` : ""}</div>
+        <div class="tt">${esc(h.title)}</div>
+        ${h.file ? `<div class="lc">└─ ${esc(h.file)}${h.line ? `:${h.line}` : ""}${h.cwe ? ` · ${esc(h.cwe)}` : ""}</div>` : ""}
+      </div>`).join("")}</div></section>` : "";
+
+  const probs = [];
+  for (const x of r.repos) {
+    if (x.status === "failed") probs.push(`<b>${esc(x.name)}</b> denetlenemedi: ${esc(x.error || "bilinmeyen hata")}`);
+    if (x.fetchError) probs.push(`<b>${esc(x.name)}</b> sunucudan güncellenemedi, eldeki son hâl denetlendi: ${esc(x.fetchError)}`);
+  }
+  const kalan = r.repos.filter((x) => x.status === "timeout");
+  if (kalan.length) probs.push(`${kalan.length} depoya bitiş saatine kadar sıra gelmedi: ${kalan.map((x) => esc(x.name)).join(", ")}`);
+  const problems = probs.length ? `<section class="card"><div class="label">${icon(I.alert)}Dikkat edilecekler</div><ul class="probs">${probs.map((p) => `<li>${p}</li>`).join("")}</ul></section>` : "";
+
+  $("main").innerHTML = hero + highlights + repos + problems +
+    `<section class="card"><div class="label">${icon(I.moon)}Ayar</div>${nightSettingsHtml()}</section>`;
+}
+
+async function nightRun() {
+  try {
+    const res = await fetch("/gece/baslat", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.error || "başlatılamadı");
+    await pollNight();
+    renderNight(data.run.id);
+    poll();
+  } catch (err) { toast(err.message); }
+}
+async function nightCancel() {
+  try {
+    const res = await fetch("/gece/durdur", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.error || "durdurulamadı");
+    toast("Durduruluyor — denetlenmekte olan depo kesiliyor");
+    poll();
+  } catch (err) { toast(err.message); }
+}
+async function pollNight() {
+  try {
+    const d = await (await fetch("/gece")).json();
+    if (d && d.settings) { night = d; nightError = ""; }
+    else { night = null; nightError = (d && d.error) || ""; }
+  } catch { /* eski görünüm kalsın */ }
 }
 
 async function pickDir() {
@@ -742,16 +975,21 @@ async function open(id) {
   try {
     const r = await (await fetch("/security-reports/" + encodeURIComponent(id))).json();
     if (!r || !r.id) throw new Error();
-    current = r; filter = "all"; viewJob = null;
+    current = r; filter = "all"; viewJob = null; viewNight = null;
     if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
     renderList(); renderReport(r); window.scrollTo({ top: 0 });
   } catch { toast("Rapor açılamadı"); }
 }
 
 document.addEventListener("click", (ev) => {
+  const gece = ev.target.closest("[data-gece]");
+  if (gece) { ev.preventDefault(); return renderNight(gece.dataset.gece); }
+  if (ev.target.closest("#btnGece")) return renderNight("son");
+  if (ev.target.closest("[data-nrun]")) { ev.target.closest("[data-nrun]").disabled = true; return nightRun(); }
+  if (ev.target.closest("[data-ncancel]")) { ev.target.closest("[data-ncancel]").disabled = true; return nightCancel(); }
   const job = ev.target.closest("[data-job]");
   if (job) { ev.preventDefault(); return renderJob(job.dataset.job); }
-  const rep = ev.target.closest(".rep"); if (rep) return open(rep.dataset.id);
+  const rep = ev.target.closest(".rep[data-id]"); if (rep) return open(rep.dataset.id);
   if (ev.target.closest("#btnNew, [data-new]")) { launchDir = ""; return renderLaunch(); }
   const re = ev.target.closest("[data-reaudit]");
   if (re) { launchDir = re.dataset.reaudit; return renderLaunch(); }
@@ -781,6 +1019,7 @@ document.addEventListener("click", (ev) => {
   renderList();
   const want = location.hash.slice(1);
   if (want === "yeni") renderLaunch();
+  else if (want === "gece" || want.startsWith("gece-")) renderNight(want === "gece" ? "son" : want);
   else if (jobs.some((j) => j.id === want)) renderJob(want);
   else if (list.length) open(list.some((r) => r.id === want) ? want : list[0].id);
   else renderEmpty();

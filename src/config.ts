@@ -6,6 +6,7 @@ import {
   EFFORT_LEVELS,
   isCommandNode,
   isFanoutNode,
+  NIGHTLY_MIN_SEVERITY,
   TFS_WRITE_BACK,
   type AppConfig,
   type EffortSetting,
@@ -200,6 +201,9 @@ export function loadAppConfig(configPath: string): AppConfig {
     }
   }
 
+  if (cfg.nightlyAudit !== undefined) checkNightlyAudit(cfg.nightlyAudit);
+  if (cfg.smtp !== undefined) checkSmtp(cfg.smtp);
+
   if (!cfg.workflow?.entry || !cfg.workflow.agents) {
     throw new Error('ayar dosyası: "workflow" bölümü eksik ("entry" ve "agents" alanları zorunlu)');
   }
@@ -361,4 +365,78 @@ export function buildAgentEnv(cfg: ProviderConfig): Record<string, string> | und
   if (cfg.baseUrl) delete env.ANTHROPIC_API_KEY; // AUTH_TOKEN ile çakışmasın
 
   return env;
+}
+
+/** "SS:DD" saat biçimi (00:00 – 23:59) */
+export const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Gece güvenlik denetimi ayarı ("nightlyAudit") — boş metinler tanımsız sayılır */
+function checkNightlyAudit(v: unknown): void {
+  const n = v as Record<string, unknown> | null;
+  const yer = (k: string) => `ayar dosyası: "nightlyAudit.${k}"`;
+  if (!n || typeof n !== "object" || Array.isArray(n))
+    throw new Error(`ayar dosyası: "nightlyAudit" bir nesne olmalı (verilen: ${JSON.stringify(n)})`);
+  if (n.enabled !== undefined && typeof n.enabled !== "boolean") throw new Error(`${yer("enabled")} true/false olmalı`);
+  if (n.root !== undefined && typeof n.root !== "string") throw new Error(`${yer("root")} metin olmalı`);
+  if (n.root === "") delete n.root;
+  if (n.time !== undefined && (typeof n.time !== "string" || !CLOCK_RE.test(n.time)))
+    throw new Error(`${yer("time")} "SS:DD" biçiminde bir saat olmalı (verilen: ${JSON.stringify(n.time)})`);
+  if (n.stopAt !== undefined && n.stopAt !== null && (typeof n.stopAt !== "string" || !CLOCK_RE.test(n.stopAt)))
+    throw new Error(
+      `${yer("stopAt")} "SS:DD" biçiminde bir saat ya da null (sınır yok) olmalı (verilen: ${JSON.stringify(n.stopAt)})`,
+    );
+  if (n.exclude !== undefined && (!Array.isArray(n.exclude) || n.exclude.some((x) => typeof x !== "string")))
+    throw new Error(`${yer("exclude")} metin listesi olmalı`);
+  if (n.workItems !== undefined) {
+    const w = n.workItems as Record<string, unknown> | null;
+    if (!w || typeof w !== "object" || Array.isArray(w)) throw new Error(`${yer("workItems")} bir nesne olmalı`);
+    if (w.enabled !== undefined && typeof w.enabled !== "boolean")
+      throw new Error(`${yer("workItems.enabled")} true/false olmalı`);
+    for (const k of ["type", "areaPath"]) {
+      if (w[k] !== undefined && typeof w[k] !== "string") throw new Error(`${yer("workItems." + k)} metin olmalı`);
+      if (w[k] === "") delete w[k];
+    }
+    if (w.minSeverity !== undefined && !(NIGHTLY_MIN_SEVERITY as readonly unknown[]).includes(w.minSeverity))
+      throw new Error(`${yer("workItems.minSeverity")} şunlardan biri olmalı: ${NIGHTLY_MIN_SEVERITY.join(", ")}`);
+  }
+  if (n.email !== undefined) {
+    const e = n.email as Record<string, unknown> | null;
+    if (!e || typeof e !== "object" || Array.isArray(e)) throw new Error(`${yer("email")} bir nesne olmalı`);
+    if (e.enabled !== undefined && typeof e.enabled !== "boolean")
+      throw new Error(`${yer("email.enabled")} true/false olmalı`);
+    if (e.to !== undefined && (!Array.isArray(e.to) || e.to.some((x) => typeof x !== "string" || !EMAIL_RE.test(x))))
+      throw new Error(`${yer("email.to")} e-posta adresi listesi olmalı (verilen: ${JSON.stringify(e.to)})`);
+    if (e.panelUrl !== undefined && typeof e.panelUrl !== "string")
+      throw new Error(`${yer("email.panelUrl")} metin olmalı`);
+    if (e.panelUrl === "") delete e.panelUrl;
+    if (typeof e.panelUrl === "string" && !/^https?:\/\/[^\s]+$/i.test(e.panelUrl))
+      throw new Error(`${yer("email.panelUrl")} http:// ya da https:// ile başlayan bir adres olmalı`);
+  }
+}
+
+/** Basit e-posta adresi denetimi (ad@alan) */
+export const EMAIL_RE = /^[^\s@<>",;]+@[^\s@<>",;]+$/;
+
+/** Giden e-posta sunucusu ayarı ("smtp") — parola burada tutulmaz */
+function checkSmtp(v: unknown): void {
+  const s = v as Record<string, unknown> | null;
+  const yer = (k: string) => `ayar dosyası: "smtp.${k}"`;
+  if (!s || typeof s !== "object" || Array.isArray(s))
+    throw new Error(`ayar dosyası: "smtp" bir nesne olmalı (verilen: ${JSON.stringify(s)})`);
+  for (const k of ["host", "user", "from"]) {
+    if (s[k] !== undefined && typeof s[k] !== "string") throw new Error(`${yer(k)} metin olmalı`);
+    if (s[k] === "") delete s[k];
+  }
+  if (s.port !== undefined && (!Number.isInteger(s.port) || (s.port as number) < 1 || (s.port as number) > 65535))
+    throw new Error(`${yer("port")} 1–65535 arası bir tam sayı olmalı (verilen: ${JSON.stringify(s.port)})`);
+  if (s.security !== undefined && !["starttls", "tls", "none"].includes(s.security as string))
+    throw new Error(`${yer("security")} şunlardan biri olmalı: starttls, tls, none`);
+  if (s.insecureTls !== undefined && typeof s.insecureTls !== "boolean")
+    throw new Error(`${yer("insecureTls")} true/false olmalı`);
+  if (typeof s.from === "string" && !EMAIL_RE.test(s.from.replace(/^.*<([^>]+)>\s*$/, "$1")))
+    throw new Error(`${yer("from")} geçerli bir e-posta adresi olmalı (verilen: ${JSON.stringify(s.from)})`);
+  if ("password" in s)
+    throw new Error(
+      'ayar dosyası: "smtp.password" config.json\'da tutulmaz — parolayı Ayarlar → E-posta sunucusu kartından gir ya da KURMAY_SMTP_PAROLA ortam değişkeniyle ver',
+    );
 }

@@ -37,6 +37,8 @@ export interface SecurityReport {
   files: string[];
   /** Bağımsız denetim (/guvenlik sayfasından, kod tabanının tamamı) — akıştaki değil */
   standalone?: boolean;
+  /** Gece denetiminin bir parçası: koşu kimliği, depo (köke göre), denetlenen dal ve kayıt */
+  nightly?: { run: string; repo: string; ref?: string; commit?: string };
   /** Genel risk düzeyi: none | low | medium | high | critical (çıktı gelmediyse yok) */
   risk?: string;
   summary?: string;
@@ -49,7 +51,7 @@ export interface SecurityReport {
 /** Listede gösterilen özet (tam raporu sayfa ayrıca ister) */
 export type SecurityReportSummary = Pick<
   SecurityReport,
-  "id" | "createdAt" | "task" | "risk" | "sessionName" | "standalone"
+  "id" | "createdAt" | "task" | "risk" | "sessionName" | "standalone" | "nightly"
 > & {
   counts: Record<Severity, number>;
 };

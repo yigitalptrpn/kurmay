@@ -127,6 +127,20 @@ export interface TfsApi {
   prDismiss(session: string): { ok: boolean; error?: string };
 }
 
+/** Gece güvenlik denetimi (Ayarlar kartı + /guvenlik sayfası) — yalnızca sunucu modunda */
+export interface NightlyApi {
+  view(): unknown;
+  /** Kök klasördeki depolar (önizleme; hariç tutulanlar işaretli) */
+  repos(root?: string): { ok: boolean; error?: string; root?: string; repos?: unknown[] };
+  save(input: Record<string, unknown>): { ok: boolean; error?: string; config?: unknown };
+  run(): { ok: boolean; error?: string; run?: unknown };
+  cancel(): boolean;
+  get(id: string): unknown;
+  types(): Promise<{ ok: boolean; error?: string; types?: string[] }>;
+  smtpSave(input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown; config?: unknown };
+  smtpTest(input: Record<string, unknown>): Promise<{ ok: boolean; error?: string; response?: string }>;
+}
+
 export interface UiServerOptions {
   /** Oturum çalışma zamanları — olay akışı, onay/zamanlama/iptal oturum başına */
   runtimes: RuntimeRegistry;
@@ -262,6 +276,8 @@ export interface UiServerOptions {
   cancelAudit?: (id: string) => boolean;
   /** TFS modu: ayarlar, iş öğesi önizleme/arama, eklerin önizlemesi, sonucu yazma */
   tfs?: TfsApi;
+  /** Gece güvenlik denetimi (GET/POST /gece…) */
+  nightly?: NightlyApi;
   /** Sesle görev yazma (src/speech.ts): ayarlar, bağlantı denemesi, kaydı metne çevirme */
   speech?: SpeechApi;
   /** Git işleri (src/gitOps.ts): depoların durumu, işi planla, onaylanınca uygula */
@@ -347,6 +363,13 @@ export interface SpeechApi {
  *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
  *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
  *   POST /security-audits/cancel  { id } — süren bağımsız denetimi durdurur
+ *   GET  /gece                    gece güvenlik denetimi: ayar, sonraki başlama, süren ve son koşular
+ *   POST /gece                    { enabled, root, time, stopAt, exclude, workItems, email } — ayarı kaydeder (canlı)
+ *   GET  /gece/depolar?kok=       kök klasördeki git depoları (önizleme)
+ *   GET  /gece/turler             TFS iş öğesi türleri
+ *   POST /gece/baslat | /gece/durdur — elle başlat / süreni durdur
+ *   GET  /gece/kosu/<id>          bir koşunun kaydı (sabah özeti)
+ *   POST /smtp | /smtp/dene       e-posta sunucusu ayarı (parola .gizli/'ye) / deneme e-postası
  *   GET  /agent-md?file=  { raw, body, description } — rol tanımı dosyası (.claude/agents/*.md)
  *   POST /agent-md-save   { file, body, description } | { file, raw } — doğrulayıp kaydeder (canlı)
  *   GET  /guvenlik      Güvenlik denetimi raporları sayfası (ui/guvenlik.html)
@@ -1400,6 +1423,69 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         );
       });
       return;
+    }
+
+    // ── Gece güvenlik denetimi ──
+    if (url.pathname === "/gece" || url.pathname.startsWith("/gece/") || url.pathname.startsWith("/smtp")) {
+      const n = options.nightly;
+      if (!n)
+        return json(res, 409, {
+          ok: false,
+          error: "gece denetimi yalnızca sunucu modunda (görev argümanı olmadan) çalışır",
+        });
+      const p = url.pathname;
+      const fail = (e: unknown) => json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      if (req.method === "GET" && p === "/gece") return json(res, 200, n.view());
+      if (req.method === "POST" && p === "/gece") {
+        readJson(req, (b) => {
+          if (!b) return json(res, 400, { ok: false, error: "geçersiz istek" });
+          const r = n.save(b);
+          json(res, r.ok ? 200 : 400, r);
+        });
+        return;
+      }
+      if (req.method === "GET" && p === "/gece/depolar") {
+        const r = n.repos(url.searchParams.get("kok") ?? undefined);
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      if (req.method === "GET" && p === "/gece/turler") {
+        n.types().then((r) => json(res, r.ok ? 200 : 400, r), fail);
+        return;
+      }
+      if (req.method === "POST" && p === "/gece/baslat") {
+        req.resume();
+        req.on("end", () => {
+          const r = n.run();
+          json(res, r.ok ? 202 : 409, r);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/gece/durdur") {
+        req.resume();
+        req.on("end", () => {
+          const ok = n.cancel();
+          json(res, ok ? 200 : 409, ok ? { ok } : { ok, error: "süren gece denetimi yok" });
+        });
+        return;
+      }
+      const kosu = /^\/gece\/kosu\/(gece-[\w-]+)$/.exec(p);
+      if (req.method === "GET" && kosu) {
+        const r = n.get(kosu[1]);
+        return r ? json(res, 200, r) : json(res, 404, { ok: false, error: "koşu bulunamadı" });
+      }
+      if (req.method === "POST" && p === "/smtp") {
+        readJson(req, (b) => {
+          if (!b) return json(res, 400, { ok: false, error: "geçersiz istek" });
+          const r = n.smtpSave(b);
+          json(res, r.ok ? 200 : 400, r);
+        });
+        return;
+      }
+      if (req.method === "POST" && p === "/smtp/dene") {
+        readJson(req, (b) => n.smtpTest(b ?? {}).then((r) => json(res, r.ok ? 200 : 400, r), fail));
+        return;
+      }
+      return json(res, 404, { ok: false, error: "bulunamadı" });
     }
 
     // ── TFS modu ──

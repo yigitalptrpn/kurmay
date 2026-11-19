@@ -303,6 +303,20 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
     </div>
   </article>
 -->
+        <article class="surum" id="v0.1.37">
+          <div class="sol"><a class="no" href="#v0.1.37">0.1.37</a><time datetime="2026-11-19">19 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Gece güvenlik denetimi, sabah özeti e-postası</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Gece güvenlik denetimi: her gece belirlediğin saatte kök klasördeki bütün git depolarını sırayla denetler. Denetlenen, sunucudaki ana branch'in son hâlidir; geliştiricilerin çalışma kopyasına dokunulmaz. Yeni depo kendiliğinden girer, istemediğin depoyu Ayarlar'dan hariç tutarsın.</li>
+              <li data-tur="yeni">Sabah özeti: güvenlik sayfasında her gecenin depo depo risk tablosu, yeni çıkan bulgular, kritik ve yüksek bulgular. Bitiş saatinden sonra yeni depo başlamaz; Kurmay gece yeniden başlarsa kalan depolarla sürer.</li>
+              <li data-tur="yeni">Sabah özeti istersen e-postayla gelir. Ayarlar'da yeni “E-posta sunucusu” kartı: sunucu, güvenlik, gönderen, kullanıcı ve parola; deneme e-postası son gecenin özetini gönderir.</li>
+              <li data-tur="yeni">Kritik ve yüksek bulgular için TFS'te work item açılır. Aynı bulgu için açık bir work item varsa yenisi açılmaz; kapatılan work item'ın bulgusu yeniden çıkarsa yenisi açılır.</li>
+              <li data-tur="yeni">Gece denetimi sesle: “gece denetimini başlat” ya da “durdur”, “gece denetimi ne durumda”, “sabah özetini aç”, “gece denetimini aç” ya da “kapat”, “gece denetimi ayarlarını aç”. Başlatma, durdurma, açma ve kapatma önce sorulur.</li>
+              <li data-tur="iyi">Güvenlik raporu e-postası Outlook masaüstünün yazı ve kutu kurallarına göre yeniden düzenlendi; yapıştırınca daha az bozulur.</li>
+            </ul>
+          </div>
+        </article>
         <article class="surum" id="v0.1.36">
           <div class="sol"><a class="no" href="#v0.1.36">0.1.36</a><time datetime="2026-11-19">19 Kasım 2026</time></div>
           <div class="sag">

@@ -4947,6 +4947,7 @@ $("sesNot").addEventListener("click", (ev) => {
   if (b?.dataset.ses === "evet") onayCevap(true);
   else if (b?.dataset.ses === "hayir") onayCevap(false);
   else if (b?.dataset.ses === "kapat") sesNotKapat();
+  else if (b?.dataset.ses === "gece") { sesNotKapat(); sayfaAc("/guvenlik#gece", "Sabah özeti"); }
   else if (b?.dataset.oturum) { oturumGit(b.dataset.oturum); sesNot(`✓ <b>${esc(sessionsById[b.dataset.oturum]?.name || "")}</b> açıldı`, "tamam"); }
 });
 const tamam = (html, soz) => sesNot("✓ " + html, "tamam", false, soz);
@@ -4964,7 +4965,7 @@ const KOMUTLAR = [
   { re: /^(tekrarla|tekrar (oku|soyle|et)|bir daha (oku|soyle)|ne dedin)$/, yap: () => sonSoz && konusabilir() ? konus(sonSoz) : sesNot("Tekrarlanacak bir şey yok.") },
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
-  { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
+  { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · start nightly audit · morning summary · read · stop talking" },
   { ornek: "araya girmeyi kapat · aç (ben konuşurken sözümü kesebilirsin)", re: /^(konusurken |ben konusurken )?(araya girme(yi)?|soz kesme(yi)?|sozumu kesme(yi)?) (?<is>ac|kapat)$/, yap: (m) => sozKesmeAyarla(m.groups.is === "ac") },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
@@ -5020,6 +5021,13 @@ const KOMUTLAR = [
   { ornek: "commit ve push yap, mesaj …", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:kaydet ve gonder|kaydet gonder|commit\w*(?: (?:et|yap))?(?: ve)? (?:push|pus|gonder)\w*(?: (?:et|yap))?|push\w*(?: (?:et|yap))?)(?: (?:mesaj|mesaji|aciklama|aciklamasi|mesajla|commit mesaji)(?: ile)? (?<msg>.+))?$/d, yap: (m, ham) => gitSesle("kaydet", m, ham) },
   { ornek: "değişiklikleri stash'le · stash pop", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:sakla|stash\w*(?: (?:et|yap|le))?|kenara (?:al|koy))$/d, yap: (m, ham) => gitSesle("sakla", m, ham) },
   { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:saklananlari|sakladiklarimi|saklanan degisiklikleri|stash\w*) (?:geri (?:getir|al|yukle)|pop\w*)|stash pop\w*|pop (?:et|yap))(?: (?:et|yap))?$/d, yap: (m, ham) => gitSesle("geriGetir", m, ham) },
+  { grup: "Gece denetimi" },
+  { ornek: "gece denetimini başlat · durdur", re: /^(gece (guvenlik )?denetimini|gece taramasini) (simdi )?(baslat|calistir)$/, yap: () => geceBaslatSesle() },
+  { re: /^(gece (guvenlik )?denetimini|gece taramasini) (durdur|iptal et)$/, yap: () => geceDurdurSesle() },
+  { ornek: "gece denetimi ne durumda · sabah özetini oku", re: /^(gece (guvenlik )?denetimi(nin)?|gece taramasi(nin)?|sabah ozeti(nin)?) (durumu|ne durumda|nasil|nasil gecti|sonucu|sonuclari)( (ne|nedir|soyle|oku))?$|^(sabah ozetini|gece denetiminin sonucunu|gece denetiminin sonuclarini) (soyle|oku)$/, yap: () => geceDurumSesle() },
+  { ornek: "sabah özetini aç", re: /^(sabah ozeti(ni)?|gece denetimleri(ni)?|gece denetiminin sonuclari(ni)?) (ac|goster)$/, yap: () => sayfaAc("/guvenlik#gece", "Sabah özeti") },
+  { ornek: "gece denetimi ayarlarını aç", re: /^gece (guvenlik )?denetimi(nin)? (ayarlari(ni)?|ayari(ni)?)( ac| goster)?$/, yap: () => sayfaAc("/config#ngCard", "Gece denetimi ayarları") },
+  { ornek: "gece denetimini aç · kapat (her gece çalışsın)", re: /^(gece (guvenlik )?denetimini|gece taramasini) (?<is>ac|kapat|etkinlestir|devre disi birak)$/, yap: (m) => geceAcKapatSesle(/ac|etkin/.test(m.groups.is)) },
   { grup: "Sayfalar ve görünüm" },
   { ornek: "ayarları aç", re: /^(ayarlar(i)?( ac)?|ayarlara (git|gec))$/, yap: () => sayfaAc("/config", "Ayarlar") },
   { ornek: "aç kapat sayfasını aç", re: /^(ac kapat( sayfasi(ni)?)?( ac)?|anahtarlar(i)?( ac)?)$/, yap: () => sayfaAc("/toggles", "Aç / Kapat") },
@@ -5121,6 +5129,10 @@ const EN_KOMUT = [
   [/^(go back|back|close( it| this| the page)?|back to (the )?panel)$/i, "panele dön"],
   [/^((open|show) )?(the )?security (reports?|page)$/i, "güvenlik raporlarını aç"],
   [/^((open|show) )?(the )?release notes$/i, "sürüm notlarını aç"],
+  [/^(start|run) (the )?nightly (security )?(audit|scan)( now)?$/i, "gece denetimini başlat"],
+  [/^(stop|cancel) (the )?nightly (security )?(audit|scan)$/i, "gece denetimini durdur"],
+  [/^((open|show) )?(the )?(morning summary|nightly (audit|scan) results)$/i, "sabah özetini aç"],
+  [/^(nightly (audit|scan) status|how did the nightly (audit|scan) go|(read )?(the )?morning summary)$/i, "gece denetimi ne durumda"],
   [/^(next|go to (the )?next) session$/i, "sonraki oturum"],
   [/^(previous|go to (the )?previous) session$/i, "önceki oturum"],
   [/^(what'?s running|what is running|(show )?running sessions)$/i, "çalışan oturumları göster"],
@@ -5233,6 +5245,8 @@ const KALIPLAR = [
   "git durumu", "tüm repolarda <branch> branch'ine geç", "<repo> reposunda <branch> branch'ine geç", "tüm repoları pull et", "<repo> reposunu pull et",
   "<repo> reposunda <branch> branch'i aç", "commit ve push yap mesaj <mesaj>", "<repo> reposunda commit ve push yap mesaj <mesaj>",
   "değişiklikleri stash'le", "<repo> reposundaki değişiklikleri stash'le", "stash pop",
+  "gece denetimini başlat", "gece denetimini durdur", "gece denetimi ne durumda", "sabah özetini aç",
+  "gece denetimi ayarlarını aç", "gece denetimini aç", "gece denetimini kapat",
 ];
 // ── Sağ sütun kutuları: başlığa tıkla (ya da Enter/Boşluk) → aç/kapa; kapalılar hatırlanır ──
 const KUTU_ANAHTAR = "kurmay-kutular-kapali";
@@ -5716,6 +5730,75 @@ async function tfsModSesle(ac) {
   if (!r.ok) return olmaz("TFS modu değiştirilemedi: " + esc(r.error || "bilinmeyen hata"));
   await loadTfs();
   tamam(ac ? "TFS modu açık <small>“1201 numaralı maddeyi çek” ya da “bana atananları göster” diyebilirsin</small>" : "TFS modu kapalı");
+}
+// ── Gece güvenlik denetimi sesle: başlat / durdur / durum / aç-kapat — Ayarlar'daki kartla ve
+// güvenlik sayfasıyla aynı uçlar (/gece…). Değiştiren her iş önce sorulur.
+async function geceGetir() {
+  try { const d = await (await fetch("/gece")).json(); return d && d.settings ? d : null; } catch { return null; }
+}
+async function gecePost(yol, govde) {
+  try { return await (await fetch(yol, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(govde || {}) })).json(); }
+  catch { return { ok: false, error: "sunucuya ulaşılamadı" }; }
+}
+const geceSaat = (iso) => new Date(iso).toLocaleString("tr-TR", { weekday: "long", hour: "2-digit", minute: "2-digit" });
+const GECE_KOK_YOK = "Önce Ayarlar'da depoların bulunduğu kök klasörü seç. <small>“gece denetimi ayarlarını aç” de</small>";
+async function geceBaslatSesle() {
+  const d = await geceGetir();
+  if (!d) return olmaz("Gece denetimi bu modda kullanılamıyor.");
+  if (d.running) return olmaz("Gece denetimi zaten sürüyor. <small>“gece denetimi ne durumda” de</small>");
+  if (!d.settings.root) return olmaz(GECE_KOK_YOK);
+  onayIste(`Gece güvenlik denetimi şimdi başlasın mı? <b>${esc(d.settings.root)}</b> altındaki depolar sırayla denetlenecek.`, async () => {
+    const r = await gecePost("/gece/baslat");
+    if (!r.ok) return olmaz("Gece denetimi başlatılamadı: " + esc(r.error || "bilinmeyen hata"));
+    tamam("Gece denetimi başladı <small>İlerleme için “sabah özetini aç” de</small>", "Gece denetimi başladı.");
+  });
+}
+async function geceDurdurSesle() {
+  const d = await geceGetir();
+  if (!d?.running) return olmaz("Süren bir gece denetimi yok.");
+  onayIste("Süren gece denetimi durdurulsun mu? Denetlenmekte olan depo kesilir, kalanlar denetlenmez.", async () => {
+    const r = await gecePost("/gece/durdur");
+    if (!r.ok) return olmaz("Durdurulamadı: " + esc(r.error || "bilinmeyen hata"));
+    tamam("Gece denetimi durduruluyor");
+  });
+}
+async function geceAcKapatSesle(ac) {
+  const d = await geceGetir();
+  if (!d) return olmaz("Gece denetimi bu modda kullanılamıyor.");
+  if (d.settings.enabled === ac)
+    return sesNot(ac ? `Gece denetimi zaten açık — her gece başlama saati ${esc(d.settings.time)}.` : "Gece denetimi zaten kapalı.");
+  if (ac && !d.settings.root) return olmaz(GECE_KOK_YOK);
+  onayIste(ac ? `Gece denetimi açılsın mı? Her gece ${esc(d.settings.time)} başlar.` : "Gece denetimi kapatılsın mı? Zamanlanmış denetim yapılmaz.", async () => {
+    const r = await gecePost("/gece", { enabled: ac });
+    if (!r.ok) return olmaz("Değiştirilemedi: " + esc(r.error || "bilinmeyen hata"));
+    const yeni = await geceGetir();
+    tamam(ac ? `Gece denetimi açık${yeni?.next ? ` — sonraki: ${esc(geceSaat(yeni.next))}` : ""}` : "Gece denetimi kapalı");
+  });
+}
+async function geceDurumSesle() {
+  const d = await geceGetir();
+  if (!d) return olmaz("Gece denetimi bu modda kullanılamıyor.");
+  const sonraki = d.settings.enabled ? (d.next ? ` Sonraki denetim ${geceSaat(d.next)}.` : "") : " Zamanlanmış çalışma kapalı.";
+  const r = d.running || d.runs[0];
+  if (!r) return sesNot(esc(`Henüz gece denetimi yapılmadı.${sonraki}`), "bilgi", false, `Henüz gece denetimi yapılmadı.${sonraki}`);
+  const bitti = r.repos.filter((x) => x.status === "done");
+  const top = (sv) => bitti.reduce((a, x) => a + ((x.counts && x.counts[sv]) || 0), 0);
+  let s;
+  if (r.status === "running") s = `Gece denetimi sürüyor: ${bitti.length} / ${r.repos.length || "?"} depo denetlendi.`;
+  else {
+    const gun = new Date(r.startedAt).toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+    const p = [`${gun} gecesi ${bitti.length} / ${r.repos.length} depo denetlendi`];
+    p.push(top("critical") || top("high") ? `${top("critical")} kritik, ${top("high")} yüksek bulgu var` : "kritik ya da yüksek bulgu yok");
+    if (bitti.some((x) => !x.firstAudit)) p.push(`${bitti.reduce((a, x) => a + (x.newFindings || 0), 0)} yeni bulgu`);
+    if (r.workItems?.created) p.push(`${r.workItems.created} work item açıldı`);
+    const dus = r.repos.filter((x) => x.status === "failed").length;
+    if (dus) p.push(`${dus} depo denetlenemedi`);
+    const kal = r.repos.filter((x) => x.status === "timeout").length;
+    if (kal) p.push(`${kal} depoya sıra gelmedi`);
+    s = p.join(", ") + ".";
+  }
+  sesNot(`${esc(s + sonraki)}<span class="ses-dugmeler"><button type="button" class="primary" data-ses="gece">Sabah özetini aç</button>` +
+    `<button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, s + sonraki);
 }
 async function tfsSecSesle(no, pr) {
   const id = sayiOku(no);
