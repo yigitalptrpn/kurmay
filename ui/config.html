@@ -108,6 +108,13 @@ input.sw:disabled { opacity:.5; cursor:default; }
 .rgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px 16px; margin-top:12px; }
 .chkl { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
 .rfoot { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+/* Gece denetimi: bulunan depolar (işaretsiz = hariç) */
+.ngrepos { margin-top:10px; }
+.ngl { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap:4px 14px; max-height:190px; overflow:auto;
+  border:1px solid var(--border); border-radius:var(--md-shape-md); padding:8px 10px; margin-top:4px; }
+.ngl .chkl { min-width:0; }
+.ngl code { font-family:var(--font-mono); font-size:12.5px; overflow-wrap:anywhere; }
+.ngsub { border-top:1px solid var(--border); margin-top:12px; padding-top:10px; }
 #rMsg, #xMsg { font-size:13px; }
 .rmodes { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px; margin-top:4px; }
 .rmode { position:relative; display:block; padding:10px 12px; border:1px solid var(--border); border-radius:var(--md-shape-md); background:var(--bg); cursor:pointer; transition:border-color var(--md-motion), background var(--md-motion); }
@@ -211,6 +218,136 @@ input.sw:disabled { opacity:.5; cursor:default; }
   </div>
   <a href="/guvenlik" class="secc-a">Raporlar →</a>
   <input type="checkbox" role="switch" class="sw" id="secSw" aria-label="Güvenlik denetimi">
+</div>
+
+<!-- Gece güvenlik denetimi: her gece kök klasördeki git depolarını sırayla denetler (sunucudaki ana dalın son
+     hâli, çalışma kopyasına dokunmadan). config.json "nightlyAudit" — Kaydet'e basınca anında geçerli. -->
+<div class="card" id="ngCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/><path d="m15 9 1.5 1.5L19 8"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Gece güvenlik denetimi <span id="ngState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Her gece belirlediğin saatte kök klasördeki bütün git depolarını sırayla denetler. Denetlenen, sunucudaki ana dalın son hâlidir; geliştiricilerin çalışma kopyasına dokunulmaz.
+        Sabah özeti güvenlik sayfasında görünür; istersen e-postayla gelir, kritik ve yüksek bulgular için TFS'te iş öğesi açılır. Kurmay o saatte açık olmalı.</div>
+    </div>
+    <a href="/guvenlik#gece" class="secc-a">Sabah özetleri →</a>
+    <input type="checkbox" role="switch" class="sw" id="ngSw" aria-label="Gece güvenlik denetimi">
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow">
+      <label class="minl" for="ngRoot">Depoların bulunduğu kök klasör</label>
+      <div style="display:flex;gap:6px"><input type="text" id="ngRoot" spellcheck="false" placeholder="D:\work" style="flex:1;min-width:0">
+      <button id="ngBrowse" type="button" style="min-height:auto;padding:4px 12px">📁 Gözat</button></div>
+      <div class="fhint">Altındaki git depoları her gece yeniden bulunur (iki kat derinliğe kadar); yeni depo kendiliğinden girer.</div>
+    </div>
+    <div>
+      <label class="minl" for="ngTime">Başlama saati</label>
+      <input type="time" id="ngTime" value="00:00">
+    </div>
+    <div>
+      <label class="minl" for="ngStop">Bu saatten sonra yeni depo başlamaz</label>
+      <div style="display:flex;gap:10px;align-items:center"><input type="time" id="ngStop" value="07:00">
+      <label class="chkl"><input type="checkbox" id="ngNoStop"> sınır yok</label></div>
+    </div>
+  </div>
+  <div id="ngRepos" class="ngrepos"></div>
+  <div class="ngsub">
+    <div class="gbar">
+      <label class="chkl" style="align-self:center"><input type="checkbox" id="ngWi"> Kritik ve yüksek bulgular için TFS'te iş öğesi aç</label>
+      <div>
+        <label class="minl" for="ngWiType">Tür</label>
+        <input type="text" id="ngWiType" list="ngWiTypes" spellcheck="false" value="Bug" style="width:150px">
+        <datalist id="ngWiTypes"></datalist>
+      </div>
+      <div>
+        <label class="minl" for="ngWiMin">Hangi bulgular</label>
+        <select id="ngWiMin">
+          <option value="high">kritik ve yüksek</option>
+          <option value="critical">yalnızca kritik</option>
+          <option value="medium">kritik, yüksek ve orta</option>
+        </select>
+      </div>
+      <div class="grow">
+        <label class="minl" for="ngWiArea">Alan yolu (isteğe bağlı)</label>
+        <input type="text" id="ngWiArea" spellcheck="false" placeholder="Proje\Güvenlik" style="width:100%">
+      </div>
+    </div>
+    <div class="fhint" id="ngWiHint"></div>
+  </div>
+  <div class="ngsub">
+    <div class="gbar">
+      <label class="chkl" style="align-self:center"><input type="checkbox" id="ngMail"> Sabah özetini e-postayla gönder</label>
+      <div class="grow">
+        <label class="minl" for="ngMailTo">Alıcılar (virgülle ayır)</label>
+        <input type="text" id="ngMailTo" spellcheck="false" placeholder="ekip@kurum.com.tr, guvenlik@kurum.com.tr" style="width:100%">
+      </div>
+      <div class="grow">
+        <label class="minl" for="ngPanel">Kurmay'ın ağdaki adresi (isteğe bağlı)</label>
+        <input type="text" id="ngPanel" spellcheck="false" placeholder="http://10.0.0.5:4141" style="width:100%">
+      </div>
+    </div>
+    <div class="fhint" id="ngMailHint"></div>
+  </div>
+  <div class="rfoot" style="margin-top:12px">
+    <button id="ngRun" type="button">Şimdi çalıştır</button>
+    <button class="primary" id="ngSave" type="button" disabled>Kaydet</button>
+    <span id="ngMsg" role="status"></span>
+  </div>
+</div>
+
+<!-- E-posta sunucusu (SMTP): gece denetiminin sabah özeti. config.json "smtp" (parola hariç) +
+     parola .gizli/smtp.json — Kaydet'e basınca anında geçerli. -->
+<div class="card" id="smCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">E-posta sunucusu <span id="smState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Sabah özetini göndermek için kurumun giden e-posta sunucusu (SMTP). Kimliksiz bir iç aktarıcı ya da kullanıcı adı ve parolası olan bir gönderim hesabı kullanılabilir;
+        yalnızca Windows oturumuyla giriş isteyen sunucular desteklenmez.</div>
+    </div>
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow">
+      <label class="minl" for="smHost">Sunucu</label>
+      <input type="text" id="smHost" spellcheck="false" placeholder="smtp.kurum.com.tr" style="width:100%">
+    </div>
+    <div>
+      <label class="minl" for="smSec">Güvenlik</label>
+      <select id="smSec">
+        <option value="starttls">STARTTLS — düz bağlanıp şifreler (587)</option>
+        <option value="tls">TLS — baştan şifreli (465)</option>
+        <option value="none">şifresiz — yalnızca iç ağ (25)</option>
+      </select>
+    </div>
+    <div>
+      <label class="minl" for="smPort">Bağlantı noktası</label>
+      <input type="number" id="smPort" min="1" max="65535" step="1" inputmode="numeric" placeholder="587" style="width:110px">
+    </div>
+  </div>
+  <div class="gbar" style="margin-top:10px">
+    <div class="grow">
+      <label class="minl" for="smFrom">Gönderen</label>
+      <input type="text" id="smFrom" spellcheck="false" placeholder="Kurmay &lt;kurmay@kurum.com.tr&gt;" style="width:100%">
+    </div>
+    <div class="grow">
+      <label class="minl" for="smUser">Kullanıcı adı (boş = kimliksiz)</label>
+      <input type="text" id="smUser" spellcheck="false" autocomplete="off" style="width:100%">
+    </div>
+    <div class="grow">
+      <label class="minl" for="smPass">Parola</label>
+      <div style="display:flex;gap:6px"><input type="password" id="smPass" autocomplete="new-password" spellcheck="false" style="flex:1;min-width:0">
+      <button id="smPassShow" type="button" title="Göster / gizle" style="min-height:auto;padding:4px 12px">👁</button></div>
+    </div>
+    <label class="chkl" style="align-self:center" title="Yalnızca iç ağdaki, kendinden imzalı sertifikalı sunucu için — bağlantı doğrulanmaz">
+      <input type="checkbox" id="smInsecure"> Sertifikayı doğrulama</label>
+  </div>
+  <div class="fhint" id="smPassHint"></div>
+  <div class="rfoot" style="margin-top:10px">
+    <input type="text" id="smTestTo" spellcheck="false" placeholder="deneme alıcısı" aria-label="Deneme e-postasının alıcısı" style="width:230px">
+    <button id="smTest" type="button">Deneme e-postası gönder</button>
+    <button class="primary" id="smSave" type="button" disabled>Kaydet</button>
+    <span id="smMsg" role="status"></span>
+  </div>
 </div>
 
 <!-- Planı otomatik iletme: Analist'in planı onay kartında beklemeden Saha Timi'ne geçer.
@@ -1399,6 +1536,208 @@ $("tfsSw").addEventListener("change", async ()=>{
   tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde work item seçici çıkar" : "TFS modu kapatıldı", "teal");
 });
 
+// Gece güvenlik denetimi + e-posta sunucusu kartları: GET/POST /gece, /gece/depolar, /gece/turler,
+// POST /gece/baslat, POST /smtp, /smtp/dene. Parola sunucuda .gizli/'de durur — sayfa yalnızca "kayıtlı mı"yı bilir.
+let ngSaved = null;    // son GET /gece
+let ngRepoList = null; // kök klasördeki depolar [{name, excluded}] (önizleme)
+const ngMsg = (html, renk)=> { $("ngMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
+const smMsg = (html, renk)=> { $("smMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
+async function loadNightlyCard(){
+  try { ngSaved = await (await fetch("/gece")).json(); } catch { ngSaved = null; }
+  if (!ngSaved || ngSaved.ok === false || !ngSaved.settings){
+    // Görevli (CLI) modda gece denetimi çalışmaz
+    $("ngCard").style.display = "none"; $("smCard").style.display = "none"; return;
+  }
+  fillNightly(); fillSmtp();
+  if (ngSaved.settings.root) loadNgRepos();
+  if (ngSaved.tfsReady){
+    fetch("/gece/turler").then((r)=> r.json()).then((r)=>{
+      if (r.ok) $("ngWiTypes").innerHTML = r.types.map((t)=> `<option value="${esc(t)}">`).join("");
+    }).catch(()=>{});
+  }
+}
+async function refreshNightly(){
+  try { const v = await (await fetch("/gece")).json(); if (v && v.settings) ngSaved = v; } catch { /* eski görünüm kalsın */ }
+}
+function fillNightly(){
+  const s = ngSaved.settings;
+  $("ngSw").checked = s.enabled;
+  $("ngRoot").value = s.root;
+  $("ngTime").value = s.time;
+  $("ngNoStop").checked = s.stopAt === null;
+  $("ngStop").value = s.stopAt || "07:00";
+  $("ngWi").checked = s.workItems.enabled;
+  $("ngWiType").value = s.workItems.type;
+  $("ngWiMin").value = s.workItems.minSeverity;
+  $("ngWiArea").value = s.workItems.areaPath;
+  $("ngMail").checked = s.email.enabled;
+  $("ngMailTo").value = s.email.to.join(", ");
+  $("ngPanel").value = s.email.panelUrl;
+  if (!$("smTestTo").value) $("smTestTo").value = s.email.to[0] || "";
+  renderNightly();
+}
+const ngExcluded = ()=> ngRepoList ? ngRepoList.filter((r)=> r.excluded).map((r)=> r.name) : (ngSaved?.settings.exclude || []);
+const ngForm = ()=> ({
+  root: $("ngRoot").value.trim(),
+  time: $("ngTime").value || "00:00",
+  stopAt: $("ngNoStop").checked ? null : ($("ngStop").value || "07:00"),
+  exclude: ngExcluded(),
+  workItems: { enabled: $("ngWi").checked, type: $("ngWiType").value.trim() || "Bug", minSeverity: $("ngWiMin").value, areaPath: $("ngWiArea").value.trim() },
+  email: { enabled: $("ngMail").checked, to: $("ngMailTo").value.split(/[,;\s]+/).map((x)=> x.trim()).filter(Boolean), panelUrl: $("ngPanel").value.trim().replace(/\/+$/, "") },
+});
+function ngDirty(){
+  if (!ngSaved) return false;
+  const s = ngSaved.settings, f = ngForm();
+  const norm = (o)=> JSON.stringify({ root:o.root, time:o.time, stopAt:o.stopAt, exclude:[...o.exclude].sort(), workItems:o.workItems, email:o.email });
+  return norm(f) !== norm(s);
+}
+const ngWhen = (iso)=> new Date(iso).toLocaleString("tr-TR", { weekday:"long", day:"numeric", month:"long", hour:"2-digit", minute:"2-digit" });
+function renderNightly(){
+  if (!ngSaved) return;
+  const s = ngSaved.settings, run = ngSaved.running;
+  const done = run ? run.repos.filter((r)=> !["waiting","preparing","running"].includes(r.status)).length : 0;
+  $("ngState").textContent = run ? `sürüyor — ${done}/${run.repos.length || "?"} depo`
+    : s.enabled ? (ngSaved.next ? `açık · sonraki: ${ngWhen(ngSaved.next)}` : "açık") : "kapalı";
+  $("ngState").className = "secc-st" + (s.enabled || run ? " on" : "");
+  $("ngStop").disabled = $("ngNoStop").checked;
+  for (const id of ["ngWiType","ngWiMin","ngWiArea"]) $(id).disabled = !$("ngWi").checked;
+  $("ngMailTo").disabled = !$("ngMail").checked;
+  $("ngWiHint").innerHTML = !ngSaved.tfsReady
+    ? "TFS modu ayarlı değil — iş öğesi açmak için yukarıdaki TFS modu kartından sunucu, proje ve erişim anahtarını gir."
+    : "Aynı bulgu için açık bir iş öğesi varsa yenisi açılmaz; kapatılan iş öğesinin bulgusu yeniden çıkarsa yenisi açılır. İş öğelerine <code>kurmay-guvenlik</code> etiketi konur.";
+  $("ngMailHint").innerHTML = (ngSaved.smtp.ready ? "" : `<span style="color:var(--amber)">⚠ E-posta sunucusu ayarlı değil — aşağıdaki kartı doldur.</span> `) +
+    "Adres verilirse e-postadaki ve iş öğesindeki rapor bağlantıları Kurmay'a gider.";
+  $("ngRun").disabled = !!run;
+  $("ngRun").textContent = run ? "Sürüyor…" : "Şimdi çalıştır";
+  $("ngSave").disabled = !ngDirty();
+}
+async function loadNgRepos(){
+  const root = $("ngRoot").value.trim();
+  if (!root){ ngRepoList = null; $("ngRepos").innerHTML = ""; renderNightly(); return; }
+  $("ngRepos").innerHTML = `<div class="fhint">Depolar aranıyor…</div>`;
+  let r;
+  try { r = await (await fetch("/gece/depolar?kok=" + encodeURIComponent(root))).json(); } catch { r = { ok:false, error:"sunucuya ulaşılamadı" }; }
+  if (!r.ok){ ngRepoList = null; $("ngRepos").innerHTML = `<div class="fhint" style="color:var(--red)">✗ ${esc(r.error || "okunamadı")}</div>`; renderNightly(); return; }
+  const ex = new Set((ngSaved.settings.exclude || []).map((x)=> x.toLowerCase()));
+  ngRepoList = r.repos.map((x)=> ({ name: x.name, excluded: ex.has(x.name.toLowerCase()) }));
+  drawNgRepos(); renderNightly();
+}
+function drawNgRepos(){
+  const list = ngRepoList || [];
+  const on = list.filter((x)=> !x.excluded).length;
+  $("ngRepos").innerHTML = list.length
+    ? `<div class="minl">${on} / ${list.length} depo denetlenecek — işaretini kaldırdığın depo denetlenmez</div>
+       <div class="ngl">${list.map((x, i)=> `<label class="chkl"><input type="checkbox" data-ng="${i}"${x.excluded ? "" : " checked"}> <code>${esc(x.name)}</code></label>`).join("")}</div>`
+    : `<div class="fhint" style="color:var(--amber)">⚠ Bu klasörde git deposu bulunamadı.</div>`;
+}
+$("ngRepos").addEventListener("change", (e)=>{
+  const i = e.target.dataset ? e.target.dataset.ng : undefined;
+  if (i === undefined || !ngRepoList) return;
+  ngRepoList[Number(i)].excluded = !e.target.checked;
+  drawNgRepos(); ngMsg(""); renderNightly();
+});
+for (const id of ["ngRoot","ngMailTo","ngPanel","ngWiType","ngWiArea"]){
+  $(id).addEventListener("input", ()=>{ ngMsg(""); renderNightly(); });
+  $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("ngSave").disabled){ e.preventDefault(); $("ngSave").click(); } });
+}
+for (const id of ["ngTime","ngStop","ngNoStop","ngWi","ngWiMin","ngMail"]) $(id).addEventListener("change", ()=>{ ngMsg(""); renderNightly(); });
+$("ngRoot").addEventListener("change", loadNgRepos);
+$("ngBrowse").addEventListener("click", async ()=>{
+  const d = await openDirPicker($("ngRoot").value.trim() || ngSaved?.defaultRoot || "");
+  if (!d) return;
+  $("ngRoot").value = d;
+  ngMsg(""); await loadNgRepos();
+});
+/** Kayıttan sonra sayfadaki kopya da güncellenir — sonradan üstteki Kaydet'e basılırsa ayar silinmesin */
+function syncNgCfg(raw){ if (!cfg) return; if (raw) cfg.nightlyAudit = raw; else delete cfg.nightlyAudit; }
+function syncSmCfg(raw){ if (!cfg) return; if (raw) cfg.smtp = raw; else delete cfg.smtp; }
+async function ngSave(extra){
+  const r = await tfsPost("/gece", { ...ngForm(), ...(extra || {}) });
+  if (!r.ok){ ngMsg(`✗ ${esc(r.error || "kaydedilemedi")}`, "red"); renderNightly(); return false; }
+  syncNgCfg(r.config);
+  await refreshNightly();
+  fillNightly();
+  return true;
+}
+$("ngSave").addEventListener("click", async ()=>{
+  $("ngSave").disabled = true;
+  if (await ngSave()) ngMsg(`✓ Kaydedildi — hemen geçerli${ngSaved.settings.enabled ? "" : ". Gece çalışması için sağdaki anahtarı aç"}`, "teal");
+});
+$("ngSw").addEventListener("change", async ()=>{
+  const want = $("ngSw").checked;
+  $("ngSw").disabled = true;
+  const ok = await ngSave({ enabled: want });
+  $("ngSw").disabled = false;
+  if (!ok){ $("ngSw").checked = !want; return; }
+  ngMsg(want ? `✓ Açıldı — sonraki denetim: ${ngSaved.next ? ngWhen(ngSaved.next) : "—"}` : "Gece denetimi kapatıldı", "teal");
+});
+$("ngRun").addEventListener("click", async ()=>{
+  $("ngRun").disabled = true;
+  if (ngDirty() && !(await ngSave())) { $("ngRun").disabled = false; return; }
+  const r = await tfsPost("/gece/baslat", {});
+  if (!r.ok){ ngMsg(`✗ ${esc(r.error || "başlatılamadı")}`, "red"); $("ngRun").disabled = false; return; }
+  await refreshNightly(); renderNightly();
+  ngMsg(`✓ Başladı — ilerlemeyi <a href="/guvenlik#${esc(r.run.id)}">güvenlik sayfasında</a> izleyebilirsin`, "teal");
+});
+// Koşu sürerken durum yazısı tazelenir (form alanlarına dokunmadan)
+setInterval(async ()=>{ if (!ngSaved || !document.getElementById("ngCard").offsetParent) return; if (!ngSaved.running) return; await refreshNightly(); renderNightly(); }, 5000);
+
+function fillSmtp(){
+  const s = ngSaved.smtp;
+  $("smHost").value = s.host; $("smPort").value = s.port ?? ""; $("smSec").value = s.security;
+  $("smUser").value = s.user; $("smFrom").value = s.from; $("smInsecure").checked = s.insecureTls; $("smPass").value = "";
+  renderSmtp();
+}
+const smForm = ()=> ({ host: $("smHost").value.trim(), port: $("smPort").value ? Number($("smPort").value) : null, security: $("smSec").value,
+  user: $("smUser").value.trim(), from: $("smFrom").value.trim(), insecureTls: $("smInsecure").checked });
+function smDirty(){
+  const s = ngSaved.smtp, f = smForm();
+  return f.host !== s.host || f.port !== (s.port ?? null) || f.security !== s.security || f.user !== s.user || f.from !== s.from ||
+    f.insecureTls !== s.insecureTls || !!$("smPass").value;
+}
+function renderSmtp(){
+  if (!ngSaved) return;
+  const s = ngSaved.smtp;
+  $("smState").textContent = s.ready ? "ayarlı" : "ayarlanmadı";
+  $("smState").className = "secc-st" + (s.ready ? " on" : "");
+  $("smPort").placeholder = { starttls:"587", tls:"465", none:"25" }[$("smSec").value] || "587";
+  $("smPass").disabled = s.passwordSource === "ortam" || !$("smUser").value.trim();
+  $("smPassHint").textContent = s.passwordSource === "ortam"
+    ? `Parola ${s.passwordEnv} ortam değişkeninden geliyor — buradan değiştirilemez.`
+    : !$("smUser").value.trim() ? "Kullanıcı adı boşsa kimliksiz gönderilir (iç aktarıcı); parola gerekmez."
+    : s.hasPassword ? "Kayıtlı parola var — değiştirmek için yenisini yaz. Ayar dosyasına ve tarayıcıya gitmez (çalışma klasöründe .gizli/ altında)."
+    : "Parola ayar dosyasına yazılmaz; çalışma klasöründe .gizli/ altında saklanır.";
+  $("smSave").disabled = !smDirty();
+}
+for (const id of ["smHost","smPort","smUser","smFrom","smPass"]){
+  $(id).addEventListener("input", ()=>{ smMsg(""); renderSmtp(); });
+  $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("smSave").disabled){ e.preventDefault(); $("smSave").click(); } });
+}
+for (const id of ["smSec","smInsecure"]) $(id).addEventListener("change", ()=>{ smMsg(""); renderSmtp(); });
+$("smPassShow").addEventListener("click", ()=>{ $("smPass").type = $("smPass").type === "password" ? "text" : "password"; });
+async function smSave(){
+  const f = smForm(), pass = $("smPass").value;
+  const r = await tfsPost("/smtp", { ...f, ...(pass ? { password: pass } : {}) });
+  if (!r.ok){ smMsg(`✗ ${esc(r.error || "kaydedilemedi")}`, "red"); renderSmtp(); return false; }
+  ngSaved.smtp = r.view; syncSmCfg(r.config); fillSmtp(); renderNightly();
+  return true;
+}
+$("smSave").addEventListener("click", async ()=>{
+  $("smSave").disabled = true;
+  if (await smSave()) smMsg("✓ Kaydedildi — hemen geçerli", "teal");
+});
+$("smTest").addEventListener("click", async ()=>{
+  const to = $("smTestTo").value.trim();
+  if (!to){ smMsg("Deneme e-postasının gideceği adresi yaz", "amber"); $("smTestTo").focus(); return; }
+  $("smTest").disabled = true;
+  if (smDirty() && !(await smSave())){ $("smTest").disabled = false; return; }
+  smMsg("Gönderiliyor…");
+  const r = await tfsPost("/smtp/dene", { to });
+  $("smTest").disabled = false;
+  if (!r.ok) return smMsg(`✗ ${esc(r.error || "gönderilemedi")}`, "red");
+  smMsg(`✓ Gönderildi${r.summary ? " — son gece denetiminin sabah özeti" : ""} · sunucunun yanıtı: ${esc(r.response || "")}`, "teal");
+});
+
 function render(){
   drawGraph();
   renderSecCard();
@@ -1903,6 +2242,7 @@ async function load(){
   loadSpeechCard();
   loadAssistantCard();
   loadTfsCard();
+  loadNightlyCard();
   fillResilience();
   fillContext();
   loadContextModels();

@@ -111,7 +111,7 @@ const agents = new Map<string, https.Agent>();
  * eski Node'da yalnızca Node'un listesi + dosya. DİKKAT: "ca" verilince varsayılan liste ve
  * NODE_EXTRA_CA_CERTS yok sayılır — bu yüzden "default" (ikisini de içerir) listeye katılır.
  */
-function trustedRoots(caFile?: string): string[] | undefined {
+export function trustedRoots(caFile?: string): string[] | undefined {
   const getCA = (tls as unknown as { getCACertificates?: (t: string) => string[] }).getCACertificates;
   let pem: string | undefined;
   if (caFile) {
@@ -1345,4 +1345,96 @@ export async function writeWorkItem(
     }
     throw e;
   }
+}
+
+// ── İş öğesi açma (gece güvenlik denetimi) ────────────────────────────────
+
+/** Projedeki iş öğesi türleri (Ayarlar'daki seçim için; test/inceleme gibi araç türleri hariç) */
+export async function getWorkItemTypes(c: TfsConnection, signal?: AbortSignal): Promise<string[]> {
+  const v = await serverVersion(c, signal);
+  const r = await call<{ value?: Array<{ name?: string; isDisabled?: boolean }> }>(
+    c,
+    "GET",
+    `/${encodeURIComponent(c.project)}/_apis/wit/workitemtypes`,
+    { query: { "api-version": ver(v) }, what: "iş öğesi türleri", signal },
+  );
+  const hidden =
+    /^(Code Review (Request|Response)|Feedback (Request|Response)|Shared (Steps|Parameter)|Test (Case|Plan|Suite))$/i;
+  return (r?.value ?? [])
+    .filter((t) => t.name && !t.isDisabled && !hidden.test(t.name))
+    .map((t) => t.name!)
+    .sort((a, b) => a.localeCompare(b, "tr"));
+}
+
+export interface TfsTaggedItem {
+  id: number;
+  title: string;
+  state: string;
+  category?: string;
+  tags: string[];
+  url: string;
+}
+
+/** Etiketi taşıyan iş öğeleri (projede, en son değişen önce, en fazla `top`) — durum kategorisiyle */
+export async function taggedWorkItems(
+  c: TfsConnection,
+  tag: string,
+  top = 1000,
+  signal?: AbortSignal,
+): Promise<TfsTaggedItem[]> {
+  const ids = await wiql(c, `[System.Tags] CONTAINS ${wiqlString(tag)}`, top, signal);
+  const sum = await getSummaries(c, ids, signal, ["System.Tags"]);
+  const cats = new Map<string, Map<string, string>>();
+  const out: TfsTaggedItem[] = [];
+  for (const id of ids) {
+    const s = sum.get(id);
+    if (!s) continue;
+    if (!cats.has(s.type)) {
+      const states = await getStates(c, s.type, signal).catch(() => [] as TfsState[]);
+      cats.set(s.type, new Map(states.filter((x) => x.category).map((x) => [x.name, x.category!])));
+    }
+    const category = cats.get(s.type)?.get(s.state) ?? guessCategory(s.state);
+    out.push({
+      id,
+      title: s.title,
+      state: s.state,
+      ...(category ? { category } : {}),
+      tags: String(s.fields["System.Tags"] ?? "")
+        .split(";")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      url: `${c.url}/${encodeURIComponent(c.project)}/_workitems/edit/${id}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * Yeni iş öğesi açar: alanlar (System.Title, System.Tags…) tek istekte. Türde olmayan bir alan
+ * verilirse sunucu 400 döner — çağıran sadeleştirip yeniden deneyebilir.
+ */
+export async function createWorkItem(
+  c: TfsConnection,
+  type: string,
+  fields: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<{ id: number; url: string }> {
+  const v = await serverVersion(c, signal);
+  const r = await call<RawWorkItem>(
+    c,
+    "POST",
+    `/${encodeURIComponent(c.project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
+    {
+      query: { "api-version": ver(v) },
+      json: Object.entries(fields).map(([k, value]) => ({ op: "add", path: `/fields/${k}`, value })),
+      patch: true,
+      what: `"${type}" iş öğesi açma`,
+      signal,
+    },
+  );
+  if (!r || typeof r.id !== "number") throw new TfsError(`"${type}" iş öğesi açıldı ama numarası okunamadı`);
+  return {
+    id: r.id,
+    url: r._links?.html?.href ?? `${c.url}/${encodeURIComponent(c.project)}/_workitems/edit/${r.id}`,
+  };
 }

@@ -1,9 +1,20 @@
 import fs from "node:fs";
+import { deleteSession } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import { EventBus } from "./events.js";
 import { runAgent } from "./runAgent.js";
 import { countBySeverity, toReport, type SecurityReportStore } from "./securityReport.js";
 import type { AgentDefinition, AppConfig } from "./types.js";
+import type { SecurityReport } from "./securityReport.js";
+
+/** Gece denetiminin seçenekleri: ajan geçici kopyada çalışır, raporda deponun kendi yolu görünür */
+export interface AuditStartOptions {
+  /** Raporda ve sayfada görünen dizin (ajan `dir`'de çalışır) */
+  displayDir?: string;
+  /** Rapor başlığı (varsayılan "Kod tabanı denetimi: <klasör>") */
+  task?: string;
+  nightly?: NonNullable<SecurityReport["nightly"]>;
+}
 
 /**
  * Bağımsız güvenlik denetimi — /guvenlik sayfasından başlatılır: denetçi ajan akışın
@@ -25,7 +36,10 @@ export interface AuditStep {
 
 export interface AuditJob {
   id: string;
+  /** Denetlenen proje (raporda ve sayfada görünen) */
   dir: string;
+  /** Gece denetiminin koşu kimliği — iş o koşunun parçası (dizin geçici kopyadır) */
+  nightly?: string;
   model?: string;
   startedAt: string;
   finishedAt?: string;
@@ -68,6 +82,7 @@ export const STANDALONE_AUDIT_PROMPT = [
 export class SecurityAuditRunner {
   private jobs: AuditJob[] = [];
   private controllers = new Map<string, AbortController>();
+  private done = new Map<string, Promise<void>>();
 
   constructor(private readonly o: { store: SecurityReportStore; runsDir: string }) {}
 
@@ -85,14 +100,15 @@ export class SecurityAuditRunner {
   }
 
   /** Denetimi arka planda başlatır; iş hemen döner, ilerleme list() ile izlenir */
-  start(dir: string, agent: AgentDefinition, cfg: AppConfig): AuditJob {
+  start(dir: string, agent: AgentDefinition, cfg: AppConfig, opts: AuditStartOptions = {}): AuditJob {
     const now = new Date();
     const job: AuditJob = {
       id: `denetim-${now
         .toISOString()
         .replace(/[-:.TZ]/g, "")
         .slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`,
-      dir,
+      dir: opts.displayDir ?? dir,
+      ...(opts.nightly ? { nightly: opts.nightly.run } : {}),
       model: agent.config.model ?? cfg.model,
       startedAt: now.toISOString(),
       status: "running",
@@ -107,8 +123,16 @@ export class SecurityAuditRunner {
     }
     const ac = new AbortController();
     this.controllers.set(job.id, ac);
-    void this.run(job, agent, cfg, ac);
+    const p = this.run(job, dir, agent, cfg, ac, opts).finally(() => this.done.delete(job.id));
+    this.done.set(job.id, p);
     return job;
+  }
+
+  /** İş bitene kadar bekler (gece denetimi depoları sırayla denetler); işin son hâli */
+  async wait(id: string): Promise<AuditJob | undefined> {
+    await this.done.get(id);
+    const j = this.jobs.find((x) => x.id === id);
+    return j ? { ...j, steps: [...j.steps] } : undefined;
   }
 
   /** Süren denetimi durdurur; durdurulacak iş yoksa false */
@@ -121,12 +145,19 @@ export class SecurityAuditRunner {
     return true;
   }
 
-  private async run(job: AuditJob, agent: AgentDefinition, cfg: AppConfig, ac: AbortController): Promise<void> {
+  private async run(
+    job: AuditJob,
+    workDir: string,
+    agent: AgentDefinition,
+    cfg: AppConfig,
+    ac: AbortController,
+    opts: AuditStartOptions,
+  ): Promise<void> {
     const bus = new EventBus();
     const log = path.join(this.o.runsDir, `${job.id}.jsonl`);
     const read = new Set<string>();
     const rel = (f: string) => {
-      const r = path.relative(job.dir, path.resolve(job.dir, f));
+      const r = path.relative(workDir, path.resolve(workDir, f));
       return r && !r.startsWith("..") && !path.isAbsolute(r) ? r.split(path.sep).join("/") : f;
     };
     bus.subscribe((e) => {
@@ -157,28 +188,31 @@ export class SecurityAuditRunner {
       }
     });
 
-    console.log(`\n🛡  Bağımsız güvenlik denetimi başladı: ${job.dir}`);
+    console.log(`\n🛡  ${opts.nightly ? "Gece" : "Bağımsız"} güvenlik denetimi başladı: ${job.dir}`);
     try {
-      const r = await runAgent(agent, STANDALONE_AUDIT_PROMPT, job.dir, cfg, bus, ac);
+      const r = await runAgent(agent, STANDALONE_AUDIT_PROMPT, workDir, cfg, bus, ac);
       const report = toReport(
         {
-          task: `Kod tabanı denetimi: ${path.basename(job.dir) || job.dir}`,
+          task: opts.task ?? `Kod tabanı denetimi: ${path.basename(job.dir) || job.dir}`,
           targetDir: job.dir,
           model: job.model,
           files: [...read].sort(),
           standalone: true,
+          ...(opts.nightly ? { nightly: opts.nightly } : {}),
         },
         r.structured,
         r.text,
       );
       this.o.store.save(report);
+      // Gece denetiminin konuşması bir daha sürdürülmez: her gece depo başına yeni kayıt birikmesin
+      if (opts.nightly && r.sessionId) void deleteSession(r.sessionId).catch(() => undefined);
       job.reportId = report.id;
       job.risk = report.risk;
       job.findings = report.findings.length;
       job.status = "finished";
       const c = countBySeverity(report.findings);
       console.log(
-        `🛡  Bağımsız denetim bitti (${job.dir}): ${report.findings.length} bulgu (kritik ${c.critical}, yüksek ${c.high}), risk ${report.risk ?? "?"}`,
+        `🛡  ${opts.nightly ? "Gece" : "Bağımsız"} denetimi bitti (${job.dir}): ${report.findings.length} bulgu (kritik ${c.critical}, yüksek ${c.high}), risk ${report.risk ?? "?"}`,
       );
     } catch (err) {
       job.status = ac.signal.aborted ? "cancelled" : "failed";

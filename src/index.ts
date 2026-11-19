@@ -8,7 +8,7 @@ import { Assistant, type AssistantReply, type AssistantRequest, type McpBridge }
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
-import { disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
+import { CLOCK_RE, disabledMcpServers, EMAIL_RE, isEffort, loadAppConfig, modelMissing } from "./config.js";
 import { callMcpTool, listMcpTools, mcpStatus, probeMcp, type McpToolInfo } from "./mcpStatus.js";
 import { assistantLimits, assistantMcpEnabled } from "./assistantLimits.js";
 import { compactPercent, contextInfo } from "./context.js";
@@ -28,6 +28,7 @@ import {
   forgetServer,
   getStates,
   getSummaries,
+  getWorkItemTypes,
   linkArtifact,
   myWorkItems,
   probe as probeTfs,
@@ -37,7 +38,15 @@ import {
   writeWorkItem,
 } from "./tfs.js";
 import { textToTfsHtml } from "./tfsHtml.js";
-import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
+import {
+  readSecret,
+  readTfsToken,
+  tfsConnection,
+  tfsReady,
+  tfsView,
+  writeSecret,
+  writeTfsToken,
+} from "./tfsSettings.js";
 import {
   generalConnection,
   probeSpeech,
@@ -91,10 +100,16 @@ import {
   type AgentDefinition,
   type AppConfig,
   type McpServerJson,
+  type NightlyAuditConfig,
+  type SmtpConfig,
   type SpeechConfig,
   type TfsConfig,
   type WorkflowConfig,
 } from "./types.js";
+import { findRepos, NightlyAuditor, stopAtOf, type NightlyRun } from "./nightlyAudit.js";
+import { NightlyWorkItems } from "./nightlyTfs.js";
+import { renderNightlyEmail } from "./reportEmail.js";
+import { buildMessage, sendMail, type SmtpOptions } from "./smtp.js";
 
 /** Koşunun TFS iş öğesi (workflow_started.workItem) */
 type RunWorkItem = NonNullable<Extract<OrchestratorEvent, { type: "workflow_started" }>["workItem"]>;
@@ -1590,6 +1605,314 @@ async function main() {
     return [...new Set(dirs.filter((d) => d && dirOk(d)))].slice(0, 10);
   };
 
+  // ── Gece güvenlik denetimi (Ayarlar → Gece güvenlik denetimi; /guvenlik sayfasında sabah özeti) ──
+  const SMTP_ENV = "KURMAY_SMTP_PAROLA";
+  const smtpPassword = () => process.env[SMTP_ENV]?.trim() || readSecret(configRoot, "smtp");
+  const smtpView = () => {
+    const sm: SmtpConfig = cfg.smtp ?? {};
+    return {
+      host: sm.host ?? "",
+      port: sm.port ?? null,
+      security: sm.security ?? "starttls",
+      user: sm.user ?? "",
+      from: sm.from ?? "",
+      insecureTls: !!sm.insecureTls,
+      hasPassword: !!smtpPassword(),
+      /** ortam | dosya — ortamdaysa Ayarlar'dan değiştirilemez */
+      passwordSource: process.env[SMTP_ENV]?.trim() ? "ortam" : readSecret(configRoot, "smtp") ? "dosya" : "",
+      passwordEnv: SMTP_ENV,
+      ready: !!(sm.host && sm.from),
+    };
+  };
+  const smtpOptions = (): SmtpOptions => {
+    const sm: SmtpConfig = cfg.smtp ?? {};
+    if (!sm.host || !sm.from)
+      throw new Error("e-posta sunucusu ayarlanmadı — Ayarlar → E-posta sunucusu kartından gir");
+    const security = sm.security ?? "starttls";
+    return {
+      host: sm.host,
+      port: sm.port ?? (security === "tls" ? 465 : security === "none" ? 25 : 587),
+      security,
+      ...(sm.user ? { user: sm.user, password: smtpPassword() ?? "" } : {}),
+      ...(sm.insecureTls ? { insecureTls: true } : {}),
+    };
+  };
+  const panelVersion = (() => {
+    try {
+      const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+      return String(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version ?? "");
+    } catch {
+      return "";
+    }
+  })();
+  /** config.json'a yazar ve doğrular; geçersizse eski içerik geri konur. Dönen: doğrulanmış ayar */
+  const patchConfig = (mut: (parsed: AppConfig) => void): AppConfig => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      mut(parsed);
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      return loadAppConfig(resolvedConfigPath);
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev);
+      throw e;
+    }
+  };
+  const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  // Koşu başına iş öğesi işleri (açık iş öğeleri koşu başında bir kez sorulur)
+  const nightlyWorkItems = new Map<string, NightlyWorkItems>();
+  const sendNightly = async (
+    runId: string | undefined,
+    to: string[],
+    deneme: boolean,
+  ): Promise<{ response: string; accepted: string[]; rejected: string[] }> => {
+    const sm = cfg.smtp ?? {};
+    const opts = smtpOptions();
+    const run: NightlyRun | undefined = runId ? nightly.get(runId) : undefined;
+    const e = cfg.nightlyAudit?.email;
+    const mail = run
+      ? renderNightlyEmail(run, { ...(e?.panelUrl ? { panelUrl: e.panelUrl } : {}), version: panelVersion })
+      : {
+          subject: "[Kurmay] Deneme e-postası",
+          text: "Kurmay'ın e-posta ayarları çalışıyor. Gece güvenlik denetiminin sabah özeti bu adrese gelecek.",
+          html:
+            "<div style=\"font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:#0f172a\">" +
+            "Kurmay'ın e-posta ayarları çalışıyor. Gece güvenlik denetiminin sabah özeti bu adrese gelecek.</div>",
+        };
+    const subject = deneme && run ? `[Deneme] ${mail.subject}` : mail.subject;
+    const from = sm.from!;
+    return sendMail(opts, { from, to, data: buildMessage({ from, to, subject, text: mail.text, html: mail.html }) });
+  };
+  const nightly: NightlyAuditor = new NightlyAuditor({
+    cfg: () => cfg,
+    runsDir,
+    audits,
+    store: securityReports,
+    agent: () => auditAgent(),
+    modelMissing: () => modelMissing(cfg),
+    snapshot: () => snapshotConfig(cfg),
+    slotFree: () => runtimes.busy().length + audits.running() < maxParallel(),
+    // Depoyu güncellerken TFS sunucusundaki uzak depoya anahtarla (TFS modu kapalı olsa da ayarlıysa)
+    tfsConn: () => tfsConnection(cfg.tfs, configRoot),
+    workItems: async (run, repo, report) => {
+      const w = cfg.nightlyAudit?.workItems;
+      if (!w?.enabled) return;
+      const conn = tfsReady(cfg.tfs, configRoot) ? tfsConnection(cfg.tfs, configRoot) : undefined;
+      if (!conn?.project)
+        throw new Error("TFS modu hazır değil — Ayarlar → TFS modu kartından sunucu, proje ve anahtarı gir");
+      let h = nightlyWorkItems.get(run.id);
+      if (!h) {
+        nightlyWorkItems.clear();
+        h = new NightlyWorkItems({ conn, settings: w, panelUrl: cfg.nightlyAudit?.email?.panelUrl });
+        nightlyWorkItems.set(run.id, h);
+      }
+      await h.handle(run, repo, report);
+    },
+    email: async (run) => {
+      const e = cfg.nightlyAudit?.email;
+      if (!e?.enabled || !e.to?.length) return undefined;
+      const r = await sendNightly(run.id, e.to, false);
+      return {
+        ok: true,
+        to: r.accepted,
+        ...(r.rejected.length ? { error: `kabul edilmeyen alıcı: ${r.rejected.join(", ")}` } : {}),
+      };
+    },
+  });
+
+  const nightlyApi = {
+    view: () => {
+      const n: NightlyAuditConfig = cfg.nightlyAudit ?? {};
+      return {
+        settings: {
+          enabled: !!n.enabled,
+          root: n.root ?? "",
+          time: n.time ?? "00:00",
+          stopAt: stopAtOf(n),
+          exclude: n.exclude ?? [],
+          workItems: {
+            enabled: !!n.workItems?.enabled,
+            type: n.workItems?.type ?? "Bug",
+            minSeverity: n.workItems?.minSeverity ?? "high",
+            areaPath: n.workItems?.areaPath ?? "",
+          },
+          email: { enabled: !!n.email?.enabled, to: n.email?.to ?? [], panelUrl: n.email?.panelUrl ?? "" },
+        },
+        smtp: smtpView(),
+        tfsReady: tfsReady(cfg.tfs, configRoot),
+        next: nightly.next() ?? null,
+        running: nightly.running() ?? null,
+        runs: nightly.list(20),
+        defaultRoot: cwd,
+      };
+    },
+    repos: (root?: string) => {
+      const r = (root ?? cfg.nightlyAudit?.root ?? "").trim();
+      if (!r) return { ok: false, error: "kök klasör seçilmedi" };
+      const abs = path.resolve(r);
+      if (!dirOk(abs)) return { ok: false, error: `klasör bulunamadı: ${abs}` };
+      const ex = new Set((cfg.nightlyAudit?.exclude ?? []).map((x) => x.toLowerCase()));
+      return {
+        ok: true,
+        root: abs,
+        repos: findRepos(abs).map((x) => ({ ...x, excluded: ex.has(x.name.toLowerCase()) })),
+      };
+    },
+    save: (input: Record<string, unknown>) => {
+      try {
+        const c = patchConfig((parsed) => {
+          const n: NightlyAuditConfig = { ...(parsed.nightlyAudit ?? {}) };
+          const str = (v: unknown) => (typeof v === "string" ? v.trim() : undefined);
+          if (typeof input.enabled === "boolean") {
+            if (input.enabled) n.enabled = true;
+            else delete n.enabled;
+          }
+          const root = str(input.root);
+          if (root !== undefined) {
+            if (root) n.root = root;
+            else delete n.root;
+          }
+          const time = str(input.time);
+          if (time !== undefined) {
+            if (!CLOCK_RE.test(time)) throw new Error("başlama saati SS:DD biçiminde olmalı");
+            if (time === "00:00") delete n.time;
+            else n.time = time;
+          }
+          if (input.stopAt === null || input.stopAt === "") n.stopAt = null;
+          else if (typeof input.stopAt === "string") {
+            if (!CLOCK_RE.test(input.stopAt)) throw new Error("bitiş saati SS:DD biçiminde olmalı");
+            if (input.stopAt === "07:00") delete n.stopAt;
+            else n.stopAt = input.stopAt;
+          }
+          if (Array.isArray(input.exclude)) {
+            const ex = [...new Set(input.exclude.map(str).filter((x): x is string => !!x))];
+            if (ex.length) n.exclude = ex;
+            else delete n.exclude;
+          }
+          const wi = input.workItems as Record<string, unknown> | undefined;
+          if (wi && typeof wi === "object") {
+            const w = { ...(n.workItems ?? {}) };
+            if (typeof wi.enabled === "boolean") {
+              if (wi.enabled) w.enabled = true;
+              else delete w.enabled;
+            }
+            const type = str(wi.type);
+            if (type !== undefined) {
+              if (type && type !== "Bug") w.type = type;
+              else delete w.type;
+            }
+            if (typeof wi.minSeverity === "string") {
+              if (wi.minSeverity === "high") delete w.minSeverity;
+              else w.minSeverity = wi.minSeverity as NonNullable<NightlyAuditConfig["workItems"]>["minSeverity"];
+            }
+            const area = str(wi.areaPath);
+            if (area !== undefined) {
+              if (area) w.areaPath = area;
+              else delete w.areaPath;
+            }
+            if (Object.keys(w).length) n.workItems = w;
+            else delete n.workItems;
+          }
+          const em = input.email as Record<string, unknown> | undefined;
+          if (em && typeof em === "object") {
+            const e = { ...(n.email ?? {}) };
+            if (typeof em.enabled === "boolean") {
+              if (em.enabled) e.enabled = true;
+              else delete e.enabled;
+            }
+            const to = Array.isArray(em.to)
+              ? em.to.map(str)
+              : typeof em.to === "string"
+                ? em.to.split(/[,;\s]+/)
+                : undefined;
+            if (to) {
+              const list = [...new Set(to.filter((x): x is string => !!x))];
+              const bad = list.filter((x) => !EMAIL_RE.test(x));
+              if (bad.length) throw new Error(`geçersiz e-posta adresi: ${bad.join(", ")}`);
+              if (list.length) e.to = list;
+              else delete e.to;
+            }
+            const panelUrl = str(em.panelUrl);
+            if (panelUrl !== undefined) {
+              if (panelUrl) e.panelUrl = panelUrl.replace(/\/+$/, "");
+              else delete e.panelUrl;
+            }
+            if (Object.keys(e).length) n.email = e;
+            else delete n.email;
+          }
+          if (n.enabled && !n.root) throw new Error("Gece denetimini açmak için depoların bulunduğu kök klasörü seç");
+          if (n.root && !dirOk(path.resolve(n.root))) throw new Error(`kök klasör bulunamadı: ${n.root}`);
+          if (n.email?.enabled && !n.email.to?.length)
+            throw new Error("Sabah özeti e-postası için en az bir alıcı gir");
+          if (n.workItems?.enabled && !tfsReady(cfg.tfs, configRoot))
+            throw new Error("TFS iş öğesi açmak için önce TFS modunu ayarla (Ayarlar → TFS modu)");
+          if (Object.keys(n).length) parsed.nightlyAudit = n;
+          else delete parsed.nightlyAudit;
+        });
+        // Zamanlama açıldıysa ya da saati değiştiyse: ilk koşu ayarlanan saatte (geçmiş pencere telafi edilmez)
+        const plan = (n?: NightlyAuditConfig) => (n?.enabled ? `${n.time ?? "00:00"}|${stopAtOf(n)}` : "");
+        if (plan(c.nightlyAudit) && plan(c.nightlyAudit) !== plan(cfg.nightlyAudit)) nightly.scheduleChanged();
+        cfg.nightlyAudit = c.nightlyAudit; // yeni nesne — süren koşu kendi okuduğunu kullanır
+        return { ok: true, config: c.nightlyAudit ?? null };
+      } catch (e) {
+        return { ok: false, error: errText(e) };
+      }
+    },
+    run: () => nightly.runNow(),
+    cancel: () => nightly.cancel(),
+    get: (id: string) => nightly.get(id),
+    types: async () => {
+      const c = tfsConnection(cfg.tfs, configRoot);
+      if (!c?.project) return { ok: false, error: "TFS modu ayarlanmadı" };
+      try {
+        return { ok: true, types: await getWorkItemTypes(c) };
+      } catch (e) {
+        return { ok: false, error: errText(e) };
+      }
+    },
+    smtpSave: (input: Record<string, unknown>) => {
+      try {
+        const c = patchConfig((parsed) => {
+          const sm: SmtpConfig = { ...(parsed.smtp ?? {}) };
+          for (const k of ["host", "user", "from"] as const) {
+            if (typeof input[k] !== "string") continue;
+            const v = (input[k] as string).trim();
+            if (v) sm[k] = v;
+            else delete sm[k];
+          }
+          if (input.port === null || input.port === "") delete sm.port;
+          else if (input.port !== undefined) sm.port = Number(input.port);
+          if (typeof input.security === "string") sm.security = input.security as SmtpConfig["security"];
+          if (typeof input.insecureTls === "boolean") {
+            if (input.insecureTls) sm.insecureTls = true;
+            else delete sm.insecureTls;
+          }
+          if (Object.keys(sm).length) parsed.smtp = sm;
+          else delete parsed.smtp;
+        });
+        // Parola: dolu = kaydet, null = sil, yok = olduğu gibi (config.json'a hiç yazılmaz)
+        if (typeof input.password === "string" && input.password) writeSecret(configRoot, "smtp", input.password);
+        else if (input.password === null) writeSecret(configRoot, "smtp", null);
+        cfg.smtp = c.smtp;
+        return { ok: true, view: smtpView(), config: c.smtp ?? null };
+      } catch (e) {
+        return { ok: false, error: errText(e) };
+      }
+    },
+    /** Deneme e-postası: son koşunun sabah özeti (yoksa kısa bir ileti) — şablon Outlook'ta görülsün */
+    smtpTest: async (input: Record<string, unknown>) => {
+      const to = typeof input.to === "string" ? input.to.trim() : "";
+      if (!EMAIL_RE.test(to)) return { ok: false, error: "geçerli bir alıcı adresi gir" };
+      try {
+        const last = nightly.list(1)[0];
+        const r = await sendNightly(last?.id, [to], true);
+        return { ok: true, response: r.response, summary: !!last };
+      } catch (e) {
+        return { ok: false, error: errText(e) };
+      }
+    },
+  };
+
   const addSecurityAudit = (): { ok: boolean; error?: string; key?: string; node?: unknown; attachedTo?: string } => {
     const nodes = cfg.workflow.agents;
     const disk = () => JSON.parse(fs.readFileSync(resolvedConfigPath, "utf8")) as AppConfig;
@@ -2074,6 +2397,7 @@ async function main() {
             listAudits: () => ({ jobs: audits.list(), dirs: auditDirs(), defaultDir: cwd, model: cfg.model ?? "" }),
             startAudit,
             cancelAudit: (id: string) => audits.cancel(id),
+            nightly: nightlyApi,
           }),
       getSecurityReport: (id) => securityReports.get(id),
       // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
@@ -2265,6 +2589,12 @@ async function main() {
 
   // Sunucu modu: görevler panelden gelir, her biri kendi oturumunda bağımsız koşar
   console.log(`⏳ Görev bekleniyor — panelden girebilirsin (aynı anda en fazla ${maxParallel()}).`);
+  nightly.start();
+  const n0 = cfg.nightlyAudit;
+  if (n0?.enabled && n0.root)
+    console.log(
+      `🌙 Gece güvenlik denetimi açık: her gece ${n0.time ?? "00:00"} (${n0.root}) — sonraki: ${fmtDate(Date.parse(nightly.next()!))}`,
+    );
 }
 
 main().catch((err) => {
