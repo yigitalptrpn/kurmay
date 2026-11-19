@@ -4328,7 +4328,8 @@ async function mikrofonAc() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     throw new Error("Tarayıcı mikrofonu açmıyor: mikrofon yalnızca panel localhost ya da https adresiyle açıldığında çalışır.");
   }
-  try { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  // Yankı kesme + gürültü bastırma açıkça istenir: Kurmay'ın kendi sesi ve oda uğultusu mikrofona daha az karışsın
+  try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
   catch (e) {
     throw new Error(e?.name === "NotAllowedError" ? "Mikrofon izni verilmedi — tarayıcının adres çubuğundaki izinlerden aç."
       : e?.name === "NotFoundError" ? "Bu bilgisayarda mikrofon bulunamadı." : "Mikrofon açılamadı: " + (e?.message || e));
@@ -4964,6 +4965,7 @@ const KOMUTLAR = [
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
   { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
+  { ornek: "araya girmeyi kapat · aç (ben konuşurken sözümü kesebilirsin)", re: /^(konusurken |ben konusurken )?(araya girme(yi)?|soz kesme(yi)?|sozumu kesme(yi)?) (?<is>ac|kapat)$/, yap: (m) => sozKesmeAyarla(m.groups.is === "ac") },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
     const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
@@ -5210,7 +5212,7 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
 let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
 const KALIPLAR = [
   "yardım", "asistan ekranını aç", "asistan ekranını kapat", "komutları göster", "komutları gizle",
-  "asistan ayarlarını aç", "asistan için <eklenti adı> eklentisini aç", "asistan için <eklenti adı> eklentisini kapat",
+  "araya girmeyi kapat", "araya girmeyi aç", "asistan ayarlarını aç", "asistan için <eklenti adı> eklentisini aç", "asistan için <eklenti adı> eklentisini kapat",
   "asistanın <okuma|yazma|silme|komut> iznini kapat", "asistanın <okuma|yazma|silme|komut> iznini aç",
   "asistan her işte sorsun", "asistan değişiklikte sorsun", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
   "<numara> numaralı work item'ı çek", "<numara> numaralı pull request'i aç", "bana atananları göster",
@@ -6133,7 +6135,31 @@ let dinleme = null;
 // Görev yazdırırken cümleler daha uzun ve düşünerek söylenir: duraklama daha uzun beklenir
 // (kısa parçada ses tanıma belirgin şekilde kötü — bağlamı yok)
 const DINLEME_GOREV_SUSKU_MS = 1800;
-const DINLEME_SUSKU_MS = 800, DINLEME_EN_KISA_MS = 400, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
+const DINLEME_SUSKU_MS = 800, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
+// Konuşma sesi ayrımı: yalnızca ses yüksekliği yetmiyor — nefes, ağız şapırtısı, tıkırtı da eşiği geçiyordu,
+// "duyuyorum… anlaşılıyor…" diye bekletip boş kaydı sunucuya yolluyordu. Artık bir karenin "konuşma" sayılması için
+// (1) eşiği geçmesi, (2) sıfır geçiş sıklığının düşük olması gerekir (ünlüler düzenli, nefes/hışırtı gürültü gibi
+// çok sık sıfırdan geçer); konuşma ancak art arda ~150 ms böyle kareyle başlar (şapırtı tek kare sürer);
+// cümlede toplam ~250 ms konuşma yoksa kayıt sunucuya gitmeden atılır. Sessizlik süresini yalnızca konuşma
+// kareleri sıfırlar — aradaki nefes cümlenin bitişini geciktirmez.
+const KONUSMA_ZCR_HZ = 3200, DINLEME_BASLA_MS = 150, DINLEME_EN_AZ_KONUSMA_MS = 250;
+// Söz kesme: Kurmay konuşurken sen belirgin biçimde (~0,3 sn) konuşursan susar ve seni dinler.
+// Eşik kendi sesinin mikrofona yansıyan düzeyinin üstündedir; hoparlör çok açıksa kendi kendini kesebilir —
+// "araya girmeyi kapat" ile kapanır.
+const SOZ_KESME_MS = 300;
+let sozKesme = true;
+try { sozKesme = localStorage.getItem("kurmay-soz-kesme") !== "0"; } catch {}
+function sozKesmeAyarla(ac) {
+  sozKesme = ac;
+  try { localStorage.setItem("kurmay-soz-kesme", ac ? "1" : "0"); } catch {}
+  tamam(ac ? "Ben konuşurken araya girebilirsin — konuşmaya başlayınca susarım" : "Araya girme kapalı — ben konuşurken söylediklerin dinlenmez (Ctrl+Boşluk yine susturur)");
+}
+/** Saniyedeki sıfır geçişi: ünlülerde düşük, nefes / hışırtı / tıkırtıda yüksek */
+function sifirGecisHz(kare, sr) {
+  let c = 0;
+  for (let i = 1; i < kare.length; i++) if ((kare[i - 1] < 0) !== (kare[i] < 0)) c++;
+  return (c * sr) / kare.length;
+}
 // ── Uyandırma kelimesi (isteğe bağlı, VARSAYILAN KAPALI): açıksa dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
 // Odadaki konuşma komut sanılmasın. "Kurmay" denince 15 sn uyanık kalır: o sırada (ve her komuttan sonra
 // yine 15 sn) cümleler "Kurmay"sız da işlenir. Görev / not yazımında ve soru açıkken gerekmez.
@@ -6180,7 +6206,8 @@ async function dinlemeAc() {
   const sr = ctx.sampleRate;
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(4096, 1, 1);
-  const d = dinleme = { ctx, stream, src, proc, sr, taban: 0.01, konusuyor: false, susku: 0, parca: [], onceki: [], kuyruk: Promise.resolve(), son: Date.now(), bekleyen: 0 };
+  const d = dinleme = { ctx, stream, src, proc, sr, taban: 0.01, konusuyor: false, susku: 0, parca: [], onceki: [], kuyruk: Promise.resolve(), son: Date.now(), bekleyen: 0,
+    basMs: 0, konusmaMs: 0, kesMs: 0, eko: 0, ekoNo: -1 };
   proc.onaudioprocess = (e) => {
     e.outputBuffer.getChannelData(0).fill(0);
     if (dinleme !== d) return;
@@ -6207,32 +6234,49 @@ function dinlemeKapat() {
   sesNot("Dinleme kapatıldı.");
 }
 function dinlemeIsle(d, kare) {
-  // Kurmay konuşuyorsa (ve biraz sonrasında) duyulan kendi sesidir — komut sanılmasın
+  const duzey = sesDuzeyi(kare), kareMs = (kare.length / d.sr) * 1000;
+  const konusmaMi = (e) => duzey > e && sifirGecisHz(kare, d.sr) < KONUSMA_ZCR_HZ;
+  const esik = Math.max(0.012, d.taban * 2.5);
+  // Kurmay konuşuyorsa (ve biraz sonrasında) duyulan çoğunlukla kendi sesidir — komut sanılmasın.
+  // Ama sen belirgin biçimde konuşursan (söz kesme) susar ve seni dinlemeye başlar.
   if (sentezde || Date.now() - sentezBitti < 500) {
     if (d.konusuyor) { d.konusuyor = false; d.parca = []; }
-    d.onceki = [];
+    d.onceki.push(kare);
+    while (d.onceki.length * kareMs > 400) d.onceki.shift();
+    if (!sentezde || !sozKesme) { d.kesMs = 0; return; }
+    if (d.ekoNo !== sentezNo) { d.ekoNo = sentezNo; d.eko = duzey; d.kesMs = 0; } // yeni konuşma: yankı düzeyini baştan ölç
+    const kesEsik = Math.max(0.04, d.taban * 5, d.eko * 2.5);
+    d.kesMs = konusmaMi(kesEsik) ? d.kesMs + kareMs : 0;
+    d.eko = d.eko * 0.95 + duzey * 0.05;
+    if (d.kesMs < SOZ_KESME_MS) return;
+    sus();
+    sentezBitti = 0; // susma anından sonraki 0,5 sn'lik yankı payı burada gerekmez: konuşan sensin
+    d.konusuyor = true; d.susku = 0; d.konusmaMs = d.kesMs; d.kesMs = 0; d.basMs = 0;
+    d.parca = d.onceki.splice(0); d.son = Date.now();
+    if (!d.bekleyen) dinlemeDurum("duyuyorum…");
     return;
   }
-  const duzey = sesDuzeyi(kare), kareMs = (kare.length / d.sr) * 1000;
-  const esik = Math.max(0.012, d.taban * 2.5);
   if (!d.konusuyor) {
     // Gürültü tabanını yavaşça izle; konuşmanın başı kaçmasın diye son ~0,4 sn saklanır
     d.taban = d.taban * 0.95 + duzey * 0.05;
     d.onceki.push(kare);
     while (d.onceki.length * kareMs > 400) d.onceki.shift();
-    if (duzey > esik) {
-      d.konusuyor = true; d.susku = 0; d.parca = d.onceki.splice(0); d.son = Date.now();
+    d.basMs = konusmaMi(esik) ? (d.basMs || 0) + kareMs : 0;
+    if (d.basMs >= DINLEME_BASLA_MS) {
+      d.konusuyor = true; d.susku = 0; d.konusmaMs = d.basMs; d.basMs = 0;
+      d.parca = d.onceki.splice(0); d.son = Date.now();
       if (!d.bekleyen) dinlemeDurum("duyuyorum…");
     }
     return;
   }
   d.parca.push(kare);
-  d.susku = duzey > esik ? 0 : d.susku + kareMs;
-  if (duzey > esik) d.son = Date.now();
+  if (konusmaMi(esik)) { d.konusmaMs += kareMs; d.susku = 0; d.son = Date.now(); }
+  else d.susku += kareMs;
   const sure = d.parca.reduce((t, k) => t + k.length, 0) / d.sr;
   if (d.susku >= (gorevYazimi || yorumYazimi ? DINLEME_GOREV_SUSKU_MS : DINLEME_SUSKU_MS) || sure >= DINLEME_EN_UZUN_SN) {
     const parca = d.parca; d.parca = []; d.konusuyor = false;
-    if ((sure - d.susku / 1000) * 1000 >= DINLEME_EN_KISA_MS) dinlemeGonder(d, parca);
+    // Toplam konuşma çok kısaysa (öksürük, nefes, tek kelimelik gürültü) sunucuya gönderilmez
+    if (d.konusmaMs >= DINLEME_EN_AZ_KONUSMA_MS) dinlemeGonder(d, parca);
     else if (!d.bekleyen) dinlemeDurum(beklemeYazisi());
   }
 }
