@@ -227,8 +227,8 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/><path d="m15 9 1.5 1.5L19 8"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">Gece güvenlik denetimi <span id="ngState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Her gece belirlediğin saatte kök klasördeki bütün git depolarını sırayla denetler. Denetlenen, sunucudaki ana dalın son hâlidir; geliştiricilerin çalışma kopyasına dokunulmaz.
-        Sabah özeti güvenlik sayfasında görünür; istersen e-postayla gelir, kritik ve yüksek bulgular için TFS'te iş öğesi açılır. Kurmay o saatte açık olmalı.</div>
+      <div class="fhint" style="font-size:12.5px">Her gece belirlediğin saatte kök klasördeki bütün git depolarını sırayla denetler. Denetlenen, sunucudaki ana branch'in son hâlidir; geliştiricilerin çalışma kopyasına dokunulmaz.
+        Sabah özeti güvenlik sayfasında görünür; istersen e-postayla gelir, kritik ve yüksek bulgular için TFS'te work item açılır. Kurmay o saatte açık olmalı.</div>
     </div>
     <a href="/guvenlik#gece" class="secc-a">Sabah özetleri →</a>
     <input type="checkbox" role="switch" class="sw" id="ngSw" aria-label="Gece güvenlik denetimi">
@@ -253,7 +253,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
   <div id="ngRepos" class="ngrepos"></div>
   <div class="ngsub">
     <div class="gbar">
-      <label class="chkl" style="align-self:center"><input type="checkbox" id="ngWi"> Kritik ve yüksek bulgular için TFS'te iş öğesi aç</label>
+      <label class="chkl" style="align-self:center"><input type="checkbox" id="ngWi"> Kritik ve yüksek bulgular için TFS'te work item aç</label>
       <div>
         <label class="minl" for="ngWiType">Tür</label>
         <input type="text" id="ngWiType" list="ngWiTypes" spellcheck="false" value="Bug" style="width:150px">
@@ -1603,10 +1603,10 @@ function renderNightly(){
   for (const id of ["ngWiType","ngWiMin","ngWiArea"]) $(id).disabled = !$("ngWi").checked;
   $("ngMailTo").disabled = !$("ngMail").checked;
   $("ngWiHint").innerHTML = !ngSaved.tfsReady
-    ? "TFS modu ayarlı değil — iş öğesi açmak için yukarıdaki TFS modu kartından sunucu, proje ve erişim anahtarını gir."
-    : "Aynı bulgu için açık bir iş öğesi varsa yenisi açılmaz; kapatılan iş öğesinin bulgusu yeniden çıkarsa yenisi açılır. İş öğelerine <code>kurmay-guvenlik</code> etiketi konur.";
+    ? "TFS modu ayarlı değil — work item açmak için yukarıdaki TFS modu kartından sunucu, proje ve erişim anahtarını gir."
+    : "Aynı bulgu için açık bir work item varsa yenisi açılmaz; kapatılan work item'ın bulgusu yeniden çıkarsa yenisi açılır. Work item'lara <code>kurmay-guvenlik</code> etiketi konur.";
   $("ngMailHint").innerHTML = (ngSaved.smtp.ready ? "" : `<span style="color:var(--amber)">⚠ E-posta sunucusu ayarlı değil — aşağıdaki kartı doldur.</span> `) +
-    "Adres verilirse e-postadaki ve iş öğesindeki rapor bağlantıları Kurmay'a gider.";
+    "Adres verilirse e-postadaki ve work item'daki rapor bağlantıları Kurmay'a gider.";
   $("ngRun").disabled = !!run;
   $("ngRun").textContent = run ? "Sürüyor…" : "Şimdi çalıştır";
   $("ngSave").disabled = !ngDirty();

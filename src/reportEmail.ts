@@ -377,7 +377,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
     run.status === "failed" && !done.length
       ? `[Kurmay] Gece güvenlik denetimi yapılamadı — ${gun}`
       : `[Kurmay] Gece güvenlik denetimi — ${gun}: ${sayim} (${done.length}/${repos.length} depo)`;
-  const onIzleme = `${done.length}/${repos.length} depo denetlendi · ${sayim}${yeni ? ` · ${yeni} yeni bulgu` : ""}${run.workItems?.created ? ` · ${run.workItems.created} yeni iş öğesi` : ""}`;
+  const onIzleme = `${done.length}/${repos.length} depo denetlendi · ${sayim}${yeni ? ` · ${yeni} yeni bulgu` : ""}${run.workItems?.created ? ` · ${run.workItems.created} yeni work item` : ""}`;
   const kalan = repos.filter((r) => r.status === "timeout").length;
   const dusen = repos.filter((r) => r.status === "failed").length;
   const hap =
@@ -436,7 +436,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
             ? `Dünden bu yana <b>${yeni}</b> yeni bulgu`
             : "İlk gece denetimi — karşılaştırma yarından itibaren",
           run.workItems
-            ? `TFS: <b>${run.workItems.created}</b> yeni iş öğesi açıldı, ${run.workItems.existing} bulgunun iş öğesi zaten açık`
+            ? `TFS: <b>${run.workItems.created}</b> yeni work item açıldı, ${run.workItems.existing} bulgunun work item'ı zaten açık`
             : "",
         ]
           .filter(Boolean)
@@ -520,7 +520,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
         (wi
           ? kutu(
               `padding-top:4px;font:12px/1.5 ${SANS};color:${R.govde}`,
-              `${wi} — ${h.workItem!.existing ? "iş öğesi zaten açık" : "bu gece açıldı"}`,
+              `${wi} — ${h.workItem!.existing ? "work item zaten açık" : "bu gece açıldı"}`,
             )
           : ""),
       R.panel,
@@ -555,7 +555,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
         `<b>${esc(r.name)}</b> sunucudan güncellenemedi, eldeki son hâl denetlendi: ${esc(kisalt(r.fetchError, 200))}`,
       );
     if (r.workItemError)
-      sorun.push(`<b>${esc(r.name)}</b> için TFS iş öğesi açılamadı: ${esc(kisalt(r.workItemError, 300))}`);
+      sorun.push(`<b>${esc(r.name)}</b> için TFS work item açılamadı: ${esc(kisalt(r.workItemError, 300))}`);
   }
   if (kalan)
     sorun.push(
@@ -597,7 +597,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
       ${tablo}
       ${sorunlar}
       ${dugme}`,
-    alt: `// Kurmay gece güvenlik denetimi — her gece kök klasördeki depoların ana dalı denetlenir${o.version ? ` · v${esc(o.version)}` : ""}<br>
+    alt: `// Kurmay gece güvenlik denetimi — her gece kök klasördeki depoların ana branch'i denetlenir${o.version ? ` · v${esc(o.version)}` : ""}<br>
         // Bulgular yapay zekâ incelemesine dayanır; düzeltmeden önce bir geliştirici tarafından doğrulanmalıdır.`,
   });
 
@@ -610,7 +610,7 @@ export function renderNightlyEmail(run: NightlyRun, o: { panelUrl?: string; vers
     rk ? `EN YÜKSEK RİSK: ${buyuk(rk.ad)}` : "",
     done.length ? `BULGULAR: ${ORDER.map((s) => `${SEV[s].ad} ${top[s]}`).join(" · ")}` : "",
     done.some((r) => !r.firstAudit) ? `Dünden bu yana ${yeni} yeni bulgu` : "",
-    run.workItems ? `TFS: ${run.workItems.created} yeni iş öğesi, ${run.workItems.existing} zaten açık` : "",
+    run.workItems ? `TFS: ${run.workItems.created} yeni work item, ${run.workItems.existing} zaten açık` : "",
   ].filter((x, i) => x || i < 5);
   if (vurgular.length) {
     T.push("", `KRİTİK VE YÜKSEK BULGULAR (${vurgular.length})`);

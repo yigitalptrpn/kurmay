@@ -702,7 +702,7 @@ function nightSettingsHtml() {
     ? `Her gece başlama saati <b>${esc(st.time)}</b>${st.stopAt ? ` · yeni depo başlatma sınırı <b>${esc(st.stopAt)}</b>` : ""} · kök: <b>${esc(st.root || "—")}</b>`
     : `Zamanlanmış çalışma <b>kapalı</b>${st.root ? ` · kök: <b>${esc(st.root)}</b>` : ""}`];
   if (st.enabled && night.next) parts.push(`sonraki: <b>${esc(nWhen(night.next))}</b>`);
-  parts.push(st.workItems.enabled ? `TFS iş öğesi: <b>açık</b> (${st.workItems.minSeverity === "critical" ? "yalnızca kritik" : st.workItems.minSeverity === "medium" ? "kritik, yüksek, orta" : "kritik ve yüksek"})` : "TFS iş öğesi: kapalı");
+  parts.push(st.workItems.enabled ? `TFS work item: <b>açık</b> (${st.workItems.minSeverity === "critical" ? "yalnızca kritik" : st.workItems.minSeverity === "medium" ? "kritik, yüksek, orta" : "kritik ve yüksek"})` : "TFS work item: kapalı");
   parts.push(st.email.enabled ? `e-posta: <b>${esc(st.email.to.join(", "))}</b>` : "e-posta: kapalı");
   return `<div class="ngset">${parts.join(" · ")} — <a href="/config">Ayarlar</a></div>`;
 }
@@ -769,7 +769,7 @@ function renderNight(id) {
         <div><b style="color:${sum("critical") ? "var(--crit)" : "inherit"}">${sum("critical")}</b><span>kritik</span></div>
         <div><b style="color:${sum("high") ? "var(--high)" : "inherit"}">${sum("high")}</b><span>yüksek</span></div>
         <div><b>${ilk ? "—" : yeni}</b><span>${ilk ? "ilk denetim" : "yeni bulgu"}</span></div>
-        <div><b>${wi ? wi.created : "—"}</b><span>${wi ? `iş öğesi açıldı${wi.existing ? ` · ${wi.existing} zaten açık` : ""}` : "TFS iş öğesi"}</span></div>
+        <div><b>${wi ? wi.created : "—"}</b><span>${wi ? `work item açıldı${wi.existing ? ` · ${wi.existing} zaten açık` : ""}` : "TFS work item"}</span></div>
       </div>
       ${r.error ? `<div class="note bad">${icon(I.alert)}<span>${esc(r.error)}</span></div>` : ""}
       ${mail}
@@ -792,7 +792,7 @@ function renderNight(id) {
     const sub = [ref, x.fetchError ? `<i class="warn" title="${esc(x.fetchError)}">sunucudan güncellenemedi — eldeki son hâl</i>` : "", x.status === "failed" && x.error ? `<i class="warn" title="${esc(x.error)}">${esc(x.error.slice(0, 120))}</i>` : ""].filter(Boolean).join(" · ");
     const wis = (x.workItems || []).length
       ? `<div class="wis">${icon(I.ticket)} TFS: ${x.workItems.map((w) => `${wiLink(w)}${w.existing ? " (zaten açık)" : ""}`).join(", ")}</div>`
-      : x.workItemError ? `<div class="wis" style="color:#ff9ea1">${icon(I.alert)} TFS iş öğesi açılamadı: ${esc(x.workItemError)}</div>` : "";
+      : x.workItemError ? `<div class="wis" style="color:#ff9ea1">${icon(I.alert)} TFS work item açılamadı: ${esc(x.workItemError)}</div>` : "";
     return `<div class="nrepo">
       <div class="nm"><b>${esc(x.name)}</b>${sub ? `<span>${sub}</span>` : ""}</div>
       <div class="st">${stHtml}</div>

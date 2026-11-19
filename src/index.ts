@@ -1845,7 +1845,7 @@ async function main() {
           if (n.email?.enabled && !n.email.to?.length)
             throw new Error("Sabah özeti e-postası için en az bir alıcı gir");
           if (n.workItems?.enabled && !tfsReady(cfg.tfs, configRoot))
-            throw new Error("TFS iş öğesi açmak için önce TFS modunu ayarla (Ayarlar → TFS modu)");
+            throw new Error("TFS work item açmak için önce TFS modunu ayarla (Ayarlar → TFS modu)");
           if (Object.keys(n).length) parsed.nightlyAudit = n;
           else delete parsed.nightlyAudit;
         });

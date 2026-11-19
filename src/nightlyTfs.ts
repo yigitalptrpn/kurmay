@@ -54,8 +54,8 @@ export function findingHtml(
       (repo.ref ? ` Denetlenen: ${repo.ref}${repo.commit ? ` (${repo.commit})` : ""}.` : "") +
       (o.reportUrl ? ` [Raporu aç](${o.reportUrl})` : ""),
     "",
-    "*Bu kayıt Kurmay'ın gece güvenlik denetimiyle kendiliğinden açıldı. Bulgu yapay zekâ incelemesine dayanır; " +
-      "düzeltmeden önce doğrulayın. Bu kayıt açık kaldıkça aynı bulgu için yenisi açılmaz.*",
+    "*Bu work item Kurmay'ın gece güvenlik denetimiyle kendiliğinden açıldı. Bulgu yapay zekâ incelemesine dayanır; " +
+      "düzeltmeden önce doğrulayın. Bu work item açık kaldıkça aynı bulgu için yenisi açılmaz.*",
     "",
     "*Arz ederim. — Kurmay*",
   ];
