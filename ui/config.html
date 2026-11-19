@@ -58,6 +58,22 @@ input[type=text], input[type=number], select { width:100%; }
 .secc-st { font:600 11.5px/1 var(--font-ui); padding:4px 9px; border-radius:999px; background:var(--bg); color:var(--muted); }
 .secc-st.on { background:var(--tealBg); color:var(--teal); }
 .secc-a { font-size:13px; white-space:nowrap; }
+/* Asistan kartı */
+.as-ek { border:1px solid var(--border); border-radius:var(--md-shape-sm, 6px); padding:8px 10px; margin-top:6px; }
+.as-ek-ust { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.as-ek-ust b { overflow-wrap:anywhere; }
+.as-ek-ust small { color:var(--muted); font-size:12px; }
+.as-ek-ust select { margin-left:auto; width:auto; max-width:100%; }
+.as-ek-alt { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-top:8px; font-size:13px; }
+.as-ek-alt[hidden] { display:none; }
+.as-ek-alt label { display:flex; gap:6px; align-items:center; cursor:pointer; }
+.as-ek-alt details { flex:1; min-width:200px; }
+.as-ek-alt summary { cursor:pointer; }
+.as-araclar { display:flex; flex-direction:column; gap:4px; margin-top:6px; max-height:240px; overflow:auto; }
+.as-araclar small { color:var(--muted); }
+.as-izin > div { min-width:150px; flex:1; }
+.as-izin select { width:100%; }
+.minl small { font-size:10.5px; }
 .parset { display:flex; align-items:center; gap:8px; }
 .parset input { width:84px; }
 #parMsg { flex-basis:100%; font-size:12.5px; }
@@ -298,11 +314,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <label class="minl" for="spCmd">Komutları anlayan model</label>
     <select id="spCmd" style="width:100%"><option value="">kapalı — yalnızca sabit komut listesi</option></select>
     <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider. Model cümleyi anlayıp listedeki bir komutu seçer (“bugün bana ne iş var” → bana atananları göster) ya da kısa bir cevap verir (“günaydın”). Onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
-    <label class="spPc" style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
-      <input type="checkbox" id="spPc" style="margin-top:3px">
-      <span><b>Bilgisayarda iş yapabilsin</b>
-        <span class="fhint" style="display:block;font-size:12.5px">Model senin yerine klasörü Dosya Gezgini'nde açar, dosyaları listeler, okur, yazar, taşır (“bulunduğun dizini aç”, “buraya notlar diye klasör aç”). <b>Silme, komut çalıştırma ve program açma önce sorulur</b>; Windows'ta silinen Geri Dönüşüm Kutusu'na gider. Yalnızca panel bu bilgisayardan (<code>localhost</code>) açıldığında çalışır. Model yanlış dosyayı seçebilir — soruları okuyarak onayla.</span></span>
-    </label>
+    <div class="fhint" style="font-size:12.5px;margin-top:8px">Modelin bilgisayarda ve eklentilerde ne yapabileceği aşağıdaki <a href="#asCard">Asistan</a> kartında.</div>
     <label style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
       <input type="checkbox" id="spFix" style="margin-top:3px">
       <span><b>Görev metnini modelle düzelt</b>
@@ -332,6 +344,47 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <button class="primary" id="spSave" type="button" disabled>Kaydet</button>
     <span id="spMsg"></span>
   </div>
+</div>
+
+<!-- Asistan: sesli asistanın (komutları anlayan model) sınırları — config.json "assistant". Değişiklik anında geçerli. -->
+<div class="card" id="asCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Asistan</div>
+      <div class="fhint" style="font-size:12.5px">Sesli ya da yazılı komut listede bulunamayınca cümle “komutları anlayan model”e gider; model adım adım iş yapar. Burada neleri kullanabileceğini ve ne zaman sorması gerektiğini seçersin. Bilgisayar işleri ve eklentiler yalnızca panel bu bilgisayardan (<code>localhost</code>) açıldığında çalışır. Değişiklik hemen geçerli olur.</div>
+    </div>
+  </div>
+  <div class="minl" style="margin-top:12px">Eklentiler</div>
+  <div id="asMcp"></div>
+  <div class="minl" style="margin-top:12px">Bilgisayarda</div>
+  <div class="gbar as-izin">
+    <div><label class="minl" for="asRead">Okuma <small>(klasör aç, listele, oku)</small></label>
+      <select id="asRead"><option value="false">kapalı</option><option value="true">açık</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asWrite">Yazma <small>(yaz, klasör oluştur, taşı)</small></label>
+      <select id="asWrite"><option value="false">kapalı</option><option value="true">açık</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asDelete">Silme</label>
+      <select id="asDelete"><option value="false">kapalı</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asRun">Komut ve program çalıştırma</label>
+      <select id="asRun"><option value="false">kapalı</option><option value="ask">önce sor</option></select></div>
+  </div>
+  <div class="fhint" style="font-size:12.5px">Silme ve komut çalıştırma hiçbir zaman sormadan yapılmaz. Windows'ta silinen Geri Dönüşüm Kutusu'na gider.</div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow"><label class="minl" for="asConfirm">Eklenti araçlarında ne zaman sorsun</label>
+      <select id="asConfirm" style="width:100%">
+        <option value="degisiklik">değişiklik yapan araçlarda (salt okunur olmayan)</option>
+        <option value="hep">her işte (eklenti ve bilgisayar)</option>
+        <option value="hic">hiç sorma (silme ve komut yine sorulur)</option>
+      </select></div>
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div><label class="minl" for="asSteps">En fazla adım</label><input type="number" id="asSteps" min="1" max="20" style="width:90px"></div>
+    <div><label class="minl" for="asMcpSn">Eklenti süresi (sn)</label><input type="number" id="asMcpSn" min="5" max="600" style="width:110px"></div>
+    <div><label class="minl" for="asCmdSn">Komut süresi (sn)</label><input type="number" id="asCmdSn" min="5" max="600" style="width:110px"></div>
+    <div style="align-self:end"><button type="button" id="asUygula">Uygula</button></div>
+  </div>
+  <div class="fhint" style="font-size:12.5px">Bir cümle için model en fazla bu kadar adım atar (1-20). Süreler 5 sn ile 10 dk arası.</div>
+  <div class="rfoot" style="margin-top:8px"><span id="asMsg"></span></div>
 </div>
 
 <div class="card" style="margin-bottom:14px">
@@ -987,6 +1040,100 @@ $("pwSave").addEventListener("click", async ()=>{
   renderPwCard();
 });
 
+
+// ── Asistan kartı: GET/POST /assistant. Her değişiklik hemen kaydedilir (yalnızca o alan). ──
+let asView = null;
+function asMsg(t, renk){ $("asMsg").innerHTML = t; $("asMsg").style.color = renk ? `var(--${renk})` : ""; }
+async function asPost(body){
+  const r = await spPost("/assistant", body);
+  if (r.ok){ asView = r; if (cfg && r.config) { if (r.config.assistant) cfg.assistant = r.config.assistant; else delete cfg.assistant; } }
+  return r;
+}
+async function loadAssistantCard(){
+  try { asView = await (await fetch("/assistant")).json(); } catch { asView = null; }
+  if (!asView || !asView.ok) { $("asMcp").innerHTML = '<div class="fhint">Asistan ayarları okunamadı.</div>'; return; }
+  fillAssistant();
+}
+function fillAssistant(){
+  const L = asView.limits;
+  $("asRead").value = String(L.computer.read); $("asWrite").value = String(L.computer.write);
+  $("asDelete").value = String(L.computer.delete); $("asRun").value = String(L.computer.run);
+  $("asConfirm").value = L.confirm;
+  $("asSteps").value = L.maxSteps; $("asMcpSn").value = Math.round(L.mcpMs / 1000); $("asCmdSn").value = Math.round(L.commandMs / 1000);
+  const sv = asView.servers || [];
+  $("asMcp").innerHTML = sv.length ? sv.map((s) => {
+    const own = s.own || {};
+    const durum = own.enabled === undefined ? "genel" : own.enabled ? "acik" : "kapali";
+    return `<div class="as-ek" data-ad="${esc(s.name)}">
+      <div class="as-ek-ust"><b>${esc(s.name)}</b><small>${s.globalDisabled ? "ajanlar için kapalı" : "ajanlar için açık"}</small>
+        <select data-is="durum" aria-label="${esc(s.name)} asistan için">
+          <option value="genel"${durum === "genel" ? " selected" : ""}>genel ayar (${s.globalDisabled ? "kapalı" : "açık"})</option>
+          <option value="acik"${durum === "acik" ? " selected" : ""}>asistana açık</option>
+          <option value="kapali"${durum === "kapali" ? " selected" : ""}>asistana kapalı</option>
+        </select></div>
+      <div class="as-ek-alt"${s.enabled ? "" : " hidden"}>
+        <label><input type="checkbox" data-is="ro"${own.readOnly ? " checked" : ""}> yalnızca okuyan araçlar</label>
+        <details data-is="araclar"><summary>Araçlar${own.tools ? ` (${own.tools.length} seçili)` : " (hepsi)"}</summary><div class="as-araclar">yükleniyor…</div></details>
+      </div></div>`;
+  }).join("") : '<div class="fhint">Tanımlı eklenti yok (eklentiler ayar dosyasındaki “mcpServers”ta).</div>';
+}
+function asEkAyar(ad){ const s = (asView.servers || []).find((x) => x.name === ad); return { ...((s && s.own) || {}) }; }
+async function asEkKaydet(ad, own, not){
+  const bos = own.enabled === undefined && !own.readOnly && !own.tools;
+  const r = await asPost({ mcp: { [ad]: bos ? null : own } });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return false; }
+  fillAssistant(); asMsg("✓ " + not, "teal"); return true;
+}
+$("asMcp").addEventListener("change", async (ev) => {
+  const kutu = ev.target.closest(".as-ek"); if (!kutu) return;
+  const ad = kutu.dataset.ad, own = asEkAyar(ad), is = ev.target.dataset.is;
+  if (is === "durum") {
+    const v = ev.target.value;
+    if (v === "genel") delete own.enabled; else own.enabled = v === "acik";
+    await asEkKaydet(ad, own, v === "acik" ? `${ad} asistana açık (ajanlar etkilenmez)` : v === "kapali" ? `${ad} asistana kapalı` : `${ad} genel ayarı izliyor`);
+  } else if (is === "ro") {
+    if (ev.target.checked) own.readOnly = true; else delete own.readOnly;
+    await asEkKaydet(ad, own, ev.target.checked ? `${ad}: asistan yalnızca okuyan araçları kullanır` : `${ad}: bütün araçlar`);
+  } else if (ev.target.dataset.arac !== undefined) {
+    const secili = [...kutu.querySelectorAll("[data-arac]")].filter((x) => x.checked).map((x) => x.dataset.arac);
+    const hepsi = secili.length === kutu.querySelectorAll("[data-arac]").length;
+    if (hepsi) delete own.tools; else own.tools = secili;
+    const acik = kutu.querySelector("details")?.open;
+    if (await asEkKaydet(ad, own, hepsi ? `${ad}: bütün araçlar` : `${ad}: ${secili.length} araç seçili`) && acik) {
+      const d = $("asMcp").querySelector(`.as-ek[data-ad="${CSS.escape(ad)}"] details`); if (d) d.open = true;
+    }
+  }
+});
+$("asMcp").addEventListener("toggle", async (ev) => {
+  const d = ev.target; if (!(d instanceof HTMLDetailsElement) || !d.open) return;
+  const kutu = d.closest(".as-ek"), ad = kutu.dataset.ad, own = asEkAyar(ad);
+  const yer = d.querySelector(".as-araclar");
+  try {
+    const r = await (await fetch("/mcp-tools?name=" + encodeURIComponent(ad))).json();
+    if (!r.ok) { yer.textContent = "Araçlar alınamadı: " + (r.error || ""); return; }
+    yer.innerHTML = r.tools.map((t) => `<label title="${esc(t.description || "")}"><input type="checkbox" data-arac="${esc(t.name)}"${!own.tools || own.tools.includes(t.name) ? " checked" : ""}> <code>${esc(t.name)}</code>${t.readOnly ? " <small>salt okunur</small>" : ""}</label>`).join("") || "Araç yok.";
+  } catch { yer.textContent = "Araçlar alınamadı."; }
+}, true);
+const asPerm = (v) => v === "true" ? true : v === "false" ? false : "ask";
+for (const id of ["asRead", "asWrite", "asDelete", "asRun"]) $(id).addEventListener("change", async () => {
+  const computer = { read: asPerm($("asRead").value), write: asPerm($("asWrite").value), delete: asPerm($("asDelete").value), run: asPerm($("asRun").value) };
+  const r = await asPost({ computer });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return; }
+  asMsg("✓ Bilgisayar izinleri kaydedildi", "teal");
+});
+$("asConfirm").addEventListener("change", async () => {
+  const r = await asPost({ confirm: $("asConfirm").value === "degisiklik" ? null : $("asConfirm").value });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return; }
+  asMsg("✓ Kaydedildi", "teal");
+});
+$("asUygula").addEventListener("click", async () => {
+  const n = (id) => Number($(id).value);
+  const steps = n("asSteps"), m = n("asMcpSn") * 1000, c = n("asCmdSn") * 1000;
+  const r = await asPost({ maxSteps: steps === 8 ? null : steps,
+    timeouts: m === 120000 && c === 60000 ? null : { ...(m !== 120000 ? { mcpMs: m } : {}), ...(c !== 60000 ? { commandMs: c } : {}) } });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  fillAssistant(); asMsg("✓ Sınırlar kaydedildi", "teal");
+});
 // Sesle görev yazma kartı: GET/POST /speech, POST /speech/test. Adres ve anahtar genel bağlantıdan (Bağlantı bölümü).
 let spSaved = null;
 async function loadSpeechCard(){
@@ -1001,7 +1148,6 @@ function fillSpeech(){
   $("spLang").value = t.language || "tr";
   if (!$("spLang").value) $("spLang").value = "tr";
   spCmdSecenek(t.commandModel || "");
-  $("spPc").checked = !!t.computer;
   $("spFix").checked = !!t.fixDictation;
   $("spTerms").value = t.terms || "";
   spTtsSecenek(t.ttsModel || "");
@@ -1115,13 +1261,7 @@ $("spFix").addEventListener("change", async ()=>{
   if (!r.ok){ $("spFix").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
   spMsg(ac ? (spSaved.commandModel ? "✓ Sesle yazılan görev metni modelle düzeltilecek" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı", "teal");
 });
-$("spPc").addEventListener("change", async ()=>{
-  const ac = $("spPc").checked;
-  spMsg("");
-  const r = await spToggle("computer", ac);
-  if (!r.ok){ $("spPc").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
-  spMsg(ac ? (spSaved.commandModel ? "✓ Model artık bilgisayarda iş yapabilir — silme ve komut önce sorulur" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı — model yalnızca panel komutlarını seçer", "teal");
-});
+
 $("spSw").addEventListener("change", async ()=>{
   const ac = $("spSw").checked;
   spMsg("");
@@ -1761,6 +1901,7 @@ async function load(){
   fillPar();
   fillPlanWebhook();
   loadSpeechCard();
+  loadAssistantCard();
   loadTfsCard();
   fillResilience();
   fillContext();

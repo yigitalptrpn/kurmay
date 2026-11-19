@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ASSISTANT_DEFAULTS, type AssistantLimits } from "./assistantLimits.js";
 import type { McpToolInfo } from "./mcpStatus.js";
+import type { AssistantPerm } from "./types.js";
 import { authHeaders, httpError, netError, speechBase } from "./speech.js";
 
 /**
@@ -17,10 +19,8 @@ import { authHeaders, httpError, netError, speechBase } from "./speech.js";
  */
 
 const STEP_TIMEOUT_MS = 30_000;
-const MAX_STEPS = 8;
 const RESULT_MAX = 4000;
 const READ_MAX_BYTES = 200_000;
-const COMMAND_TIMEOUT_MS = 60_000;
 const PENDING_TTL_MS = 3 * 60_000;
 const HISTORY_MAX = 8;
 
@@ -51,6 +51,36 @@ const COMPUTER_TOOLS = new Set<Tool>([
   "sil",
   "komut_calistir",
 ]);
+/** İzin grupları (Ayarlar → Asistan): okuma, yazma, silme, komut */
+type PermKey = "read" | "write" | "delete" | "run";
+type Perms = AssistantLimits["computer"];
+const NO_PERMS: Perms = { read: false, write: false, delete: false, run: false };
+function permOf(step: Step): PermKey | null {
+  switch (step.arac) {
+    case "klasoru_ac":
+    case "listele":
+    case "oku":
+      return "read";
+    case "ac":
+      return !/^https?:\/\//i.test(step.yol.trim()) && EXECUTABLE.test(step.yol.trim()) ? "run" : "read";
+    case "yaz":
+    case "klasor_olustur":
+    case "tasi":
+      return "write";
+    case "sil":
+      return "delete";
+    case "komut_calistir":
+      return "run";
+    default:
+      return null;
+  }
+}
+const PERM_ADI: Record<PermKey, string> = {
+  read: "dosya okuma",
+  write: "dosya yazma",
+  delete: "silme",
+  run: "komut çalıştırma",
+};
 /** Açılınca program çalıştırabilen dosyalar — açmadan önce sorulur */
 const EXECUTABLE =
   /\.(exe|bat|cmd|com|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|msi|msc|lnk|scr|cpl|reg|hta|jar|sh|command|app)$/i;
@@ -107,6 +137,8 @@ interface LoopState {
   outputs: AssistantOutput[];
   mcp: McpList;
   steps: number;
+  /** Bilgisayar izinleri (panel başka bilgisayardan açıldıysa hepsi kapalı) */
+  perms: Perms;
 }
 interface Pending extends LoopState {
   step: Step;
@@ -120,6 +152,8 @@ export interface AssistantConn {
   userPrompt?: string;
   /** Bağlı eklentiler (yalnızca panel aynı bilgisayardan açıldıysa) */
   mcp?: McpBridge;
+  /** Ayarlar → Asistan: izinler, ne zaman sorulur, adım ve süre sınırları */
+  limits?: AssistantLimits;
 }
 
 const kisalt = (s: string, n = RESULT_MAX) =>
@@ -133,13 +167,14 @@ export class Assistant {
     const dir = req.dir && fs.existsSync(req.dir) ? path.resolve(req.dir) : os.homedir();
     let mcp: McpList = [];
     if (conn.mcp) mcp = await conn.mcp.tools().catch(() => []);
-    const messages: Msg[] = [{ role: "system", content: systemPrompt(dir, local, req.patterns, conn.userPrompt, mcp) }];
+    const perms = local && conn.limits ? conn.limits.computer : NO_PERMS;
+    const messages: Msg[] = [{ role: "system", content: systemPrompt(dir, perms, req.patterns, conn.userPrompt, mcp) }];
     for (const h of (req.history ?? []).slice(-HISTORY_MAX)) {
       const metin = String(h.metin ?? "").slice(0, 1500);
       if (metin) messages.push({ role: h.rol === "asistan" ? "assistant" : "user", content: metin });
     }
     messages.push({ role: "user", content: req.text.replace(/\s+/g, " ").trim().slice(0, 1000) });
-    return this.loop(conn, { messages, dir, local, done: [], outputs: [], mcp, steps: 0 });
+    return this.loop(conn, { messages, dir, local, done: [], outputs: [], mcp, steps: 0, perms });
   }
 
   /** Kullanıcı soruya cevap verdi: evetse araç çalışır, değilse modele söylenir; döngü sürer */
@@ -161,7 +196,8 @@ export class Assistant {
 
   private async loop(conn: AssistantConn, st: LoopState): Promise<AssistantReply> {
     const base = () => ({ done: st.done, outputs: st.outputs });
-    while (st.steps < MAX_STEPS) {
+    const maxSteps = conn.limits?.maxSteps ?? ASSISTANT_DEFAULTS.maxSteps;
+    while (st.steps < maxSteps) {
       st.steps++;
       const r = await askStep(conn, st.messages);
       if (!r.ok) return { ok: false, error: r.error, ...base() };
@@ -189,7 +225,21 @@ export class Assistant {
         });
         continue;
       }
-      const soru = step.arac === "eklenti_araci" ? mcpConfirm(step, st.mcp) : needsConfirm(step, st.dir);
+      const pk = permOf(step);
+      const izin: AssistantPerm = pk ? st.perms[pk] : true;
+      if (!izin) {
+        st.done.push(`⛔ İzin yok: ${PERM_ADI[pk!]} (Ayarlar → Asistan)`);
+        st.messages.push({
+          role: "user",
+          content: `Araç sonucu: ${PERM_ADI[pk!]} izni kapalı (Ayarlar → Asistan). Yapılmadı. Kullanıcıya kısaca söyle; başka yoldan deneme.`,
+        });
+        continue;
+      }
+      const confirm = conn.limits?.confirm ?? "degisiklik";
+      const soru =
+        step.arac === "eklenti_araci"
+          ? mcpConfirm(step, st.mcp, confirm)
+          : needsConfirm(step, st.dir) || (izin === "ask" || confirm === "hep" ? genericConfirm(step, st.dir) : "");
       if (soru) {
         this.sweep();
         const id = randomUUID();
@@ -216,7 +266,7 @@ async function runStep(conn: AssistantConn, step: Step, st: LoopState): Promise<
     st.messages.push({ role: "user", content: `Araç sonucu (${step.eklenti} / ${step.metot}):\n${kisalt(r.result)}` });
     return;
   }
-  const r = await runTool(step, st.dir);
+  const r = await runTool(step, st.dir, conn.limits?.commandMs ?? ASSISTANT_DEFAULTS.commandMs);
   st.done.push(r.summary);
   if (r.output) st.outputs.push(r.output);
   st.messages.push({ role: "user", content: `Araç sonucu (${step.arac}):\n${kisalt(r.result)}` });
@@ -226,9 +276,9 @@ const findMcp = (step: Step, mcp: McpList) =>
   mcp.find((m) => m.server === step.eklenti.trim() && m.tool.name === step.metot.trim());
 
 /** Değişiklik yapabilen (salt okunur işaretli olmayan) eklenti araçları önce sorulur */
-function mcpConfirm(step: Step, mcp: McpList): string {
+function mcpConfirm(step: Step, mcp: McpList, mode: AssistantLimits["confirm"] = "degisiklik"): string {
   const m = findMcp(step, mcp);
-  if (!m || m.tool.readOnly) return "";
+  if (!m || mode === "hic" || (m.tool.readOnly && mode !== "hep")) return "";
   const girdi = step.girdi.trim() && step.girdi.trim() !== "{}" ? ` Girdi: ${step.girdi.trim().slice(0, 300)}` : "";
   return `${m.server} eklentisinin “${m.tool.name}” aracı çalıştırılsın mı?${m.tool.destructive ? " Bu araç silme ya da geri alınamaz değişiklik yapabilir." : ""}${girdi}`;
 }
@@ -287,7 +337,7 @@ function mcpLines(mcp: McpList): string[] {
   return out;
 }
 
-function systemPrompt(dir: string, local: boolean, patterns: string[], userPrompt?: string, mcp: McpList = []): string {
+function systemPrompt(dir: string, perms: Perms, patterns: string[], userPrompt?: string, mcp: McpList = []): string {
   const plat = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux";
   return [
     "Sen Kurmay'ın sesli asistanısın. Kullanıcı sana Türkçe konuşur; isteğini yerine getirmek için adım adım araç kullanırsın.",
@@ -300,21 +350,30 @@ function systemPrompt(dir: string, local: boolean, patterns: string[], userPromp
     "",
     "Araçlar:",
     "- panel_komutu: isteğin Kurmay panelinin kendi komutuysa (aşağıdaki listeden) 'komut' alanına kalıbı aynen yaz (<...> yerlerini doldur). Bu son adımdır.",
-    ...(local
+    ...(perms.read
       ? [
           "- klasoru_ac: 'yol'daki klasörü Dosya Gezgini'nde açar (dosya verilirse içinde bulunduğu klasörü açıp dosyayı seçer).",
           "- ac: 'yol'daki dosyayı ya da web adresini varsayılan programla açar.",
           "- listele: 'yol'daki klasörün içindekileri listeler.",
           "- oku: 'yol'daki metin dosyasını okur.",
+        ]
+      : []),
+    ...(perms.write
+      ? [
           "- yaz: 'icerik'i 'yol'daki dosyaya yazar (yoksa oluşturur, varsa üzerine yazar).",
           "- klasor_olustur: 'yol'da klasör oluşturur.",
           "- tasi: 'yol'u 'hedef'e taşır ya da adını değiştirir.",
-          "- sil: 'yol'daki dosyayı ya da klasörü siler.",
+        ]
+      : []),
+    ...(perms.delete ? ["- sil: 'yol'daki dosyayı ya da klasörü siler."] : []),
+    ...(perms.run
+      ? [
           `- komut_calistir: 'komut'u ${plat === "Windows" ? "cmd" : "kabuk"} ile bulunduğun dizinde çalıştırır; çıktısını görürsün.`,
         ]
-      : [
-          "(Bilgisayar araçları kapalı: panel başka bir bilgisayardan açılmış. Yalnızca panel_komutu ve bitti kullanılabilir.)",
-        ]),
+      : []),
+    ...(!perms.read && !perms.write && !perms.delete && !perms.run
+      ? ["(Bilgisayar araçları kapalı. Yalnızca panel_komutu, eklenti araçları ve bitti kullanılabilir.)"]
+      : []),
     ...(mcp.length
       ? [
           "- eklenti_araci: bağlı bir eklentinin aracını çağırır. 'eklenti'ye eklenti adını, 'metot'a aracın adını (aşağıdaki listeden aynen), 'girdi'ye parametreleri JSON nesnesi olarak yaz (parametre yoksa {}). Sonucu bir sonraki mesajda görürsün; sonuç kullanıcıya asistan ekranında da gösterilir.",
@@ -470,10 +529,34 @@ function needsConfirm(step: Step, dir: string): string {
   return "";
 }
 
+/** İzin "sor" ya da "her işte sor" seçiliyse okuma/yazma işleri için soru */
+function genericConfirm(step: Step, dir: string): string {
+  const p = resolvePath(step.yol, dir);
+  switch (step.arac) {
+    case "klasoru_ac":
+      return `${p} Dosya Gezgini'nde açılsın mı?`;
+    case "ac":
+      return `${/^https?:\/\//i.test(step.yol.trim()) ? step.yol.trim() : p} açılsın mı?`;
+    case "listele":
+      return `${p} klasörünün içi listelensin mi?`;
+    case "oku":
+      return `${p} dosyası okunsun mu?`;
+    case "yaz":
+      return `${p} dosyasına yazılsın mı?${fs.existsSync(p) ? " Dosya var, üzerine yazılacak." : ""}`;
+    case "klasor_olustur":
+      return `${p} klasörü oluşturulsun mu?`;
+    case "tasi":
+      return `${p} → ${resolvePath(step.hedef, dir)} taşınsın mı?`;
+    default:
+      return "";
+  }
+}
+
 /** Aracı çalıştırır: modele giden sonuç + panelde görünen kısa özet */
 async function runTool(
   step: Step,
   dir: string,
+  commandMs: number,
 ): Promise<{ result: string; summary: string; output?: AssistantOutput }> {
   const p = resolvePath(step.yol, dir);
   const hata = (e: unknown) => {
@@ -548,7 +631,7 @@ async function runTool(
         };
       }
       case "komut_calistir": {
-        const r = await runCommand(step.komut, dir);
+        const r = await runCommand(step.komut, dir, commandMs);
         return {
           output: {
             title: step.komut.trim(),
@@ -620,11 +703,11 @@ async function removePath(p: string): Promise<void> {
   if (r.code !== 0 || fs.existsSync(p)) throw new Error(r.output.trim() || "silinemedi");
 }
 
-function runCommand(command: string, cwd: string) {
+function runCommand(command: string, cwd: string, timeoutMs: number) {
   return process.platform === "win32"
     ? // UTF-8 kod sayfası: Türkçe çıktı bozulmasın; /s + dış tırnak = komut olduğu gibi
-      runProcess("cmd.exe", ["/d", "/s", "/c", `"chcp 65001>nul & ${command}"`], cwd, process.env, true)
-    : runProcess("/bin/sh", ["-c", command], cwd, process.env);
+      runProcess("cmd.exe", ["/d", "/s", "/c", `"chcp 65001>nul & ${command}"`], cwd, process.env, true, timeoutMs)
+    : runProcess("/bin/sh", ["-c", command], cwd, process.env, false, timeoutMs);
 }
 
 function runProcess(
@@ -633,6 +716,7 @@ function runProcess(
   cwd: string,
   env: NodeJS.ProcessEnv,
   verbatim = false,
+  timeoutMs = ASSISTANT_DEFAULTS.commandMs,
 ): Promise<{ code: number | null; output: string; timedOut: boolean }> {
   return new Promise((resolve) => {
     let out = "";
@@ -646,7 +730,7 @@ function runProcess(
     const t = setTimeout(() => {
       timedOut = true;
       c.kill();
-    }, COMMAND_TIMEOUT_MS);
+    }, timeoutMs);
     c.once("error", (e) => {
       clearTimeout(t);
       resolve({ code: null, output: e.message, timedOut });

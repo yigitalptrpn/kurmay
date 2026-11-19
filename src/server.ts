@@ -217,6 +217,9 @@ export interface UiServerOptions {
   getMcpStatus?: () => McpStatusView;
   /** Eklentileri şimdi yoklar (model çağrısı yok), bitince güncel durumu döner (POST /mcp-probe) */
   probeMcp?: () => Promise<McpStatusView>;
+  /** Ayarlar → Asistan: sınırlar ve eklentiler (GET/POST /assistant) */
+  getAssistantSettings?: () => unknown;
+  setAssistantSettings?: (patch: Record<string, unknown>) => { ok: boolean; error?: string };
   /** Eklentinin araçları açıklama + parametreleriyle (GET /mcp-tools?name=) — eklentiye doğrudan sorulur */
   getMcpTools?: (name: string) => Promise<{ ok: boolean; tools?: McpToolInfo[]; error?: string }>;
   /** Akışın ana yolu + düğümlerin açık/kapalı durumu (GET /workflow) — görev kartı çipleri */
@@ -1060,6 +1063,21 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const r = options.setPlanWebhook
           ? options.setPlanWebhook(parsed.url, parsed.apiKey ?? "")
+          : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/assistant") {
+      return json(res, 200, options.getAssistantSettings?.() ?? { ok: false, error: "kapalı" });
+    }
+    if (req.method === "POST" && req.url === "/assistant") {
+      readJson(req, (parsed) => {
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = options.setAssistantSettings
+          ? options.setAssistantSettings(parsed as Record<string, unknown>)
           : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });

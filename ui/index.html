@@ -350,34 +350,75 @@ body.dinlemede .ses-not { top:60px; }
 .ses-yardim { margin:6px 0; padding-left:18px; columns:2; column-gap:24px; font-size:12.5px; }
 @media (max-width:560px) { .ses-yardim { columns:1; } }
 @keyframes mic-nabiz { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--red) 25%, transparent); } }
-/* Asistan ekranı: sesli/yazılı komut konuşması, eklenti sonuçları ve komut listesi — sağdan açılan çekmece */
-.asistan { position:fixed; z-index:68; top:0; right:0; bottom:0; width:min(440px, 100vw); display:flex; flex-direction:column;
-  background:var(--md-surface-container-lowest, var(--card)); color:var(--text); border-left:1px solid var(--border); box-shadow:var(--md-elev-3, -6px 0 24px rgba(0,0,0,.25)); }
+/* Asistan: sağ altta yuvarlak düğme + açılan sohbet penceresi (sesli/yazılı komut konuşması, eklenti sonuçları, komut listesi) */
+.as-fab { position:fixed; z-index:67; right:20px; bottom:20px; width:56px; height:56px; padding:0; border-radius:50%; display:grid; place-items:center;
+  background:var(--md-primary); color:var(--md-on-primary, #fff); border:none; box-shadow:var(--md-elev-3, 0 6px 20px rgba(0,0,0,.3)); cursor:pointer; }
+.as-fab svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.as-fab .rozet { position:absolute; top:2px; right:2px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--red); color:#fff; font:700 11px/18px var(--font-ui); }
+.as-fab .rozet:empty { display:none; }
+.as-fab.dinliyor { box-shadow:0 0 0 4px color-mix(in srgb, var(--red) 45%, transparent), var(--md-elev-3, 0 6px 20px rgba(0,0,0,.3)); }
+.asistan { position:fixed; z-index:68; right:20px; bottom:88px; width:380px; height:min(560px, calc(100vh - 110px)); display:flex; flex-direction:column; overflow:hidden;
+  background:var(--md-surface-container-lowest, var(--card)); color:var(--text); border:1px solid var(--border); border-radius:var(--md-shape-lg, 14px);
+  box-shadow:var(--md-elev-3, 0 10px 40px rgba(0,0,0,.3)); transform-origin:bottom right; animation:as-ac .16s ease-out; }
+@keyframes as-ac { from { opacity:0; transform:scale(.94) translateY(8px); } }
+@media (prefers-reduced-motion:reduce) { .asistan { animation:none; } }
 .asistan[hidden] { display:none; }
-.asistan .as-bas { display:flex; align-items:center; gap:6px; padding:10px 12px; border-bottom:1px solid var(--border); }
-.asistan .as-bas b { font-family:var(--font-display, inherit); font-size:15px; margin-right:auto; }
-.asistan .as-bas button { min-height:30px; padding:2px 10px; text-transform:none; font-size:12.5px; }
-.asistan .as-bas button[aria-pressed="true"] { border-color:var(--md-primary); color:var(--md-primary); }
-.asistan .as-yardim { border-bottom:1px solid var(--border); padding:8px 14px; max-height:45vh; overflow:auto; font-size:12.5px; }
+@media (max-width:560px) {
+  .asistan { right:0; left:0; bottom:0; top:0; width:auto; height:auto; border-radius:0; border:none; }
+  .as-fab { right:16px; bottom:16px; }
+  body.asistanda .as-fab { display:none; }
+}
+.asistan .as-bas { display:flex; align-items:center; gap:10px; padding:10px 10px 10px 14px; background:var(--md-primary); color:var(--md-on-primary, #fff); }
+.as-av { width:30px; height:30px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:16px; line-height:1;
+  background:color-mix(in srgb, var(--md-primary) 16%, var(--md-surface-container-lowest, var(--card))); color:var(--md-primary); }
+.asistan .as-bas .as-av { background:rgba(255,255,255,.18); color:inherit; }
+.asistan .as-ad { flex:1; min-width:0; line-height:1.2; }
+.asistan .as-ad b { display:block; font-family:var(--font-display, inherit); font-size:14.5px; }
+.asistan .as-ad small { display:block; font-size:11.5px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.asistan .as-bas button { width:32px; height:32px; min-height:0; padding:0; display:grid; place-items:center; flex:none; border-radius:50%;
+  background:transparent; border:none; color:inherit; cursor:pointer; text-transform:none; box-shadow:none; }
+.asistan .as-bas button:hover, .asistan .as-bas button[aria-pressed="true"] { background:rgba(255,255,255,.18); }
+.asistan .as-bas svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.asistan .as-yardim { border-bottom:1px solid var(--border); padding:8px 14px; max-height:50%; overflow:auto; font-size:12.5px; background:var(--md-surface-container-low, transparent); }
 .asistan .as-yardim[hidden] { display:none; }
 .asistan .as-yardim .ses-yardim { columns:1; margin:4px 0 8px; }
 .asistan .as-yardim small { display:block; color:var(--muted); line-height:1.45; }
-.asistan .as-kayit { flex:1; min-height:0; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
-.asistan .as-bos { color:var(--muted); font-size:13px; text-align:center; margin:auto 12px; line-height:1.5; }
-.asistan .as-g { max-width:92%; padding:7px 11px; border-radius:var(--md-shape-md, 10px); font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
-.asistan .as-g.sen { align-self:flex-end; background:color-mix(in srgb, var(--md-primary) 14%, transparent); }
-.asistan .as-g.asistan-g { align-self:flex-start; background:var(--md-surface-container, transparent); border:1px solid var(--border); }
-.asistan .as-g.hata { border-color:var(--red); }
-.asistan .as-g small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-.asistan .as-g time { display:block; color:var(--muted); font-size:10.5px; margin-top:3px; }
-.asistan .as-g details { margin-top:6px; }
-.asistan .as-g summary { cursor:pointer; font-weight:600; font-size:12.5px; }
-.asistan .as-g details.hata summary { color:var(--red); }
-.asistan .as-g pre { margin:4px 0 0; padding:6px 8px; max-height:40vh; overflow:auto; white-space:pre-wrap; font:12px/1.45 var(--font-mono); background:var(--md-surface-container-low, transparent); border:1px solid var(--border); border-radius:var(--md-shape-sm, 6px); }
-.asistan form { display:flex; gap:6px; padding:10px 12px; border-top:1px solid var(--border); }
-.asistan form input { flex:1; min-width:0; min-height:34px; }
-.asistan form button { min-height:34px; padding:2px 14px; text-transform:none; }
-@media (min-width:900px) { body.asistanda .ses-not, body.asistanda .ses-dinleme { left:calc((100vw - 440px) / 2); } }
+.asistan .as-kayit { flex:1; min-height:0; overflow:auto; padding:14px 12px; display:flex; flex-direction:column; gap:10px; background:var(--md-surface-container-low, var(--bg)); }
+.as-satir { display:flex; gap:8px; align-items:flex-end; max-width:100%; }
+.as-satir.sen { justify-content:flex-end; }
+.as-g { max-width:82%; min-width:0; padding:8px 12px; font-size:13.5px; line-height:1.45; overflow-wrap:anywhere; border-radius:16px; }
+.as-satir.asistan-s .as-g { background:var(--md-surface-container-lowest, var(--card)); border:1px solid var(--border); border-bottom-left-radius:4px; }
+.as-satir.sen .as-g { background:var(--md-primary); color:var(--md-on-primary, #fff); border-bottom-right-radius:4px; }
+.as-satir.sen .as-g time { color:inherit; opacity:.75; }
+.as-g.hata { border-color:var(--red) !important; }
+.as-g small { display:block; color:var(--muted); font-size:12px; margin-top:3px; }
+.as-g time { display:block; color:var(--muted); font-size:10.5px; margin-top:4px; text-align:right; }
+.as-kart { margin-top:8px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--md-surface-container-low, transparent); }
+.as-kart summary { cursor:pointer; padding:6px 10px; font-weight:600; font-size:12.5px; list-style:none; display:flex; gap:6px; align-items:center; }
+.as-kart summary::-webkit-details-marker { display:none; }
+.as-kart summary::after { content:"▾"; margin-left:auto; color:var(--muted); transition:transform .15s; }
+.as-kart:not([open]) summary::after { transform:rotate(-90deg); }
+.as-kart.hata summary { color:var(--red); }
+.as-kart pre { margin:0; padding:8px 10px; max-height:260px; overflow:auto; white-space:pre-wrap; font:12px/1.45 var(--font-mono); border-top:1px solid var(--border); }
+.as-bos { margin:auto 4px; text-align:center; color:var(--muted); font-size:13px; line-height:1.5; }
+.as-bos .as-av { width:44px; height:44px; font-size:22px; margin:0 auto 8px; }
+.as-bos b { color:var(--text); display:block; font-size:14.5px; margin-bottom:2px; }
+.as-oneri { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:12px; }
+.as-oneri button { min-height:30px; padding:3px 12px; border-radius:999px; font-size:12.5px; text-transform:none; }
+.as-yaziyor { display:inline-flex; gap:4px; padding:4px 2px; }
+.as-yaziyor i { width:7px; height:7px; border-radius:50%; background:var(--muted); animation:as-nokta 1.2s infinite ease-in-out; }
+.as-yaziyor i:nth-child(2) { animation-delay:.15s; } .as-yaziyor i:nth-child(3) { animation-delay:.3s; }
+@keyframes as-nokta { 0%,60%,100% { opacity:.3; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
+.asistan form { display:flex; gap:6px; align-items:center; padding:10px; border-top:1px solid var(--border); }
+.asistan form input { flex:1; min-width:0; min-height:38px; border-radius:999px; padding:0 14px; }
+.asistan form button { width:38px; height:38px; min-height:0; padding:0; border-radius:50%; display:grid; place-items:center; flex:none; text-transform:none; }
+.asistan form button.hidden { display:none; }
+.asistan form button svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+/* Temaların köşe kuralları (Evrak: tüm düğmeler 3px; :is(#taskCard…) kimlik ağırlığı taşıdığı için !important şart) bu yuvarlak düğmeleri ezmesin */
+#asFab, #asistanEkran .as-bas button, #asistanEkran form button, #asistanEkran .as-av { border-radius:50% !important; }
+#asGirdi, #asistanEkran .as-oneri button { border-radius:999px !important; }
+.asistan form #asMic.rec { background:var(--red); border-color:var(--red); color:#fff; }
+.asistan form #asMic.acik { border-color:var(--red); color:var(--red); }
 #btnAsistan[aria-pressed="true"] { border-color:var(--md-primary); color:var(--md-primary); }
 @media (prefers-reduced-motion: reduce) { #btnMic.rec { animation:none; } }
 /* Görevle yapıştırılan görseller: yazma kutusunun altında önizleme, görev balonunda küçük resim */
@@ -872,12 +913,18 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 </aside>
 <div class="dmenu hidden" id="sessMenu" role="menu"></div>
 <div class="ses-not" id="sesNot" role="status" aria-live="polite" hidden></div>
-<aside class="asistan" id="asistanEkran" aria-label="Asistan" hidden>
-  <div class="as-bas"><b>Asistan</b><button type="button" id="asYardimBtn" aria-pressed="false" title="Komut listesini göster / gizle — sesle: “komutları göster”">Komutlar</button><button type="button" id="asTemizle" title="Konuşma geçmişini sil">Temizle</button><button type="button" id="asKapat" title="Kapat — sesle: “asistan ekranını kapat”" aria-label="Kapat">✕</button></div>
+<button type="button" class="as-fab" id="asFab" title="Asistan — sesle: “asistanı aç”" aria-label="Asistan" aria-expanded="false" aria-controls="asistanEkran"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg><span class="rozet" id="asRozet"></span></button>
+<section class="asistan" id="asistanEkran" role="dialog" aria-label="Kurmay Asistan" hidden>
+  <div class="as-bas"><span class="as-av" aria-hidden="true">◎</span><div class="as-ad"><b>Kurmay Asistan</b><small id="asDurum">hazır</small></div>
+    <button type="button" id="asYardimBtn" aria-pressed="false" title="Komut listesi — sesle: “komutları göster”" aria-label="Komut listesi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <button type="button" id="asTemizle" title="Konuşmayı sil" aria-label="Konuşmayı sil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+    <button type="button" id="asKapat" title="Kapat — sesle: “asistanı kapat”" aria-label="Kapat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="as-yardim" id="asYardim" hidden></div>
   <div class="as-kayit" id="asKayit" aria-live="polite"></div>
-  <form id="asForm" autocomplete="off"><input id="asGirdi" type="text" placeholder="Komut ya da soru yaz…" aria-label="Asistana yaz"><button type="submit" class="primary">Gönder</button></form>
-</aside>
+  <form id="asForm" autocomplete="off"><input id="asGirdi" type="text" placeholder="Bir şey sor ya da komut ver…" aria-label="Asistana yaz">
+    <button type="button" id="asMic" class="hidden" title="Basılı tut: söyle · tıkla: dinleme modu (Ctrl+Boşluk)" aria-label="Sesli komut"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
+    <button type="submit" class="primary" aria-label="Gönder" title="Gönder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-6 16-3-7z"/></svg></button></form>
+</section>
 <div class="sayfa-katman" id="sayfaKatman" hidden><div class="sk-bar"><button type="button" id="skGeri" class="primary">← Panele dön</button><b id="skAd"></b><small>Sesle: “panele dön”</small></div><iframe id="skFrame" title="Sayfa"></iframe></div>
 <div class="ses-dinleme" id="sesDinleme" hidden><span class="nokta" aria-hidden="true"></span><b>Dinleme açık</b><span class="durum"></span><button type="button" data-kapat title="Dinlemeyi kapat (Esc)">Kapat</button></div>
 
@@ -4193,6 +4240,7 @@ async function loadSpeech() {
     const om = v.generalUrl ? v.ttsModel || "" : ""; if (om !== okumaModeli) { okumaModeli = om; okumaHataGosterildi = false; } } catch { speechOn = false; komutModeli = ""; }
   if (!mic) $("btnMic").classList.toggle("hidden", !speechOn);
   $("btnVoiceCmd").classList.toggle("hidden", !speechOn);
+  $("asMic").classList.toggle("hidden", !speechOn);
 }
 window.addEventListener("focus", () => { if (!$("taskCard").classList.contains("hidden")) loadSpeech(); }); // Ayarlar başka sekmede değişmiş olabilir
 function micState(kind, label) {
@@ -4280,7 +4328,8 @@ async function mikrofonAc() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     throw new Error("Tarayıcı mikrofonu açmıyor: mikrofon yalnızca panel localhost ya da https adresiyle açıldığında çalışır.");
   }
-  try { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  // Yankı kesme + gürültü bastırma açıkça istenir: Kurmay'ın kendi sesi ve oda uğultusu mikrofona daha az karışsın
+  try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
   catch (e) {
     throw new Error(e?.name === "NotAllowedError" ? "Mikrofon izni verilmedi — tarayıcının adres çubuğundaki izinlerden aç."
       : e?.name === "NotFoundError" ? "Bu bilgisayarda mikrofon bulunamadı." : "Mikrofon açılamadı: " + (e?.message || e));
@@ -4374,9 +4423,15 @@ function sesNot(html, tur = "bilgi", kalici = false, soz) {
   // Komut modelle anlaşıldıysa notta izi kalsın (yanlış anladıysa kullanıcı görsün) — ipucu satırı, söylenmez
   const iz = sonAnlama && Date.now() - sonAnlama.t < 30000 && tur !== "dinliyor"
     ? `<small>🧠 “${esc(sonAnlama.ham)}” → “${esc(sonAnlama.komut)}” olarak anlaşıldı</small>` : "";
+  asNotKaydet(html, tur);
+  // Asistan penceresi açıkken kısa notlar yalnızca pencerede görünür (soru ve kalıcı notlar üstte kalır)
+  if (!kalici && tur !== "dinliyor" && !$("asistanEkran").hidden) {
+    clearTimeout(sesNot.zaman); k.hidden = true;
+    if (soz === false || !sesAktif()) return Promise.resolve();
+    return konus(typeof soz === "string" ? soz : soze(html));
+  }
   k.innerHTML = html + iz;
   k.hidden = false;
-  asNotKaydet(html, tur);
   clearTimeout(sesNot.zaman);
   const sure = tur === "hata" ? 7000 : 4000;
   if (!kalici) sesNot.zaman = setTimeout(function gizle() {
@@ -4688,6 +4743,7 @@ async function komutBasla(t0) {
   rec.onstop = komutBitti;
   rec.start();
   $("btnVoiceCmd").classList.add("rec");
+  $("asMic").classList.add("rec");
   sesNot(`<span class="nokta" aria-hidden="true"></span> Dinliyorum — bırakınca uygulanır <small>(Esc: vazgeç)</small>`, "dinliyor", true);
 }
 function komutDur(iptal = false) {
@@ -4699,6 +4755,7 @@ async function komutBitti() {
   const { stream, chunks, rec, iptal } = komut;
   stream.getTracks().forEach((t) => t.stop());
   $("btnVoiceCmd").classList.remove("rec");
+  $("asMic").classList.remove("rec");
   komut.rec = null;
   if (iptal || !chunks.length) {
     komut = null; sesNotKapat();
@@ -4908,12 +4965,18 @@ const KOMUTLAR = [
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
   { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · read · stop talking" },
+  { ornek: "araya girmeyi kapat · aç (ben konuşurken sözümü kesebilirsin)", re: /^(konusurken |ben konusurken )?(araya girme(yi)?|soz kesme(yi)?|sozumu kesme(yi)?) (?<is>ac|kapat)$/, yap: (m) => sozKesmeAyarla(m.groups.is === "ac") },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
     const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
   { ornek: "metin düzeltmeyi aç · kapat", re: /^(metin |gorev metni |metni )?(duzeltmeyi|duzeltme(yi)?|modelle duzeltmeyi) (?<is>ac|kapat)$/, yap: (m) => duzeltmeAyarla(m.groups.is === "ac") },
   { ornek: "asistan ekranını aç · kapat (konuşmalar, eklenti sonuçları)", re: /^(asistani|asistan( ekrani(ni)?| penceresi(ni)?| konusmalari(ni)?)?|konusmalari|konusma gecmisini) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => asAc(/^(ac|goster)$/.test(m.groups.is), true) },
   { ornek: "komutları göster · gizle", re: /^(komutlari|komut listesini|yardimi) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => { const ac = /^(ac|goster)$/.test(m.groups.is); if (ac) asAc(true); asYardimAyarla(ac); tamam(ac ? "Komut listesi asistan ekranında" : "Komut listesi gizlendi"); } },
+  { ornek: "asistan ayarlarını aç", re: /^asistan(in)? (ayarlari(ni)?|izinleri(ni)?|sinirlari(ni)?)( ac| goster)?$/, yap: () => sayfaAc("/config#asCard", "Asistan ayarları") },
+  { ornek: "asistan için … eklentisini aç · kapat", re: /^asistan (icin|da) (?<ad>.+?) eklentisi(ni)? (?<is>ac|kapat)$/d, yap: (m, ham) => {
+    const ix = m.indices.groups.ad; asistanEklenti(ham.slice(ix[0], ix[1]).trim(), m.groups.is === "ac"); } },
+  { ornek: "asistanın okuma · yazma · silme · komut iznini aç · kapat", re: /^asistan(in)? (?<ne>okuma|yazma|silme|komut( calistirma)?) izni(ni)? (?<is>ac|kapat|sorsun)$/, yap: (m) => asistanIzin(m.groups.ne, m.groups.is) },
+  { ornek: "asistan her işte sorsun · değişiklikte sorsun · hiç sormasın", re: /^asistan (?<ne>her iste|her seyde|degisiklikte|degisiklik yapan iste|hic) (sorsun|sormasin)$/, yap: (m) => asistanSorma(m.groups.ne) },
   { ornek: "asistan geçmişini temizle", re: /^(asistan (gecmisini|konusmalarini|ekranini)|konusma gecmisini) (temizle|sil)$/, yap: () => asTemizle(true) },
   { ornek: "panele dön (Ayarlar açıkken)", re: /^(panele (don|gec|git)|geri (don|gel)|geri|sayfayi kapat|ayarlari kapat|pencereyi kapat|kapat)$/, yap: () => katmanKapat(true) },
   { grup: "Oturumlar" },
@@ -5032,6 +5095,7 @@ const EN_CEVAP = [ // soru açıkken
   [/^(no|nope|cancel|don'?t|never mind|not now|later|no thanks)$/i, "hayır"],
 ];
 const EN_KOMUT = [
+  [/^(open|show) (the )?assistant settings$/i, "asistan ayarlarını aç"],
   [/^(open|show) (the )?assistant( screen| panel)?$/i, "asistan ekranını aç"],
   [/^(close|hide) (the )?assistant( screen| panel)?$/i, "asistan ekranını kapat"],
   [/^(show|open) (the )?(commands|help)$/i, "komutları göster"],
@@ -5147,7 +5211,10 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
 // Görev yazımı ("görev …") listede YOK: odadaki konuşma modelle göreve dönüşmesin.
 let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
 const KALIPLAR = [
-  "yardım", "asistan ekranını aç", "asistan ekranını kapat", "komutları göster", "komutları gizle", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
+  "yardım", "asistan ekranını aç", "asistan ekranını kapat", "komutları göster", "komutları gizle",
+  "araya girmeyi kapat", "araya girmeyi aç", "asistan ayarlarını aç", "asistan için <eklenti adı> eklentisini aç", "asistan için <eklenti adı> eklentisini kapat",
+  "asistanın <okuma|yazma|silme|komut> iznini kapat", "asistanın <okuma|yazma|silme|komut> iznini aç",
+  "asistan her işte sorsun", "asistan değişiklikte sorsun", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
   "<numara> numaralı work item'ı çek", "<numara> numaralı pull request'i aç", "bana atananları göster",
   "birinciyi seç", "ikinciyi seç", "üçüncüyü seç", "sonuncuyu seç", "<sıra numarası> seç",
   "pull request'lerimin durumu", "seçimi kaldır", "yorumları ele al", "incele", "onay beklemeden devam et", "onay beklesin",
@@ -5331,7 +5398,8 @@ async function asistanIstek(url, body) {
   } catch { return { ok: false, error: "sunucuya ulaşılamadı", done: [] }; }
 }
 async function modelleAnla(ham, dinlemede) {
-  sesNot(`⏳ Anlamaya çalışıyorum… <small>“${esc(ham)}”</small>`, "bilgi", true);
+  if ($("asistanEkran").hidden) sesNot(`⏳ Anlamaya çalışıyorum… <small>“${esc(ham)}”</small>`, "bilgi", true);
+  else { sesNotKapat(); asYaziyor(true); }
   if (Date.now() - asistanZaman > ASISTAN_GECMIS_MS) asistanGecmis = [];
   const patterns = [...KALIPLAR, ...(komutOnay ? ["evet", "hayır"] : [])];
   const r = await asistanIstek("/speech/asistan", { text: ham, patterns, history: asistanGecmis, dir: viewDir().dir });
@@ -5340,6 +5408,7 @@ async function modelleAnla(ham, dinlemede) {
 }
 const yapilanlarHtml = (done) => (done || []).filter(Boolean).map((d) => `<small>${esc(d)}</small>`).join("");
 function asistanSonuc(r, ham, dinlemede) {
+  asYaziyor(false);
   // Eklenti / dosya / komut sonuçları asistan ekranında görünür (notta yalnızca kısa cevap)
   if ((r.outputs || []).length) { asBekleyenCikti = r.outputs; asAc(true); }
   const yapilan = yapilanlarHtml(r.done) + ((r.outputs || []).length ? `<small>📄 Sonuç asistan ekranında</small>` : "");
@@ -5361,7 +5430,8 @@ function asistanSonuc(r, ham, dinlemede) {
   sesNot(`Anlaşılmadı: “${esc(ham)}” <small>Bir komuta benzemiyor · görev yazdırmak için “görev …” de · “yardım”: komut listesi</small>`, "bilgi", false, "Anlaşılmadı.");
 }
 async function asistanOnay(id, evet, ham, dinlemede) {
-  sesNot(evet ? "⏳ Yapıyorum…" : "Vazgeçildi.", "bilgi", true, false);
+  if ($("asistanEkran").hidden) sesNot(evet ? "⏳ Yapıyorum…" : "Vazgeçildi.", "bilgi", true, false);
+  else { sesNotKapat(); asYaziyor(true); }
   asistanGecmisEkle("kullanici", evet ? "Evet, yap." : "Hayır, yapma.");
   asistanSonuc(await asistanIstek("/speech/asistan/onay", { id, yes: evet }), ham, dinlemede);
 }
@@ -5852,15 +5922,33 @@ function asKaydet() { try { localStorage.setItem(AS_KAYIT, JSON.stringify(asKayi
 function asSatirHtml(g) {
   const saat = new Date(g.t).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
   const alt = (g.alt || []).map((x) => `<small>${esc(x)}</small>`).join("");
-  const cikti = (g.ciktilar || []).map((c, i) => `<details class="${c.error ? "hata" : ""}"${i === 0 && (g.ciktilar.length === 1) ? " open" : ""}><summary>${c.error ? "⚠ " : "📄 "}${esc(c.title || "Sonuç")}</summary><pre>${esc(c.text || "")}</pre></details>`).join("");
-  return `<div class="as-g ${g.kim === "sen" ? "sen" : "asistan-g"}${g.hata ? " hata" : ""}">${g.kim === "sen" ? "🗣 " : ""}${esc(g.metin || "")}${alt}${cikti}<time>${saat}</time></div>`;
+  const tek = (g.ciktilar || []).length === 1;
+  const cikti = (g.ciktilar || []).map((c) => `<details class="as-kart${c.error ? " hata" : ""}"${tek ? " open" : ""}><summary>${c.error ? "⚠" : "🔌"} ${esc(c.title || "Sonuç")}</summary><pre>${esc(c.text || "")}</pre></details>`).join("");
+  if (g.kim === "sen") return `<div class="as-satir sen"><div class="as-g">${esc(g.metin || "")}<time>${saat}</time></div></div>`;
+  // Asistanın notları "💬 …" / "✓ …" diye başlar — balonda simge gerekmez
+  const metin = (g.metin || "").replace(/^(💬|✓)\s*/u, "");
+  return `<div class="as-satir asistan-s"><span class="as-av" aria-hidden="true">◎</span><div class="as-g${g.hata ? " hata" : ""}">${esc(metin)}${alt}${cikti}<time>${saat}</time></div></div>`;
 }
+let asYaziyorMu = false;
+const AS_ONERILER = ["bana atananları göster", "git durumu", "pull request'lerimin durumu", "neler çalışıyor", "komutları göster"];
 function asCiz() {
   const k = $("asKayit");
-  k.innerHTML = asKayit.length ? asKayit.map(asSatirHtml).join("")
-    : `<div class="as-bos">Henüz konuşma yok. Sesle komut ver (Ctrl+Boşluk) ya da aşağıya yaz.<br>Eklentiler bağlıysa listede olmayan işleri de sorabilirsin — sonuçlar burada görünür.</div>`;
+  k.innerHTML = (asKayit.length ? asKayit.map(asSatirHtml).join("")
+    : `<div class="as-bos"><span class="as-av" aria-hidden="true">◎</span><b>Merhaba, ne yapalım?</b>Yaz ya da sesle söyle (Ctrl+Boşluk). Listede olmayan işleri de sorabilirsin — bağlı eklentiler (ör. TFS) varsa onları kullanırım, sonuçlar burada görünür.
+      <div class="as-oneri">${AS_ONERILER.map((o) => `<button type="button" data-oneri="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`) +
+    (asYaziyorMu ? `<div class="as-satir asistan-s"><span class="as-av" aria-hidden="true">◎</span><div class="as-g"><span class="as-yaziyor" aria-label="yazıyor"><i></i><i></i><i></i></span></div></div>` : "");
   k.scrollTop = k.scrollHeight;
 }
+function asYaziyor(on) {
+  if (asYaziyorMu === on) return;
+  asYaziyorMu = on;
+  asDurumYaz();
+  if (!$("asistanEkran").hidden) asCiz();
+}
+function asDurumYaz() {
+  $("asDurum").textContent = asYaziyorMu ? "yazıyor…" : dinleme ? "● dinliyor" : "hazır";
+}
+let asOkunmamis = 0;
 function asEkle(g) {
   g.t = Date.now();
   const son = asKayit[asKayit.length - 1];
@@ -5870,6 +5958,8 @@ function asEkle(g) {
   if (asKayit.length > AS_EN_FAZLA) asKayit.splice(0, asKayit.length - AS_EN_FAZLA);
   asKaydet();
   if (!$("asistanEkran").hidden) asCiz();
+  // Pencere kapalıyken gelen cevap ve sonuçlar düğmede sayılır
+  else if (g.kim === "asistan" && (g.ciktilar || /^💬/u.test(g.metin || ""))) $("asRozet").textContent = String(++asOkunmamis);
 }
 /** Ekrandaki notu düz metne çevirip ekrana yazar (düğmeler atılır, liste düğmelerinin yazısı alt satır olur) */
 function asNotKaydet(html, tur) {
@@ -5880,9 +5970,15 @@ function asNotKaydet(html, tur) {
   const alt = [];
   d.querySelectorAll(".ses-liste button, .git-plan > *").forEach((x) => { const y = x.textContent.replace(/\s+/g, " ").trim(); if (y) alt.push(y); x.remove(); });
   d.querySelectorAll("button, .ses-dugmeler").forEach((x) => x.remove());
-  d.querySelectorAll("small").forEach((x) => { const y = x.textContent.replace(/\s+/g, " ").trim(); if (y && !y.startsWith("📄 Sonuç asistan")) alt.push(y); x.remove(); });
-  const metin = d.textContent.replace(/\s+/g, " ").trim();
   const ciktilar = asBekleyenCikti; asBekleyenCikti = null;
+  // Pencerede gereksiz: "sonuç asistan ekranında" ipucu, söylenen cümlenin tekrarı (“…”), sonuç kartıyla aynı satır
+  const kartlar = new Set((ciktilar || []).map((c) => "🔌 " + c.title));
+  d.querySelectorAll("small").forEach((x) => {
+    const y = x.textContent.replace(/\s+/g, " ").trim();
+    if (y && !y.startsWith("📄 Sonuç asistan") && !/^“[^”]*”$/.test(y) && !kartlar.has(y)) alt.push(y);
+    x.remove();
+  });
+  const metin = d.textContent.replace(/\s+/g, " ").trim();
   if (!metin && !alt.length && !ciktilar) return;
   asEkle({ kim: "asistan", metin, ...(alt.length ? { alt } : {}), ...(tur === "hata" ? { hata: true } : {}), ...(ciktilar ? { ciktilar } : {}) });
 }
@@ -5903,9 +5999,56 @@ function asAc(ac, sesle) {
   e.hidden = !ac;
   document.body.classList.toggle("asistanda", ac);
   $("btnAsistan").setAttribute("aria-pressed", String(ac));
+  $("asFab").setAttribute("aria-expanded", String(ac));
   try { localStorage.setItem(AS_ACIK, ac ? "1" : "0"); } catch { /* yoksay */ }
-  if (ac) asCiz();
+  if (ac) {
+    asOkunmamis = 0; $("asRozet").textContent = "";
+    asCiz(); asDurumYaz();
+    if (!sesle && matchMedia("(pointer:fine)").matches) $("asGirdi").focus();
+  }
   if (sesle) tamam(ac ? "Asistan ekranı açıldı" : "Asistan ekranı kapatıldı");
+}
+// ── Asistan sınırları sesle (Ayarlar → Asistan ile aynı uç: POST /assistant). Yetki genişleten iş önce sorulur ──
+async function asistanAyarGonder(patch, not) {
+  try {
+    const r = await (await fetch("/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) })).json();
+    if (!r.ok) return olmaz("Asistan ayarı kaydedilemedi: " + esc(r.error || ""));
+    tamam(not);
+  } catch { olmaz("Sunucuya ulaşılamadı."); }
+}
+async function asistanEklenti(ad, ac) {
+  let v;
+  try { v = await (await fetch("/assistant")).json(); } catch { return olmaz("Sunucuya ulaşılamadı."); }
+  const adlar = (v.servers || []).map((x) => x.name);
+  if (!adlar.length) return olmaz("Tanımlı eklenti yok.");
+  const bul = adlar.find((x) => srFold(x) === srFold(ad)) || adlar.find((x) => srFold(x).includes(srFold(ad)))
+    || okunusBul(ad, adlar.map((x) => ({ ad: x, deger: x }))).tek || null;
+  if (!bul) return olmaz(`“${esc(ad)}” adında eklenti yok. Eklentiler: ${adlar.map(esc).join(", ")}`);
+  const own = { ...(((v.servers || []).find((x) => x.name === bul) || {}).own || {}), enabled: ac };
+  const yap = () => asistanAyarGonder({ mcp: { [bul]: own } }, `${esc(bul)} asistana ${ac ? "açıldı (ajanlar etkilenmez)" : "kapatıldı"}`);
+  if (ac) return onayIste(`Asistan ${esc(bul)} eklentisinin araçlarını kullanabilsin mi?`, yap);
+  yap();
+}
+function asistanIzin(ne, is) {
+  const k = ne.startsWith("okuma") ? "read" : ne.startsWith("yazma") ? "write" : ne.startsWith("silme") ? "delete" : "run";
+  const ad = { read: "okuma", write: "yazma", delete: "silme", run: "komut çalıştırma" }[k];
+  // Silme ve komut yalnızca kapalı / sor; "aç" onlarda "sorarak aç" demek
+  const deger = is === "kapat" ? false : is === "sorsun" || k === "delete" || k === "run" ? "ask" : true;
+  const yap = async () => {
+    let v;
+    try { v = await (await fetch("/assistant")).json(); } catch { return olmaz("Sunucuya ulaşılamadı."); }
+    asistanAyarGonder({ computer: { ...v.limits.computer, [k]: deger } },
+      `Asistanın ${ad} izni: ${deger === false ? "kapalı" : deger === "ask" ? "önce sorar" : "açık"}`);
+  };
+  if (deger !== false) return onayIste(`Asistanın ${ad} izni ${deger === "ask" ? "sorarak " : ""}açılsın mı?`, yap);
+  yap();
+}
+function asistanSorma(ne) {
+  const v = ne.startsWith("her") ? "hep" : ne === "hic" ? "hic" : "degisiklik";
+  const not = { hep: "Asistan her işte soracak", hic: "Asistan eklenti araçlarında sormayacak (silme ve komut yine sorulur)", degisiklik: "Asistan değişiklik yapan işlerde soracak" }[v];
+  const yap = () => asistanAyarGonder({ confirm: v === "degisiklik" ? null : v }, not);
+  if (v === "hic") return onayIste("Asistan eklenti araçlarını sormadan çalıştırsın mı? Silme ve komut yine sorulur.", yap);
+  yap();
 }
 function asTemizle(sesle) {
   if (!asKayit.length) return sesle ? sesNot("Asistan geçmişi zaten boş.") : undefined;
@@ -5914,6 +6057,14 @@ function asTemizle(sesle) {
   if (confirm(`Asistan ekranındaki ${asKayit.length} satırlık konuşma silinsin mi?`)) sil();
 }
 $("btnAsistan").addEventListener("click", () => asAc($("asistanEkran").hidden));
+$("asFab").addEventListener("click", () => asAc($("asistanEkran").hidden));
+$("asKayit").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-oneri]");
+  if (b) komutUygula(b.dataset.oneri);
+});
+$("asMic").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("asMic").setPointerCapture?.(ev.pointerId); basBasla(); });
+for (const t of ["pointerup", "pointercancel"]) $("asMic").addEventListener(t, () => basBirak());
+$("asMic").addEventListener("click", (ev) => ev.preventDefault());
 $("asKapat").addEventListener("click", () => asAc(false));
 $("asYardimBtn").addEventListener("click", () => asYardimAyarla($("asYardim").hidden));
 $("asTemizle").addEventListener("click", () => asTemizle(false));
@@ -5984,7 +6135,31 @@ let dinleme = null;
 // Görev yazdırırken cümleler daha uzun ve düşünerek söylenir: duraklama daha uzun beklenir
 // (kısa parçada ses tanıma belirgin şekilde kötü — bağlamı yok)
 const DINLEME_GOREV_SUSKU_MS = 1800;
-const DINLEME_SUSKU_MS = 800, DINLEME_EN_KISA_MS = 400, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
+const DINLEME_SUSKU_MS = 800, DINLEME_BOS_MS = 5 * 60 * 1000, DINLEME_EN_UZUN_SN = 28;
+// Konuşma sesi ayrımı: yalnızca ses yüksekliği yetmiyor — nefes, ağız şapırtısı, tıkırtı da eşiği geçiyordu,
+// "duyuyorum… anlaşılıyor…" diye bekletip boş kaydı sunucuya yolluyordu. Artık bir karenin "konuşma" sayılması için
+// (1) eşiği geçmesi, (2) sıfır geçiş sıklığının düşük olması gerekir (ünlüler düzenli, nefes/hışırtı gürültü gibi
+// çok sık sıfırdan geçer); konuşma ancak art arda ~150 ms böyle kareyle başlar (şapırtı tek kare sürer);
+// cümlede toplam ~250 ms konuşma yoksa kayıt sunucuya gitmeden atılır. Sessizlik süresini yalnızca konuşma
+// kareleri sıfırlar — aradaki nefes cümlenin bitişini geciktirmez.
+const KONUSMA_ZCR_HZ = 3200, DINLEME_BASLA_MS = 150, DINLEME_EN_AZ_KONUSMA_MS = 250;
+// Söz kesme: Kurmay konuşurken sen belirgin biçimde (~0,3 sn) konuşursan susar ve seni dinler.
+// Eşik kendi sesinin mikrofona yansıyan düzeyinin üstündedir; hoparlör çok açıksa kendi kendini kesebilir —
+// "araya girmeyi kapat" ile kapanır.
+const SOZ_KESME_MS = 300;
+let sozKesme = true;
+try { sozKesme = localStorage.getItem("kurmay-soz-kesme") !== "0"; } catch {}
+function sozKesmeAyarla(ac) {
+  sozKesme = ac;
+  try { localStorage.setItem("kurmay-soz-kesme", ac ? "1" : "0"); } catch {}
+  tamam(ac ? "Ben konuşurken araya girebilirsin — konuşmaya başlayınca susarım" : "Araya girme kapalı — ben konuşurken söylediklerin dinlenmez (Ctrl+Boşluk yine susturur)");
+}
+/** Saniyedeki sıfır geçişi: ünlülerde düşük, nefes / hışırtı / tıkırtıda yüksek */
+function sifirGecisHz(kare, sr) {
+  let c = 0;
+  for (let i = 1; i < kare.length; i++) if ((kare[i - 1] < 0) !== (kare[i] < 0)) c++;
+  return (c * sr) / kare.length;
+}
 // ── Uyandırma kelimesi (isteğe bağlı, VARSAYILAN KAPALI): açıksa dinleme modunda komut "Kurmay" (ya da "hey Kurmay") geçen cümleyle başlar ──
 // Odadaki konuşma komut sanılmasın. "Kurmay" denince 15 sn uyanık kalır: o sırada (ve her komuttan sonra
 // yine 15 sn) cümleler "Kurmay"sız da işlenir. Görev / not yazımında ve soru açıkken gerekmez.
@@ -6014,6 +6189,9 @@ function dinlemeDurum(durum) {
   r.hidden = !dinleme;
   document.body.classList.toggle("dinlemede", !!dinleme);
   $("btnVoiceCmd").classList.toggle("acik", !!dinleme);
+  $("asMic").classList.toggle("acik", !!dinleme);
+  $("asFab").classList.toggle("dinliyor", !!dinleme);
+  asDurumYaz();
   $("btnVoiceCmd").setAttribute("aria-pressed", dinleme ? "true" : "false");
   if (dinleme) r.querySelector(".durum").textContent = durum;
 }
@@ -6028,7 +6206,8 @@ async function dinlemeAc() {
   const sr = ctx.sampleRate;
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(4096, 1, 1);
-  const d = dinleme = { ctx, stream, src, proc, sr, taban: 0.01, konusuyor: false, susku: 0, parca: [], onceki: [], kuyruk: Promise.resolve(), son: Date.now(), bekleyen: 0 };
+  const d = dinleme = { ctx, stream, src, proc, sr, taban: 0.01, konusuyor: false, susku: 0, parca: [], onceki: [], kuyruk: Promise.resolve(), son: Date.now(), bekleyen: 0,
+    basMs: 0, konusmaMs: 0, kesMs: 0, eko: 0, ekoNo: -1 };
   proc.onaudioprocess = (e) => {
     e.outputBuffer.getChannelData(0).fill(0);
     if (dinleme !== d) return;
@@ -6055,32 +6234,49 @@ function dinlemeKapat() {
   sesNot("Dinleme kapatıldı.");
 }
 function dinlemeIsle(d, kare) {
-  // Kurmay konuşuyorsa (ve biraz sonrasında) duyulan kendi sesidir — komut sanılmasın
+  const duzey = sesDuzeyi(kare), kareMs = (kare.length / d.sr) * 1000;
+  const konusmaMi = (e) => duzey > e && sifirGecisHz(kare, d.sr) < KONUSMA_ZCR_HZ;
+  const esik = Math.max(0.012, d.taban * 2.5);
+  // Kurmay konuşuyorsa (ve biraz sonrasında) duyulan çoğunlukla kendi sesidir — komut sanılmasın.
+  // Ama sen belirgin biçimde konuşursan (söz kesme) susar ve seni dinlemeye başlar.
   if (sentezde || Date.now() - sentezBitti < 500) {
     if (d.konusuyor) { d.konusuyor = false; d.parca = []; }
-    d.onceki = [];
+    d.onceki.push(kare);
+    while (d.onceki.length * kareMs > 400) d.onceki.shift();
+    if (!sentezde || !sozKesme) { d.kesMs = 0; return; }
+    if (d.ekoNo !== sentezNo) { d.ekoNo = sentezNo; d.eko = duzey; d.kesMs = 0; } // yeni konuşma: yankı düzeyini baştan ölç
+    const kesEsik = Math.max(0.04, d.taban * 5, d.eko * 2.5);
+    d.kesMs = konusmaMi(kesEsik) ? d.kesMs + kareMs : 0;
+    d.eko = d.eko * 0.95 + duzey * 0.05;
+    if (d.kesMs < SOZ_KESME_MS) return;
+    sus();
+    sentezBitti = 0; // susma anından sonraki 0,5 sn'lik yankı payı burada gerekmez: konuşan sensin
+    d.konusuyor = true; d.susku = 0; d.konusmaMs = d.kesMs; d.kesMs = 0; d.basMs = 0;
+    d.parca = d.onceki.splice(0); d.son = Date.now();
+    if (!d.bekleyen) dinlemeDurum("duyuyorum…");
     return;
   }
-  const duzey = sesDuzeyi(kare), kareMs = (kare.length / d.sr) * 1000;
-  const esik = Math.max(0.012, d.taban * 2.5);
   if (!d.konusuyor) {
     // Gürültü tabanını yavaşça izle; konuşmanın başı kaçmasın diye son ~0,4 sn saklanır
     d.taban = d.taban * 0.95 + duzey * 0.05;
     d.onceki.push(kare);
     while (d.onceki.length * kareMs > 400) d.onceki.shift();
-    if (duzey > esik) {
-      d.konusuyor = true; d.susku = 0; d.parca = d.onceki.splice(0); d.son = Date.now();
+    d.basMs = konusmaMi(esik) ? (d.basMs || 0) + kareMs : 0;
+    if (d.basMs >= DINLEME_BASLA_MS) {
+      d.konusuyor = true; d.susku = 0; d.konusmaMs = d.basMs; d.basMs = 0;
+      d.parca = d.onceki.splice(0); d.son = Date.now();
       if (!d.bekleyen) dinlemeDurum("duyuyorum…");
     }
     return;
   }
   d.parca.push(kare);
-  d.susku = duzey > esik ? 0 : d.susku + kareMs;
-  if (duzey > esik) d.son = Date.now();
+  if (konusmaMi(esik)) { d.konusmaMs += kareMs; d.susku = 0; d.son = Date.now(); }
+  else d.susku += kareMs;
   const sure = d.parca.reduce((t, k) => t + k.length, 0) / d.sr;
   if (d.susku >= (gorevYazimi || yorumYazimi ? DINLEME_GOREV_SUSKU_MS : DINLEME_SUSKU_MS) || sure >= DINLEME_EN_UZUN_SN) {
     const parca = d.parca; d.parca = []; d.konusuyor = false;
-    if ((sure - d.susku / 1000) * 1000 >= DINLEME_EN_KISA_MS) dinlemeGonder(d, parca);
+    // Toplam konuşma çok kısaysa (öksürük, nefes, tek kelimelik gürültü) sunucuya gönderilmez
+    if (d.konusmaMs >= DINLEME_EN_AZ_KONUSMA_MS) dinlemeGonder(d, parca);
     else if (!d.bekleyen) dinlemeDurum(beklemeYazisi());
   }
 }

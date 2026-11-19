@@ -400,6 +400,27 @@ export interface AppConfig extends ProviderConfig {
   /** Sesle görev yazma (Ayarlar): panelde mikrofon düğmesi kaydı ses tanıma modeline gönderir,
    *  metin görev kutusuna yazılır. Bağlantı varsayılan olarak genel bağlantıdır (baseUrl + apiKey). */
   speech?: SpeechConfig;
+  /** Sesli asistanın sınırları: hangi eklenti/araçlar, bilgisayarda ne yapabilir, ne zaman sorar */
+  assistant?: AssistantLimitsConfig;
+}
+
+/** İzin: kapalı (false), açık (true) ya da önce sor ("ask") */
+export type AssistantPerm = boolean | "ask";
+/** Sesli asistanın sınırları (config.json "assistant"). Yoksa eski davranış: genel açık eklentiler,
+ *  bilgisayar işleri `speech.computer`'a göre. */
+export interface AssistantLimitsConfig {
+  /** Eklenti başına: enabled (yoksa genel Aç/Kapat ayarı geçerli; true = ajanlar için kapalı olsa da
+   *  asistan kullanır), tools (yalnızca bu araçlar), readOnly (yalnızca okuyan araçlar) */
+  mcp?: Record<string, { enabled?: boolean; tools?: string[]; readOnly?: boolean }>;
+  /** Bilgisayar işleri: okuma (klasör aç, listele, oku), yazma (yaz, klasör oluştur, taşı),
+   *  silme ve komut çalıştırma (çalıştırılabilir dosya açma dahil) — silme ve komut yalnızca kapalı/sor */
+  computer?: { read?: AssistantPerm; write?: AssistantPerm; delete?: false | "ask"; run?: false | "ask" };
+  /** Eklenti araçlarında ne zaman sorsun: degisiklik (salt okunur olmayan; varsayılan), hep, hic */
+  confirm?: "degisiklik" | "hep" | "hic";
+  /** Bir cümlede en fazla kaç adım (1-20, varsayılan 8) */
+  maxSteps?: number;
+  /** Süre sınırları (ms): eklenti aracı (varsayılan 2 dk), komut (varsayılan 60 sn) */
+  timeouts?: { mcpMs?: number; commandMs?: number };
 }
 
 /** Ses tanıma (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM) */
