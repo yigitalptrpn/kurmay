@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLI_STALL_MIN_MS } from "./resilience.js";
+import { checkAssistantLimits } from "./assistantLimits.js";
 import {
   EFFORT_LEVELS,
   isCommandNode,
@@ -141,6 +142,29 @@ export function loadAppConfig(configPath: string): AppConfig {
       throw new Error(`ayar dosyası: "planWebhook.apiKey" metin olmalı`);
     }
   }
+
+  if (cfg.speech !== undefined) {
+    const sp = cfg.speech as unknown as Record<string, unknown> | null;
+    if (!sp || typeof sp !== "object" || Array.isArray(sp)) {
+      throw new Error(
+        `ayar dosyası: "speech" {"enabled": true, "model": "…", "language"?: "tr"} biçiminde olmalı (verilen: ${JSON.stringify(sp)})`,
+      );
+    }
+    for (const k of ["enabled", "computer", "fixDictation"]) {
+      if (sp[k] !== undefined && typeof sp[k] !== "boolean")
+        throw new Error(`ayar dosyası: "speech.${k}" true/false olmalı`);
+    }
+    for (const k of ["model", "language", "prompt", "commandModel", "ttsModel", "ttsVoice", "terms"]) {
+      if (sp[k] !== undefined && typeof sp[k] !== "string") throw new Error(`ayar dosyası: "speech.${k}" metin olmalı`);
+    }
+    if (typeof sp.language === "string" && sp.language && !/^(auto|[a-z]{2,3})$/i.test(sp.language)) {
+      throw new Error(
+        `ayar dosyası: "speech.language" iki harfli dil kodu (tr, en…) ya da "auto" olmalı (verilen: ${JSON.stringify(sp.language)})`,
+      );
+    }
+  }
+
+  if (cfg.assistant !== undefined) checkAssistantLimits(cfg.assistant);
 
   if (cfg.tfs !== undefined) {
     const t = cfg.tfs as Record<string, unknown> | null;

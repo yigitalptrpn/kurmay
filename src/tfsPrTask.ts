@@ -240,7 +240,7 @@ export async function preparePrTask(
   const pr = await getPullRequest(c, id, signal);
   if (pr.status && pr.status !== "active")
     throw new Error(
-      `!${id} çekme isteği açık değil (${pr.status === "completed" ? "tamamlanmış" : pr.status === "abandoned" ? "bırakılmış" : pr.status})`,
+      `!${id} pull request açık değil (${pr.status === "completed" ? "tamamlanmış" : pr.status === "abandoned" ? "bırakılmış" : pr.status})`,
     );
   const it = await getIterationChanges(c, pr, signal).catch(() => ({ iteration: 0, changes: [] }));
   const changes = it.changes;
@@ -251,24 +251,24 @@ export async function preparePrTask(
   ]);
   const repo = local.repo;
   if (mode === "yorum") {
-    if (!repo) throw new Error(local.status.error ?? "çekme isteğinin deposu hedef dizinde bulunamadı");
+    if (!repo) throw new Error(local.status.error ?? "pull request'in deposu hedef dizinde bulunamadı");
     if (!local.status.onBranch) {
       throw new Error(
-        `bilgisayardaki kopya ("${repo.rel}") şu an "${local.status.branch}" dalında; çekme isteğinin dalı "${pr.source}" — önce karttaki "Dala geç" düğmesine bas`,
+        `bilgisayardaki kopya ("${repo.rel}") şu an "${local.status.branch}" branch'inde; pull request'in branch'i "${pr.source}" — önce karttaki "Checkout" düğmesine bas`,
       );
     }
   }
   const acik = openThreads(threads);
   if (mode === "yorum" && !acik.length && !userNote.trim())
-    throw new Error(`!${id} çekme isteğinde açık yorum yok — ne yapılacağını görev kutusuna yaz`);
+    throw new Error(`!${id} pull request'te açık yorum yok — ne yapılacağını görev kutusuna yaz`);
   const sum = await getSummaries(c, wiIds, signal).catch(() => new Map());
 
   // Ajan talimatı (şema alan adları dahil) ekranda gösterilmez — görev balonunda yalnızca içerik
   const guide =
     mode === "yorum"
       ? [
-          `Bu görev TFS'teki !${pr.id} numaralı çekme isteğinin (pull request) inceleme yorumlarını ele almaktır — Kurmay isteği TFS'ten aldı.`,
-          `- Çalışma kopyası isteğin "${pr.source}" dalında${repo && repo.rel !== "." ? ` (depo hedef dizinde "${repo.rel}" klasöründe)` : ""}; değişiklikleri burada yap.`,
+          `Bu görev TFS'teki !${pr.id} numaralı pull request'in (pull request) inceleme yorumlarını ele almaktır — Kurmay isteği TFS'ten aldı.`,
+          `- Çalışma kopyası isteğin "${pr.source}" branch'inde${repo && repo.rel !== "." ? ` (depo hedef dizinde "${repo.rel}" klasöründe)` : ""}; değişiklikleri burada yap.`,
           "- Her açık yorumu oku. Haklıysa kodu düzelt; katılmıyorsan o kodu değiştirme ve nedenini planın varsayımlarında (assumptions) yaz.",
           "- Planındaki her değişikliğin gerekçesinin (rationale) BAŞINA hangi yorumu karşıladığını yaz: [Y-12] biçiminde (birden çoksa [Y-12][Y-15]). " +
             "Kurmay bitince her yorumun altına bu gerekçeleri cevap olarak yazacak.",
@@ -276,7 +276,7 @@ export async function preparePrTask(
           `- ${SADE_DIL}`,
         ]
       : [
-          `Bu görev TFS'teki !${pr.id} numaralı çekme isteğini (pull request) incelemektir — kod DEĞİŞTİRME, plan çıkarma.`,
+          `Bu görev TFS'teki !${pr.id} numaralı pull request'i (pull request) incelemektir — kod DEĞİŞTİRME, plan çıkarma.`,
           '- route alanını "done" yap; file_plan boş kalsın.',
           "- answer alanına genel değerlendirmeyi Markdown olarak yaz (isteğe genel yorum olarak gidecek): ne yapılmış, riskler, eksikler.",
           "- Somut her bulguyu references'a ayrı bir kayıt olarak yaz: path = dosya yolu (hedef dizine göre), line = isteğin SON halindeki satır " +
@@ -294,7 +294,7 @@ export async function preparePrTask(
     L.push(`- İnceleyenler: ${pr.reviewers.map((r) => `${r.name} (${VOTES[String(r.vote)] ?? r.vote})`).join(", ")}`);
   if (wiIds.length)
     L.push(
-      `- Bağlı iş öğeleri: ${wiIds.map((w) => (sum.get(w) ? `#${w} (${sum.get(w)!.type}) ${sum.get(w)!.title}` : `#${w}`)).join("; ")}`,
+      `- Bağlı work item'lar: ${wiIds.map((w) => (sum.get(w) ? `#${w} (${sum.get(w)!.type}) ${sum.get(w)!.title}` : `#${w}`)).join("; ")}`,
     );
   L.push(`- Adres: ${pr.webUrl}`);
   if (pr.description.trim()) L.push("", "### Açıklama", kirp(pr.description.trim(), 6000));
@@ -584,16 +584,16 @@ export async function preparePrFollowUp(
   signal?: AbortSignal,
 ): Promise<PreparedPrTask> {
   const pr = await getPullRequest(c, id, signal);
-  if (pr.status && pr.status !== "active") throw new Error(`!${id} çekme isteği artık açık değil`);
+  if (pr.status && pr.status !== "active") throw new Error(`!${id} pull request artık açık değil`);
   const local = await localStatus(targetDir, pr);
-  if (!local.repo) throw new Error(local.status.error ?? "çekme isteğinin deposu hedef dizinde bulunamadı");
+  if (!local.repo) throw new Error(local.status.error ?? "pull request'in deposu hedef dizinde bulunamadı");
   if (!local.status.onBranch)
     throw new Error(
-      `bilgisayardaki kopya ("${local.repo.rel}") şu an "${local.status.branch}" dalında; çekme isteğinin dalı "${pr.source}" — önce dala geç`,
+      `bilgisayardaki kopya ("${local.repo.rel}") şu an "${local.status.branch}" branch'inde; pull request'in branch'i "${pr.source}" — önce branch'e geç`,
     );
   const text =
-    `Bu görev, bu oturumda üzerinde çalışılan TFS çekme isteği !${pr.id} — "${pr.title}" ile ilgilidir ` +
-    `(dal "${pr.source}"${local.repo.rel !== "." ? `, depo "${local.repo.rel}" klasöründe` : ""}). Değişiklikleri bu dalda yap.\n\n${userNote}`;
+    `Bu görev, bu oturumda üzerinde çalışılan TFS pull request !${pr.id} — "${pr.title}" ile ilgilidir ` +
+    `(dal "${pr.source}"${local.repo.rel !== "." ? `, depo "${local.repo.rel}" klasöründe` : ""}). Değişiklikleri bu branch'te yap.\n\n${userNote}`;
   const t = pr.title.trim();
   return {
     meta: {

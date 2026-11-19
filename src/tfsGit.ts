@@ -139,7 +139,7 @@ export interface LocalRepo {
   remoteUrl: string;
 }
 
-async function repoAt(dir: string): Promise<{ root: string; remote: string; remoteUrl: string } | undefined> {
+export async function repoAt(dir: string): Promise<{ root: string; remote: string; remoteUrl: string } | undefined> {
   if (!fs.existsSync(path.join(dir, ".git"))) return undefined;
   try {
     const root = path.resolve(await git(dir, ["rev-parse", "--show-toplevel"]));
@@ -227,8 +227,8 @@ export async function checkoutPrBranch(
   const dirty = await dirtyFiles(repo.dir);
   if (dirty.length) {
     throw new GitError(
-      `yerel kopyada kaydedilmemiş ${dirty.length} değişiklik var (${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}) — ` +
-        "önce bunları kaydet ya da geri al; Kurmay kaydedilmemiş değişikliklerin üstünde dal değiştirmez",
+      `yerel kopyada commit edilmemiş ${dirty.length} değişiklik var (${dirty.slice(0, 3).join(", ")}${dirty.length > 3 ? "…" : ""}) — ` +
+        "önce bunları commit et ya da geri al; Kurmay commit edilmemiş değişikliklerin üstünde checkout yapmaz",
     );
   }
   if (!repo.remote) throw new GitError("depoda sunucu bağlantısı (uzak depo) tanımlı değil");
@@ -245,7 +245,7 @@ export async function checkoutPrBranch(
     await git(repo.dir, ["checkout", branch], { signal });
     await git(repo.dir, ["merge", "--ff-only", `${repo.remote}/${branch}`], { signal }).catch((e: Error) => {
       throw new GitError(
-        `yerel "${branch}" dalı sunucudakinden ayrılmış — iki dalı elle birleştirmen gerekiyor (${e.message})`,
+        `yerel "${branch}" branch'i sunucudakinden ayrılmış — iki branch'i elle birleştirmen gerekiyor (${e.message})`,
       );
     });
   } else {
@@ -279,7 +279,7 @@ export async function commitAndPush(
   if (o.newBranch) await git(repo.dir, ["checkout", "-b", o.newBranch], { signal: o.signal });
   const branch = o.newBranch ?? (await currentBranch(repo.dir));
   if (branch === "HEAD")
-    throw new GitError("yerel kopya bir dalda değil (belirli bir kayda geçilmiş) — önce bir dala geç");
+    throw new GitError("yerel kopya bir branch'te değil (belirli bir kayda geçilmiş) — önce bir branch'e geç");
   await git(repo.dir, ["add", "-A", "--", ...paths], { signal: o.signal });
   const [subject, ...body] = message.trim().split(/\r?\n/);
   const args = ["commit", "-m", subject || "Kurmay değişikliği"];
@@ -312,7 +312,7 @@ export async function pushBranch(
       await git(repo.dir, args, { timeoutMs: 300_000, signal: o.signal });
     } catch (e2) {
       throw new GitError(
-        `gönderilemedi — TFS anahtarıyla da kendi git kimliğinle de kimlik reddedildi (anahtarın "Kod — okuma ve yazma" kapsamı var mı?): ${e2 instanceof Error ? e2.message : String(e2)}`,
+        `push yapılamadı — TFS anahtarıyla da kendi git kimliğinle de kimlik reddedildi (anahtarın "Code — Read & write" kapsamı var mı?): ${e2 instanceof Error ? e2.message : String(e2)}`,
       );
     }
   }

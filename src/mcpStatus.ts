@@ -156,22 +156,25 @@ export function clearMcpToolCache(): void {
   toolCache.clear();
 }
 
+function makeTransport(server: McpServerJson, cwd: string) {
+  return "url" in server
+    ? server.type === "sse"
+      ? new SSEClientTransport(new URL(server.url), { requestInit: { headers: server.headers ?? {} } })
+      : new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: server.headers ?? {} } })
+    : new StdioClientTransport({
+        command: server.command,
+        args: server.args ?? [],
+        cwd,
+        env: { ...(process.env as Record<string, string>), ...(server.env ?? {}) },
+        stderr: "ignore",
+      });
+}
+
 export async function listMcpTools(name: string, server: McpServerJson, cwd: string): Promise<McpToolInfo[]> {
   const cached = toolCache.get(name);
   if (cached) return cached;
   const client = new Client({ name: "kurmay", version: "1.0.0" });
-  const transport =
-    "url" in server
-      ? server.type === "sse"
-        ? new SSEClientTransport(new URL(server.url), { requestInit: { headers: server.headers ?? {} } })
-        : new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: server.headers ?? {} } })
-      : new StdioClientTransport({
-          command: server.command,
-          args: server.args ?? [],
-          cwd,
-          env: { ...(process.env as Record<string, string>), ...(server.env ?? {}) },
-          stderr: "ignore",
-        });
+  const transport = makeTransport(server, cwd);
   const timer = setTimeout(() => void client.close().catch(() => {}), 20_000);
   try {
     await client.connect(transport);
@@ -205,5 +208,75 @@ export async function listMcpTools(name: string, server: McpServerJson, cwd: str
   } finally {
     clearTimeout(timer);
     await client.close().catch(() => {});
+  }
+}
+
+/**
+ * Sesli asistan için eklenti aracı çağırma. Bağlantı açık tutulur (stdio eklentisinin her çağrıda
+ * yeniden başlaması saniyeler sürer); 5 dk kullanılmazsa kapanır. Model çağrısı yok.
+ */
+const POOL_IDLE_MS = 5 * 60_000;
+const pool = new Map<string, { client: Client; key: string; timer: NodeJS.Timeout }>();
+
+function dropPooled(name: string): void {
+  const p = pool.get(name);
+  if (!p) return;
+  pool.delete(name);
+  clearTimeout(p.timer);
+  void p.client.close().catch(() => {});
+}
+
+async function pooledClient(name: string, server: McpServerJson, cwd: string): Promise<Client> {
+  const key = JSON.stringify(server) + "\n" + cwd;
+  const p = pool.get(name);
+  if (p && p.key === key) {
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => dropPooled(name), POOL_IDLE_MS);
+    return p.client;
+  }
+  if (p) dropPooled(name);
+  const client = new Client({ name: "kurmay", version: "1.0.0" });
+  const giveUp = setTimeout(() => void client.close().catch(() => {}), 30_000);
+  try {
+    await client.connect(makeTransport(server, cwd));
+  } finally {
+    clearTimeout(giveUp);
+  }
+  const entry = { client, key, timer: setTimeout(() => dropPooled(name), POOL_IDLE_MS) };
+  pool.set(name, entry);
+  client.onclose = () => {
+    if (pool.get(name) === entry) pool.delete(name);
+  };
+  return client;
+}
+
+export async function callMcpTool(
+  name: string,
+  server: McpServerJson,
+  cwd: string,
+  tool: string,
+  args: Record<string, unknown>,
+  timeoutMs = 120_000,
+): Promise<{ ok: boolean; text: string }> {
+  try {
+    const client = await pooledClient(name, server, cwd);
+    const r = (await client.callTool({ name: tool, arguments: args }, undefined, { timeout: timeoutMs })) as {
+      content?: Array<{ type?: string; text?: string; resource?: { text?: string; uri?: string } }>;
+      structuredContent?: unknown;
+      isError?: boolean;
+    };
+    const parts = (r.content ?? []).map((c) =>
+      c.type === "text"
+        ? (c.text ?? "")
+        : c.type === "resource"
+          ? (c.resource?.text ?? `[kaynak: ${c.resource?.uri ?? "?"}]`)
+          : `[${c.type ?? "içerik"}]`,
+    );
+    let text = parts.join("\n").trim();
+    if (!text && r.structuredContent !== undefined) text = JSON.stringify(r.structuredContent, null, 2);
+    return { ok: !r.isError, text: text || "(boş sonuç)" };
+  } catch (e) {
+    dropPooled(name); // bağlantı bozulduysa sonraki çağrı yeniden açsın
+    return { ok: false, text: e instanceof Error ? e.message : String(e) };
   }
 }

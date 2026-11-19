@@ -15,26 +15,37 @@ import type { TfsConfig } from "./types.js";
 export const TOKEN_ENVS = ["KURMAY_TFS_TOKEN", "AZURE_DEVOPS_PAT"] as const;
 
 const secretDir = (configRoot: string) => path.join(configRoot, ".gizli");
-const secretFile = (configRoot: string) => path.join(secretDir(configRoot), "tfs.json");
+const secretFile = (configRoot: string, name = "tfs") => path.join(secretDir(configRoot), `${name}.json`);
+
+/** `.gizli/<ad>.json`'daki anahtar (yoksa undefined) — ses tanıma da aynı klasörü kullanır */
+export function readSecret(configRoot: string, name: string): string | undefined {
+  try {
+    const j = JSON.parse(fs.readFileSync(secretFile(configRoot, name), "utf8")) as { token?: unknown };
+    if (typeof j.token === "string" && j.token.trim()) return j.token.trim();
+  } catch {
+    /* yok */
+  }
+  return undefined;
+}
 
 export function readTfsToken(configRoot: string): { token?: string; source?: "ortam" | "dosya"; env?: string } {
   for (const env of TOKEN_ENVS) {
     const v = process.env[env]?.trim();
     if (v) return { token: v, source: "ortam", env };
   }
-  try {
-    const j = JSON.parse(fs.readFileSync(secretFile(configRoot), "utf8")) as { token?: unknown };
-    if (typeof j.token === "string" && j.token.trim()) return { token: j.token.trim(), source: "dosya" };
-  } catch {
-    /* yok */
-  }
-  return {};
+  const token = readSecret(configRoot, "tfs");
+  return token ? { token, source: "dosya" } : {};
 }
 
 /** Anahtarı kaydeder (null = siler) */
 export function writeTfsToken(configRoot: string, token: string | null): void {
+  writeSecret(configRoot, "tfs", token);
+}
+
+/** `.gizli/<ad>.json`'a anahtar yazar (null = siler) */
+export function writeSecret(configRoot: string, name: string, token: string | null): void {
   const dir = secretDir(configRoot);
-  const file = secretFile(configRoot);
+  const file = secretFile(configRoot, name);
   if (token === null) {
     fs.rmSync(file, { force: true });
     return;

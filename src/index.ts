@@ -1,13 +1,16 @@
 import fs from "node:fs";
-import { getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
+import { deleteSession as deleteSdkSession, getSessionInfo } from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { GitOps, type GitOpKind } from "./gitOps.js";
+import { Assistant, type AssistantReply, type AssistantRequest, type McpBridge } from "./assistant.js";
 import { checkAgentMd, composeAgentMd, frontDescription, resolveAgentMd, splitAgentMd } from "./agentMd.js";
 import { loadAgents, skillInfo } from "./agents.js";
 import { fmtDate, parseRunAt } from "./approval.js";
 import { disabledMcpServers, isEffort, loadAppConfig, modelMissing } from "./config.js";
-import { listMcpTools, mcpStatus, probeMcp } from "./mcpStatus.js";
+import { callMcpTool, listMcpTools, mcpStatus, probeMcp, type McpToolInfo } from "./mcpStatus.js";
+import { assistantLimits, assistantMcpEnabled } from "./assistantLimits.js";
 import { compactPercent, contextInfo } from "./context.js";
 import { fetchModels, refreshModelContext } from "./models.js";
 import { RESILIENCE_LIMIT_KEYS, RESILIENCE_RETRY_KEYS, setLiveResilience } from "./resilience.js";
@@ -35,6 +38,16 @@ import {
 } from "./tfs.js";
 import { textToTfsHtml } from "./tfsHtml.js";
 import { readTfsToken, tfsConnection, tfsReady, tfsView, writeTfsToken } from "./tfsSettings.js";
+import {
+  generalConnection,
+  probeSpeech,
+  speechEnabled,
+  speechView,
+  synthesize,
+  transcribe,
+  understandCommand,
+  fixDictation,
+} from "./speech.js";
 import {
   prepareWorkItemTask,
   previewWorkItem,
@@ -64,6 +77,7 @@ import {
   getPullRequest,
   getRepository,
   myPullRequests,
+  prStatusSummary,
   repoInfoFromRemote,
   replyToThread,
   setThreadStatus,
@@ -76,6 +90,8 @@ import {
   TFS_WRITE_BACK,
   type AgentDefinition,
   type AppConfig,
+  type McpServerJson,
+  type SpeechConfig,
   type TfsConfig,
   type WorkflowConfig,
 } from "./types.js";
@@ -168,6 +184,8 @@ async function executeRun(o: {
   attachmentIntro?: string;
   /** Akış bittikten sonra, koşu kaydı kapanmadan (TFS'e yazma) — bu koşunun olaylarıyla */
   afterRun?: (events: TimedEvent[]) => Promise<void>;
+  /** Oturumun adı değişti (Analist'in kısa başlığı) — lobi yenilensin */
+  onRename?: () => void;
 }): Promise<void> {
   const { task, cfg, agents, cwd, runtime, entry } = o;
   const display = o.display ?? task;
@@ -179,6 +197,13 @@ async function executeRun(o: {
   const runLog = path.join(o.runsDir, logName);
   o.sessions.addRunLog(entry.id, logName, display);
   const unsubscribe = bus.subscribe((e) => fs.appendFileSync(runLog, JSON.stringify(e) + "\n"));
+  // Analist (entry) ilk görevde kısa başlık verirse oturumun adı o olur — görevin ilk 60 karakteri
+  // listede çoğu zaman aynı başlıyor, ayırt edilemiyordu. Ek model çağrısı yok: başlık planla gelir.
+  const unsubscribeTitle = bus.subscribe((e) => {
+    if (e.type !== "agent_finished" || e.agent !== cfg.workflow.entry) return;
+    const title = (e.structured as { title?: unknown } | undefined)?.title;
+    if (typeof title === "string" && o.sessions.setTitle(entry.id, title)) o.onRename?.();
+  });
   // Güvenlik denetimi raporu: denetçi düğüm (securityReport) bitince runs/guvenlik/'e kaydedilir
   const unsubscribeReport = watchSecurityReports(bus, o.securityReports, {
     isReportAgent: (agent) =>
@@ -253,6 +278,7 @@ async function executeRun(o: {
   } finally {
     runtime.endRun();
     unsubscribe();
+    unsubscribeTitle();
     unsubscribeReport();
     o.sessions.finishRun(entry.id, sessionStore.entrySessionId, runtime.status, sessionStore.entryContext);
     o.onDone();
@@ -312,6 +338,34 @@ async function main() {
   const runsDir = path.join(configRoot, "runs");
   const securityReports = new SecurityReportStore(path.join(runsDir, "guvenlik"));
   fs.mkdirSync(runsDir, { recursive: true });
+  /** Oturum silinince diskteki izleri de silinir: koşu kayıtları (runs/*.jsonl), görev ekleri
+   *  (runs/ekler/<oturum>/) ve ajanların konuşma kayıtları (~/.claude/projects/…/<kimlik>.jsonl —
+   *  Analist'inki oturumda, diğer ajanlarınki koşu kayıtlarındaki agent_finished olaylarında).
+   *  Başka bir oturumun hâlâ kullandığı konuşmaya dokunulmaz. Güvenlik raporları kalır (ayrı sayfa). */
+  const removeSessionFiles = (e: SessionEntry): void => {
+    const ids = new Set<string>();
+    if (e.sdkSessionId) ids.add(e.sdkSessionId);
+    for (const name of e.runLogs ?? []) {
+      const f = path.join(runsDir, path.basename(name));
+      try {
+        for (const line of fs.readFileSync(f, "utf8").split("\n")) {
+          if (!line.includes('"agent_finished"') || !line.includes('"sessionId"')) continue;
+          try {
+            const ev = JSON.parse(line) as { type?: string; sessionId?: unknown };
+            if (ev.type === "agent_finished" && typeof ev.sessionId === "string") ids.add(ev.sessionId);
+          } catch {
+            /* bozuk satır */
+          }
+        }
+      } catch {
+        /* kayıt yok */
+      }
+      fs.rmSync(f, { force: true });
+    }
+    if (/^[\w-]+$/.test(e.id)) fs.rmSync(path.join(runsDir, "ekler", e.id), { recursive: true, force: true });
+    for (const other of sessions.all()) if (other.sdkSessionId) ids.delete(other.sdkSessionId);
+    for (const sid of ids) void deleteSdkSession(sid).catch(() => {});
+  };
 
   // Oturum kataloğu (runs/sessions.json) + oturum başına çalışma zamanları. Sunucu
   // modunda onaylar yalnızca panelden (exclusive): birden çok oturum aynı anda
@@ -364,6 +418,8 @@ async function main() {
         // Oturumun hedef dizini (yoksa genel dizin geçerli) ve diskte var mı — panel uyarısı için
         targetDir: e.targetDir,
         dirExists: dirOk(e.targetDir ?? cwd),
+        // Panelde oturumun grubu (klasör gibi)
+        ...(e.group ? { group: e.group } : {}),
         // Analist konuşmasının doluluğu — panelde yaklaşınca uyarı
         ...(e.contextTokens ? { context: { tokens: e.contextTokens, window: ctx?.window, limit: ctx?.limit } } : {}),
         // TFS: oturumun bağlı olduğu iş öğesi (sol listede rozet)
@@ -414,7 +470,7 @@ async function main() {
     try {
       await writeWorkItem(conn, wi.id, { html: textToTfsHtml(text) });
       rt.bus.emit({ type: "tfs_written", id: wi.id, ok: true, auto: true, url: wi.url });
-      console.log(`📌 TFS #${wi.id}: sonuç iş öğesine yazıldı`);
+      console.log(`📌 TFS #${wi.id}: sonuç work item'a yazıldı`);
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       rt.bus.emit({ type: "tfs_written", id: wi.id, ok: false, auto: true, error });
@@ -458,11 +514,11 @@ async function main() {
     if (input.push) {
       if (!input.files?.length) return fail("gönderilecek dosya yok");
       const repo = pr.repoDir ? await openRepo(pr.repoDir, runDir) : undefined;
-      if (!repo) return fail("çekme isteğinin bilgisayardaki kopyası bulunamadı — değişiklikler gönderilemedi");
+      if (!repo) return fail("pull request'in bilgisayardaki kopyası bulunamadı — değişiklikler gönderilemedi");
       const branch = await currentBranch(repo.dir).catch(() => "");
       if (branch !== pr.source)
         return fail(
-          `bilgisayardaki kopya artık "${branch}" dalında, çekme isteğinin dalı "${pr.source}" — değişiklikler gönderilmedi`,
+          `bilgisayardaki kopya artık "${branch}" branch'inde, pull request'in branch'i "${pr.source}" — değişiklikler gönderilmedi`,
         );
       try {
         const r = await commitAndPush(
@@ -473,7 +529,7 @@ async function main() {
         );
         pushed = { branch: r.branch, commit: r.commit };
         console.log(
-          `📤 Çekme isteği !${pr.id}: ${r.files.length} dosya ${r.branch} dalına gönderildi (kayıt ${r.commit.slice(0, 8)})`,
+          `📤 Pull request !${pr.id}: ${r.files.length} dosya ${r.branch} branch'ine push edildi (commit ${r.commit.slice(0, 8)})`,
         );
       } catch (e) {
         return fail(`değişiklikler gönderilemedi: ${e instanceof Error ? e.message : String(e)}`);
@@ -666,6 +722,7 @@ async function main() {
       entry: e,
       securityReports,
       onDone: () => runtimes.notify(),
+      onRename: () => runtimes.notify(),
       startAt: runAt,
       ...(tfs
         ? {
@@ -871,7 +928,7 @@ async function main() {
         const runDir = started?.targetDir ?? e.targetDir ?? cwd;
         const { repos } = await groupByRepo(runChangedFiles(events, cfg.workflow.entry, runDir), runDir);
         if (!repos.size)
-          return { ok: false, error: "değişen dosyalar bir git deposunda değil — çekme isteği açılamaz" };
+          return { ok: false, error: "değişen dosyalar bir git deposunda değil — pull request açılamaz" };
         for (const [root, rels] of repos) {
           const repo = await openRepo(root, runDir);
           const label = repo?.rel ?? root;
@@ -914,7 +971,7 @@ async function main() {
             if ((await serverVersion(c)) < 5 && made.artifactId) {
               await linkArtifact(c, pend.id, made.artifactId, "Pull Request").catch((err) =>
                 console.warn(
-                  `⚠ TFS #${pend.id}: çekme isteği bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
+                  `⚠ TFS #${pend.id}: pull request bağı eklenemedi — ${err instanceof Error ? err.message : err}`,
                 ),
               );
             }
@@ -925,7 +982,7 @@ async function main() {
               ...(made.existed ? { existed: true } : {}),
               branch: pushed.branch,
             });
-            console.log(`🔀 TFS #${pend.id}: çekme isteği !${made.id} (${label}, ${pushed.branch} → ${target})`);
+            console.log(`🔀 TFS #${pend.id}: pull request !${made.id} (${label}, ${pushed.branch} → ${target})`);
           } catch (err) {
             prs.push({
               repo: label,
@@ -937,13 +994,13 @@ async function main() {
         if (prs.every((p) => p.error)) {
           return {
             ok: false,
-            error: `çekme isteği açılamadı — ${prs.map((p) => `${p.repo}: ${p.error}`).join("; ")}`,
+            error: `pull request açılamadı — ${prs.map((p) => `${p.repo}: ${p.error}`).join("; ")}`,
             prs,
           };
         }
       }
       const prLines = prs.filter((p) => p.id).map((p) => `[!${p.id}](${p.url}) (${p.repo}, dal ${p.branch})`);
-      const note = text.trim() + (prLines.length ? `\n\n**Çekme isteği:** ${prLines.join(", ")}` : "");
+      const note = text.trim() + (prLines.length ? `\n\n**Pull request:** ${prLines.join(", ")}` : "");
       try {
         const r = await writeWorkItem(c, pend.id, {
           ...(note.trim() ? { html: textToTfsHtml(note) } : {}),
@@ -962,7 +1019,7 @@ async function main() {
       } catch (err) {
         return {
           ok: false,
-          error: `${prs.length ? "çekme isteği açıldı ama " : ""}iş öğesine yazılamadı: ${err instanceof Error ? err.message : String(err)}`,
+          error: `${prs.length ? "pull request açıldı ama " : ""}work item'a yazılamadı: ${err instanceof Error ? err.message : String(err)}`,
           ...(prs.length ? { prs } : {}),
         };
       }
@@ -971,6 +1028,9 @@ async function main() {
     /** PR kartı: PR, açık yorumlar, değişen dosyalar, yerel deponun durumu (dir: görevin dizini) */
     prPreview: (id: number, dir?: string) => previewPr(tfsConn(), id, dir && dirOk(dir) ? dir : cwd),
     prMine: () => myPullRequests(tfsConn()),
+    /** Açık çekme isteklerimin durumu (sesli komut): oylar, açık / yeni yorumlar, çakışma */
+    prStatus: (since: Record<string, string>, fallbackSince: string) =>
+      prStatusSummary(tfsConn(), since, fallbackSince),
     /** "Dala geç": yerel depoyu PR'ın kaynak dalına geçirir (çalışma ağacı temizse) */
     prCheckout: async (id: number, dir?: string) => {
       const c = tfsConn();
@@ -979,7 +1039,7 @@ async function main() {
       const repo = await findRepo(target, pr.repository.name);
       if (!repo) throw new TfsError(`"${pr.repository.name}" deposu hedef dizinde bulunamadı (${target})`);
       const commit = await checkoutPrBranch(repo, pr.source, await authEnv(c, repo.remoteUrl));
-      console.log(`🔀 ${repo.rel}: çekme isteği !${id} dalına geçildi (${pr.source}, kayıt ${commit})`);
+      console.log(`🔀 ${repo.rel}: pull request !${id} branch'ine checkout yapıldı (${pr.source}, commit ${commit})`);
       return { branch: pr.source, commit, repo: repo.rel };
     },
     /** PR'a yaz (kartta düzenlenmiş haliyle) */
@@ -988,7 +1048,7 @@ async function main() {
       if (!e) return { ok: false, error: "oturum bulunamadı" };
       const rt = runtimes.get(e.id, e.runLogs);
       const pend = pendingPrWriteback(rt);
-      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      if (!pend) return { ok: false, error: "bu oturumda pull request'e yazılmayı bekleyen sonuç yok" };
       const r = await executePrWrite(
         pend.pr,
         { ...input, files: input.push ? pend.draft.commit?.files : undefined },
@@ -1005,7 +1065,7 @@ async function main() {
       if (!e) return { ok: false, error: "oturum bulunamadı" };
       const rt = runtimes.get(e.id, e.runLogs);
       const pend = pendingPrWriteback(rt);
-      if (!pend) return { ok: false, error: "bu oturumda çekme isteğine yazılmayı bekleyen sonuç yok" };
+      if (!pend) return { ok: false, error: "bu oturumda pull request'e yazılmayı bekleyen sonuç yok" };
       emitAfterRun(e, rt, { type: "tfs_pr_written", id: pend.pr.id, ok: false, skipped: true });
       return { ok: true };
     },
@@ -1138,7 +1198,282 @@ async function main() {
     }
   };
 
+  /** Sesle görev yazma (Ayarlar): aç/kapat, model, dil config.json'a (speech). Adres ve anahtar
+   *  genel bağlantıdan (baseUrl/apiKey). Canlı: yeniden başlatma gerekmez. */
+  const assistant = new Assistant();
+  /** Sesli asistanın eklentileri: Ayarlar → Asistan'daki ayar, yoksa genel Aç/Kapat (ajanlar için
+   *  kapalı eklenti asistana açık olabilir). `disabled` alanı atılır (bağlantı havuzunun anahtarı sabit kalsın). */
+  const assistantServers = (): Record<string, McpServerJson> => {
+    const out: Record<string, McpServerJson> = {};
+    for (const [name, server] of Object.entries(cfg.mcpServers ?? {})) {
+      if (!assistantMcpEnabled(cfg, name)) continue;
+      const { disabled: _, ...rest } = server;
+      out[name] = rest as McpServerJson;
+    }
+    return out;
+  };
+  /** Araç asistana açık mı: eklentinin araç listesi ve "yalnızca okuyan" ayarı */
+  const assistantToolAllowed = (server: string, tool: McpToolInfo): boolean => {
+    const a = cfg.assistant?.mcp?.[server];
+    if (a?.tools && !a.tools.includes(tool.name)) return false;
+    if (a?.readOnly && !tool.readOnly) return false;
+    return true;
+  };
+  /** Sesli asistanın eklenti köprüsü. Bağlanamayan eklenti 60 sn yeniden denenmez
+   *  (her cümlede 20 sn beklenmesin). */
+  const mcpFail = new Map<string, number>();
+  const mcpBridge: McpBridge = {
+    tools: async () => {
+      const servers = assistantServers();
+      const out: Array<{ server: string; tool: McpToolInfo }> = [];
+      await Promise.all(
+        Object.entries(servers).map(async ([name, server]) => {
+          if ((mcpFail.get(name) ?? 0) > Date.now()) return;
+          try {
+            for (const tool of await listMcpTools(name, server, mcpProbeDir()))
+              if (assistantToolAllowed(name, tool)) out.push({ server: name, tool });
+            mcpFail.delete(name);
+          } catch {
+            mcpFail.set(name, Date.now() + 60_000);
+          }
+        }),
+      );
+      return out.sort((a, b) => a.server.localeCompare(b.server) || a.tool.name.localeCompare(b.tool.name));
+    },
+    call: async (name, tool, args) => {
+      const server = assistantServers()[name];
+      if (!server) return { ok: false, text: `"${name}" eklentisi yok ya da asistana kapalı.` };
+      const info = (await listMcpTools(name, server, mcpProbeDir()).catch(() => [])).find((t) => t.name === tool);
+      if (info && !assistantToolAllowed(name, info))
+        return { ok: false, text: `"${tool}" aracı asistana kapalı (Ayarlar → Asistan).` };
+      return callMcpTool(name, server, mcpProbeDir(), tool, args, assistantLimits(cfg).mcpMs);
+    },
+  };
+  // Git işleri: uzak depo TFS sunucusundaysa kimlik TFS anahtarından (yoksa kullanıcının kendi git kimliği)
+  const gitOps = new GitOps(async (remoteUrl) => {
+    let c;
+    try {
+      c = tfsConn();
+    } catch {
+      return {};
+    }
+    return authEnv(c, remoteUrl);
+  });
+  const GIT_OPS = new Set(["dal", "guncelle", "yeniDal", "kaydet", "sakla", "geriGetir"]);
+  const gitApi = {
+    status: async (dir?: string) => {
+      const d = dir && fs.existsSync(dir) ? dir : cwd;
+      try {
+        return { ok: true, dir: d, repos: await gitOps.status(d) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    plan: async (r: Record<string, unknown>) => {
+      const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string) : undefined);
+      const op = s("op");
+      if (!op || !GIT_OPS.has(op)) return { ok: false, error: "geçersiz git işi" };
+      try {
+        return await gitOps.plan({
+          dir: s("dir") || cwd,
+          op: op as GitOpKind,
+          repo: s("repo"),
+          branch: s("branch"),
+          message: s("message"),
+        });
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    apply: (id: string) => gitOps.apply(id),
+  };
+  const speechApi = {
+    view: () => speechView(cfg.speech, cfg),
+    save: (input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown } => {
+      const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string).trim() : "");
+      if (
+        (input.enabled !== undefined && typeof input.enabled !== "boolean") ||
+        (input.computer !== undefined && typeof input.computer !== "boolean") ||
+        (input.fixDictation !== undefined && typeof input.fixDictation !== "boolean")
+      )
+        return { ok: false, error: "geçersiz istek" };
+      const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+      try {
+        const parsed = JSON.parse(prev) as AppConfig;
+        const old = parsed.speech ?? {};
+        const enabled = typeof input.enabled === "boolean" ? input.enabled : speechEnabled(old);
+        const pick = (k: "model" | "language" | "commandModel" | "ttsModel" | "ttsVoice") =>
+          k in input ? str(k) : (old[k] ?? "");
+        const model = pick("model"),
+          language = pick("language"),
+          commandModel = pick("commandModel"),
+          ttsModel = pick("ttsModel"),
+          ttsVoice = pick("ttsVoice");
+        const computer = typeof input.computer === "boolean" ? input.computer : !!old.computer;
+        const fixDictation = typeof input.fixDictation === "boolean" ? input.fixDictation : !!old.fixDictation;
+        const terms = ("terms" in input ? str("terms") : (old.terms ?? "")).slice(0, 2000);
+        // Eski sürümlerdeki ayrı ses sunucusu adresi (speech.url) ve ipucu (speech.prompt) artık kullanılmıyor — kayıtta düşer
+        const sp: SpeechConfig = {
+          enabled,
+          ...(model ? { model } : {}),
+          ...(language && language !== "tr" ? { language } : {}),
+          ...(commandModel ? { commandModel } : {}),
+          ...(ttsModel ? { ttsModel } : {}),
+          ...(ttsVoice ? { ttsVoice } : {}),
+          ...(computer ? { computer } : {}),
+          ...(terms ? { terms } : {}),
+          ...(fixDictation ? { fixDictation } : {}),
+        };
+        if (enabled && !generalConnection(cfg).url) {
+          return { ok: false, error: "Sunucu adresi yok: önce Ayarlar → Bağlantı bölümünde sunucu adresini gir." };
+        }
+        if (
+          enabled ||
+          model ||
+          commandModel ||
+          ttsModel ||
+          ttsVoice ||
+          computer ||
+          terms ||
+          fixDictation ||
+          (language && language !== "tr")
+        )
+          parsed.speech = sp;
+        else delete parsed.speech;
+        fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+        loadAppConfig(resolvedConfigPath); // dil kodu
+        if (parsed.speech) cfg.speech = parsed.speech;
+        else delete cfg.speech;
+      } catch (e) {
+        fs.writeFileSync(resolvedConfigPath, prev); // geçersizse geri al
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+      return { ok: true, view: speechView(cfg.speech, cfg) };
+    },
+    probe: () => {
+      const conn = generalConnection(cfg);
+      if (!conn.url)
+        return Promise.resolve({
+          ok: false,
+          error: "Sunucu adresi yok: Ayarlar → Bağlantı bölümünde sunucu adresini gir.",
+        });
+      return probeSpeech(conn.url, conn.token);
+    },
+    transcribe: (audio: Buffer, mime: string, previous?: string, terms?: string) => {
+      const conn = generalConnection(cfg);
+      if (!speechEnabled(cfg.speech) || !conn.url) {
+        return Promise.resolve({
+          ok: false,
+          error: "Sesle görev yazma kapalı ya da sunucu adresi yok (Ayarlar → Sesle görev yazma, Bağlantı).",
+        });
+      }
+      // Sözlük: Ayarlar'daki terimler önce (kullanıcının seçtikleri), panelin kendiliğinden eklediği adlar sonra
+      const sozluk = [cfg.speech?.terms, terms]
+        .filter(Boolean)
+        .join(", ")
+        .replace(/\s*[\n;]+\s*/g, ", ");
+      return transcribe({ ...cfg.speech, url: conn.url }, conn.token, audio, mime, previous, sozluk);
+    },
+    /** Görev metnini komut modeliyle düzeltir (Ayarlar → Görev metnini modelle düzelt) */
+    fix: (text: string, terms?: string) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+        });
+      return fixDictation(conn.url, conn.token, m, text, [cfg.speech?.terms, terms].filter(Boolean).join(", "));
+    },
+    /** Sabit listede bulunmayan sesli komutu modelle anlamaya çalışır (Ayarlar'da model seçiliyse) */
+    understand: (text: string, patterns: string[]) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+        });
+      return understandCommand(conn.url, conn.token, m, text, patterns, cfg.userPrompt);
+    },
+    /** Sesli asistan: komut modeli adım adım iş yapar (bilgisayar araçları yalnızca yerel panelde) */
+    assistant: (req: AssistantRequest, local: boolean, answer?: { id: string; yes: boolean }) => {
+      const conn = generalConnection(cfg);
+      const m = cfg.speech?.commandModel;
+      if (!speechEnabled(cfg.speech) || !conn.url || !m)
+        return Promise.resolve<AssistantReply>({
+          ok: false,
+          error: "Komutları anlayan model seçili değil (Ayarlar → Sesle görev yazma).",
+          done: [],
+        });
+      // Eklentiler yalnızca panel aynı bilgisayardan açıldıysa (kullanıcının kimliğiyle çalışırlar)
+      const c = {
+        url: conn.url,
+        token: conn.token,
+        model: m,
+        userPrompt: cfg.userPrompt,
+        limits: assistantLimits(cfg),
+        ...(local ? { mcp: mcpBridge } : {}),
+      };
+      return answer ? assistant.answer(c, answer.id, answer.yes) : assistant.start(c, req, local);
+    },
+    /** Metni okuma modeline okutur; model/ses verilirse (Ayarlar'da "Dinle") kayıtlı ayar yerine onlar */
+    say: (text: string, model?: string, voice?: string) => {
+      const conn = generalConnection(cfg);
+      const m = model || cfg.speech?.ttsModel;
+      if (!conn.url) return Promise.resolve({ ok: false as const, error: "Sunucu adresi yok: Ayarlar → Bağlantı." });
+      if (!m) return Promise.resolve({ ok: false as const, error: "Okuma modeli seçili değil." });
+      return synthesize(conn.url, conn.token, m, model ? voice : (voice ?? cfg.speech?.ttsVoice), text);
+    },
+  };
+
   /** Kullanıcı talimatı (Ayarlar): config.json'a yazar, sıradaki görevde her ajanın prompt'una eklenir */
+  /** Ayarlar → Asistan: görünüm (etkin sınırlar + eklentiler) */
+  const getAssistantSettings = () => ({
+    ok: true,
+    limits: assistantLimits(cfg),
+    raw: cfg.assistant ?? {},
+    legacyComputer: !!cfg.speech?.computer,
+    servers: Object.entries(cfg.mcpServers ?? {}).map(([name, s]) => ({
+      name,
+      globalDisabled: !!s.disabled,
+      enabled: assistantMcpEnabled(cfg, name),
+      own: cfg.assistant?.mcp?.[name] ?? null,
+    })),
+  });
+  /** Ayarlar → Asistan kaydı: verilen alanlar değişir, null olan silinir; mcp eklenti eklenti birleşir.
+   *  Canlı (yeniden başlatma yok); geçersizse dosya geri alınır. */
+  const setAssistantSettings = (patch: Record<string, unknown>) => {
+    const prev = fs.readFileSync(resolvedConfigPath, "utf8");
+    try {
+      const parsed = JSON.parse(prev) as AppConfig;
+      const a = { ...(parsed.assistant ?? {}) } as Record<string, unknown>;
+      for (const [k, v] of Object.entries(patch)) {
+        if (!["mcp", "computer", "confirm", "maxSteps", "timeouts"].includes(k)) continue;
+        if (v === null) delete a[k];
+        else if (k === "mcp" && v && typeof v === "object") {
+          const m = { ...((a.mcp as Record<string, unknown>) ?? {}) };
+          for (const [ad, o] of Object.entries(v as Record<string, unknown>)) {
+            if (o === null) delete m[ad];
+            else m[ad] = o;
+          }
+          if (Object.keys(m).length) a.mcp = m;
+          else delete a.mcp;
+        } else a[k] = v;
+      }
+      if (Object.keys(a).length) parsed.assistant = a as AppConfig["assistant"];
+      else delete parsed.assistant;
+      fs.writeFileSync(resolvedConfigPath, JSON.stringify(parsed, null, 2));
+      const fresh = loadAppConfig(resolvedConfigPath);
+      if (fresh.assistant) cfg.assistant = fresh.assistant;
+      else delete cfg.assistant;
+      return { ...getAssistantSettings(), config: parsed };
+    } catch (e) {
+      fs.writeFileSync(resolvedConfigPath, prev);
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   const setUserPrompt = (text: string): { ok: boolean; error?: string; text?: string } => {
     const prev = fs.readFileSync(resolvedConfigPath, "utf8");
     const value = text.trim();
@@ -1453,10 +1788,27 @@ async function main() {
         return e ? runtimes.get(e.id, e.runLogs) : undefined;
       },
       // Çalışan oturum silinmez (koşusu yetim kalırdı)
+      renameSession: (id, name) => {
+        const ok = sessions.rename(id, name);
+        if (ok) runtimes.notify();
+        return ok;
+      },
+      setSessionGroup: (id, group) => {
+        const ok = sessions.setGroup(id, group);
+        if (ok) runtimes.notify();
+        return ok;
+      },
+      renameGroup: (from, to) => {
+        const n = sessions.renameGroup(from, to);
+        if (n) runtimes.notify();
+        return n;
+      },
       deleteSession: (id) => {
         if (runtimes.peek(id)?.busy) return false;
+        const entry = sessions.get(id);
         runtimes.delete(id);
         const ok = sessions.remove(id);
+        if (ok && entry) removeSessionFiles(entry);
         runtimes.notify();
         return ok;
       },
@@ -1696,6 +2048,8 @@ async function main() {
       setAutoForward,
       setMaxParallel,
       setUserPrompt,
+      getAssistantSettings,
+      setAssistantSettings,
       setPlanWebhook,
       getPlanTarget: () => (cfg.planWebhook?.url ? cfg.planWebhook : undefined),
       search: (q, session, kind) => {
@@ -1724,12 +2078,14 @@ async function main() {
       getSecurityReport: (id) => securityReports.get(id),
       // TFS uçları CLI görevli modda da okunabilir (Ayarlar); görev yalnızca sunucu modunda
       tfs: tfsApi,
+      speech: speechApi,
+      git: gitApi,
       setToggle,
       getMcpStatus: mcpView,
       getMcpTools: async (name) => {
         const server = cfg.mcpServers?.[name];
         if (!server) return { ok: false, error: "eklenti bulunamadı" };
-        if (server.disabled) return { ok: false, error: "eklenti kapalı" };
+        if (server.disabled && !assistantMcpEnabled(cfg, name)) return { ok: false, error: "eklenti kapalı" };
         try {
           return { ok: true, tools: await listMcpTools(name, server, mcpProbeDir()) };
         } catch (e) {
@@ -1806,7 +2162,7 @@ async function main() {
                   ...(prepared.skipped.length ? { skipped: prepared.skipped } : {}),
                 },
                 attachmentIntro:
-                  `TFS iş öğesindeki ekler ve metindeki görseller (${prepared.files.length} dosya)` +
+                  `TFS work item'daki ekler ve metindeki görseller (${prepared.files.length} dosya)` +
                   `${files?.length ? `, ayrıca kullanıcının verdiği ${files.length} dosya` : ""}.`,
               };
               console.log(`📌 TFS #${prepared.meta.id} alındı: ${prepared.meta.title} (${prepared.files.length} ek)`);
@@ -1848,7 +2204,7 @@ async function main() {
               tfs = { display: t, pr: { ...prepared.meta, inherited: true } };
             } else if (entry?.workItem && tfsReady(cfg.tfs, configRoot)) {
               const w = entry.workItem;
-              agentTask = `Bu görev, bu oturumda üzerinde çalışılan TFS #${w.id} — "${w.title}" iş öğesinin devamıdır.\n\n${t}`;
+              agentTask = `Bu görev, bu oturumda üzerinde çalışılan TFS #${w.id} — "${w.title}" work item'ın devamıdır.\n\n${t}`;
               tfs = { display: t, workItem: { ...w, inherited: true } };
             }
             const busy = runtimes.busy();

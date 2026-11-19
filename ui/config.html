@@ -58,6 +58,22 @@ input[type=text], input[type=number], select { width:100%; }
 .secc-st { font:600 11.5px/1 var(--font-ui); padding:4px 9px; border-radius:999px; background:var(--bg); color:var(--muted); }
 .secc-st.on { background:var(--tealBg); color:var(--teal); }
 .secc-a { font-size:13px; white-space:nowrap; }
+/* Asistan kartı */
+.as-ek { border:1px solid var(--border); border-radius:var(--md-shape-sm, 6px); padding:8px 10px; margin-top:6px; }
+.as-ek-ust { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.as-ek-ust b { overflow-wrap:anywhere; }
+.as-ek-ust small { color:var(--muted); font-size:12px; }
+.as-ek-ust select { margin-left:auto; width:auto; max-width:100%; }
+.as-ek-alt { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-top:8px; font-size:13px; }
+.as-ek-alt[hidden] { display:none; }
+.as-ek-alt label { display:flex; gap:6px; align-items:center; cursor:pointer; }
+.as-ek-alt details { flex:1; min-width:200px; }
+.as-ek-alt summary { cursor:pointer; }
+.as-araclar { display:flex; flex-direction:column; gap:4px; margin-top:6px; max-height:240px; overflow:auto; }
+.as-araclar small { color:var(--muted); }
+.as-izin > div { min-width:150px; flex:1; }
+.as-izin select { width:100%; }
+.minl small { font-size:10.5px; }
 .parset { display:flex; align-items:center; gap:8px; }
 .parset input { width:84px; }
 #parMsg { flex-basis:100%; font-size:12.5px; }
@@ -136,11 +152,11 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
     <div class="secc-t">
       <div class="secc-h">TFS modu <span id="tfsState" class="secc-st"></span></div>
-      <div class="fhint" style="font-size:12.5px">Açıkken görev kutusunda bir <b>iş öğesi</b> (#123) ya da <b>çekme isteği</b> (!45) seçersin: numara, adres, başlıkta arama ya da sana atananlar.
-        İş öğesinde Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve görselleri TFS'ten kendisi alıp ekibe görev yapar;
-        bitince sonucu iş öğesine yazar, istersen değişiklikleri yeni dala gönderip iş öğesine bağlı çekme isteği açar. Çekme isteğinde ya açık yorumları ele alır
-        (kodu çekme isteğinin dalında düzeltir, her yoruma cevap yazar, "düzeltildi" yapar, değişikliği dala gönderir) ya da isteği inceleyip bulguları satır yorumu olarak yazar.
-        Kişisel erişim anahtarı gerekir — kapsam: <i>İş öğeleri</i> ve <i>Kod</i>, okuma ve yazma.</div>
+      <div class="fhint" style="font-size:12.5px">Açıkken görev kutusunda bir <b>work item</b> (#123) ya da <b>pull request</b> (!45) seçersin: numara, adres, başlıkta arama ya da sana atananlar.
+        Work itemnde Kurmay açıklamayı, kabul kriterlerini, yeniden üretme adımlarını, tartışmayı, bağlı öğeleri, ekleri ve görselleri TFS'ten kendisi alıp ekibe görev yapar;
+        bitince sonucu work item'a yazar, istersen değişiklikleri yeni branch'e gönderip work item'a bağlı pull request açar. Pull request'te ya açık yorumları ele alır
+        (kodu pull request'in branch'inde düzeltir, her yoruma cevap yazar, "düzeltildi" yapar, değişikliği branch'e gönderir) ya da isteği inceleyip bulguları satır yorumu olarak yazar.
+        Kişisel erişim anahtarı gerekir — kapsam: <i>Work item'lar</i> ve <i>Kod</i>, okuma ve yazma.</div>
     </div>
     <input type="checkbox" role="switch" class="sw" id="tfsSw" aria-label="TFS modu">
   </div>
@@ -148,7 +164,7 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <div class="grow">
       <label class="minl" for="tfsUrl">Sunucu (koleksiyon adresi)</label>
       <input type="text" id="tfsUrl" spellcheck="false" placeholder="http://tfs-sunucusu:8080/tfs/DefaultCollection" style="width:100%">
-      <div class="fhint">Tarayıcıdaki bir iş öğesinin adresini de yapıştırabilirsin — koleksiyon ve proje ondan ayrılır.</div>
+      <div class="fhint">Tarayıcıdaki bir work item'ın adresini de yapıştırabilirsin — koleksiyon ve proje ondan ayrılır.</div>
     </div>
     <div>
       <label class="minl" for="tfsProject">Proje</label>
@@ -164,10 +180,10 @@ input.sw:disabled { opacity:.5; cursor:default; }
   </div>
   <div class="gbar" style="margin-top:10px">
     <div>
-      <label class="minl" for="tfsWrite">İş bitince sonucu TFS'e yaz (iş öğesi / çekme isteği)</label>
+      <label class="minl" for="tfsWrite">İş bitince sonucu TFS'e yaz (work item / pull request)</label>
       <select id="tfsWrite">
         <option value="ask">sorarak — panelde taslak hazır gelir, düzenleyip gönderirsin</option>
-        <option value="auto">kendiliğinden — not ve yorumlar doğrudan yazılır; çekme isteğinde değişiklik dala gönderilir</option>
+        <option value="auto">kendiliğinden — not ve yorumlar doğrudan yazılır; pull request'te değişiklik branch'e gönderilir</option>
         <option value="off">yazma</option>
       </select>
     </div>
@@ -266,6 +282,109 @@ input.sw:disabled { opacity:.5; cursor:default; }
     <button class="primary" id="pwSave" type="button" disabled>Kaydet</button>
     <span id="pwMsg"></span>
   </div>
+</div>
+
+<!-- Sesle görev yazma: paneldeki mikrofon düğmesi ve sesli komut, kaydı ses tanıma modeline gönderir
+     (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM). Adres ve anahtar genel bağlantıdan (Bağlantı bölümü).
+     config.json'daki speech. -->
+<div class="card" id="spCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Sesle görev yazma <span id="spState" class="secc-st"></span></div>
+      <div class="fhint" style="font-size:12.5px">Açıkken panelde mikrofon düğmeleri çıkar: görev kutusunun yanındaki 🎙 ile görevi söyleyerek yazdırırsın, Ctrl+Boşluk ile paneli sesle yönetirsin. Kayıt, aşağıdaki ses tanıma modeline gider — sunucu adresi ve anahtar <b>genel bağlantı ayarlarından</b> gelir. Mikrofon yalnızca panel <code>localhost</code> ya da <code>https</code> adresiyle açıldığında çalışır.</div>
+    </div>
+    <input type="checkbox" role="switch" class="sw" id="spSw" aria-label="Sesle görev yazma">
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow">
+      <label class="minl" for="spModel">Ses tanıma modeli</label>
+      <input type="text" id="spModel" spellcheck="false" list="spModels" placeholder="openai/whisper-large-v3" style="width:100%">
+      <datalist id="spModels"></datalist>
+    </div>
+    <div>
+      <label class="minl" for="spLang">Konuşma dili</label>
+      <select id="spLang">
+        <option value="tr">Türkçe</option><option value="auto">Kendisi bulsun</option><option value="en">İngilizce</option>
+        <option value="de">Almanca</option><option value="fr">Fransızca</option><option value="ar">Arapça</option><option value="ru">Rusça</option>
+      </select>
+    </div>
+  </div>
+  <div style="margin-top:10px">
+    <label class="minl" for="spCmd">Komutları anlayan model</label>
+    <select id="spCmd" style="width:100%"><option value="">kapalı — yalnızca sabit komut listesi</option></select>
+    <div class="fhint" style="font-size:12.5px">Sesli komut sabit listede bulunamazsa cümle bu modele gider. Model cümleyi anlayıp listedeki bir komutu seçer (“bugün bana ne iş var” → bana atananları göster) ya da kısa bir cevap verir (“günaydın”). Onayla, reddet, durdur yine sorulur. Küçük, hızlı bir model yeter (ör. Gemma).</div>
+    <div class="fhint" style="font-size:12.5px;margin-top:8px">Modelin bilgisayarda ve eklentilerde ne yapabileceği aşağıdaki <a href="#asCard">Asistan</a> kartında.</div>
+    <label style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
+      <input type="checkbox" id="spFix" style="margin-top:3px">
+      <span><b>Görev metnini modelle düzelt</b>
+        <span class="fhint" style="display:block;font-size:12.5px">Sesle yazdırdığın görev bitince (“tamam”, “başlat” ya da 🎙 düğmesi) metin yukarıdaki modele gider: yanlış duyulan teknik terimler, noktalama ve büyük harf düzeltilir, anlam değiştirilmez. Kutudaki metin değişir; notta özgün metin ve “Geri al” görünür. Bir iki saniye bekletir.</span></span>
+    </label>
+  </div>
+  <div style="margin-top:10px">
+    <label class="minl" for="spTerms">Sözlük (terimler)</label>
+    <textarea id="spTerms" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="SiparisServisi, FaturaKdv, endpoint, Kafka, kurmay, …"></textarea>
+    <div class="fhint" style="font-size:12.5px">Ses tanımanın bilmediği kelimeler: sınıf, servis, ürün adları, kısaltmalar (virgül ya da satırla ayır). Konuşurken modele ipucu olarak gider, böyle yazar. Depo, dal ve değişen dosya adları zaten kendiliğinden eklenir. “Kaydet” ile kaydedilir.</div>
+  </div>
+  <div class="gbar" style="margin-top:10px">
+    <div class="grow">
+      <label class="minl" for="spTts">Sesli yanıtı okuyan model</label>
+      <select id="spTts" style="width:100%"><option value="">tarayıcının sesi — bilgisayardaki Türkçe ses</option></select>
+    </div>
+    <div>
+      <label class="minl" for="spVoice">Ses adı (isteğe bağlı)</label>
+      <input type="text" id="spVoice" spellcheck="false" placeholder="modelin varsayılanı">
+    </div>
+    <div style="align-self:end"><button type="button" id="spDinle">▶ Dinle</button></div>
+  </div>
+  <div class="fhint" style="font-size:12.5px">Sesle çalışırken Kurmay'ın söylediklerini bu model okur (sunucudaki metinden ses üreten model). Model Türkçe okumuyorsa ya da ses üretemezse tarayıcının sesine dönülür. “Dinle” kaydetmeden dener.</div>
+  <div class="fhint" id="spDinleMsg" style="margin-top:4px"></div>
+  <div class="fhint" id="spConn" style="margin-top:8px"></div>
+  <div class="rfoot" style="margin-top:8px">
+    <button class="primary" id="spSave" type="button" disabled>Kaydet</button>
+    <span id="spMsg"></span>
+  </div>
+</div>
+
+<!-- Asistan: sesli asistanın (komutları anlayan model) sınırları — config.json "assistant". Değişiklik anında geçerli. -->
+<div class="card" id="asCard" style="margin-bottom:14px">
+  <div class="secc">
+    <div class="secc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></div>
+    <div class="secc-t">
+      <div class="secc-h">Asistan</div>
+      <div class="fhint" style="font-size:12.5px">Sesli ya da yazılı komut listede bulunamayınca cümle “komutları anlayan model”e gider; model adım adım iş yapar. Burada neleri kullanabileceğini ve ne zaman sorması gerektiğini seçersin. Bilgisayar işleri ve eklentiler yalnızca panel bu bilgisayardan (<code>localhost</code>) açıldığında çalışır. Değişiklik hemen geçerli olur.</div>
+    </div>
+  </div>
+  <div class="minl" style="margin-top:12px">Eklentiler</div>
+  <div id="asMcp"></div>
+  <div class="minl" style="margin-top:12px">Bilgisayarda</div>
+  <div class="gbar as-izin">
+    <div><label class="minl" for="asRead">Okuma <small>(klasör aç, listele, oku)</small></label>
+      <select id="asRead"><option value="false">kapalı</option><option value="true">açık</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asWrite">Yazma <small>(yaz, klasör oluştur, taşı)</small></label>
+      <select id="asWrite"><option value="false">kapalı</option><option value="true">açık</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asDelete">Silme</label>
+      <select id="asDelete"><option value="false">kapalı</option><option value="ask">önce sor</option></select></div>
+    <div><label class="minl" for="asRun">Komut ve program çalıştırma</label>
+      <select id="asRun"><option value="false">kapalı</option><option value="ask">önce sor</option></select></div>
+  </div>
+  <div class="fhint" style="font-size:12.5px">Silme ve komut çalıştırma hiçbir zaman sormadan yapılmaz. Windows'ta silinen Geri Dönüşüm Kutusu'na gider.</div>
+  <div class="gbar" style="margin-top:12px">
+    <div class="grow"><label class="minl" for="asConfirm">Eklenti araçlarında ne zaman sorsun</label>
+      <select id="asConfirm" style="width:100%">
+        <option value="degisiklik">değişiklik yapan araçlarda (salt okunur olmayan)</option>
+        <option value="hep">her işte (eklenti ve bilgisayar)</option>
+        <option value="hic">hiç sorma (silme ve komut yine sorulur)</option>
+      </select></div>
+  </div>
+  <div class="gbar" style="margin-top:12px">
+    <div><label class="minl" for="asSteps">En fazla adım</label><input type="number" id="asSteps" min="1" max="20" style="width:90px"></div>
+    <div><label class="minl" for="asMcpSn">Eklenti süresi (sn)</label><input type="number" id="asMcpSn" min="5" max="600" style="width:110px"></div>
+    <div><label class="minl" for="asCmdSn">Komut süresi (sn)</label><input type="number" id="asCmdSn" min="5" max="600" style="width:110px"></div>
+    <div style="align-self:end"><button type="button" id="asUygula">Uygula</button></div>
+  </div>
+  <div class="fhint" style="font-size:12.5px">Bir cümle için model en fazla bu kadar adım atar (1-20). Süreler 5 sn ile 10 dk arası.</div>
+  <div class="rfoot" style="margin-top:8px"><span id="asMsg"></span></div>
 </div>
 
 <div class="card" style="margin-bottom:14px">
@@ -921,6 +1040,258 @@ $("pwSave").addEventListener("click", async ()=>{
   renderPwCard();
 });
 
+
+// ── Asistan kartı: GET/POST /assistant. Her değişiklik hemen kaydedilir (yalnızca o alan). ──
+let asView = null;
+function asMsg(t, renk){ $("asMsg").innerHTML = t; $("asMsg").style.color = renk ? `var(--${renk})` : ""; }
+async function asPost(body){
+  const r = await spPost("/assistant", body);
+  if (r.ok){ asView = r; if (cfg && r.config) { if (r.config.assistant) cfg.assistant = r.config.assistant; else delete cfg.assistant; } }
+  return r;
+}
+async function loadAssistantCard(){
+  try { asView = await (await fetch("/assistant")).json(); } catch { asView = null; }
+  if (!asView || !asView.ok) { $("asMcp").innerHTML = '<div class="fhint">Asistan ayarları okunamadı.</div>'; return; }
+  fillAssistant();
+}
+function fillAssistant(){
+  const L = asView.limits;
+  $("asRead").value = String(L.computer.read); $("asWrite").value = String(L.computer.write);
+  $("asDelete").value = String(L.computer.delete); $("asRun").value = String(L.computer.run);
+  $("asConfirm").value = L.confirm;
+  $("asSteps").value = L.maxSteps; $("asMcpSn").value = Math.round(L.mcpMs / 1000); $("asCmdSn").value = Math.round(L.commandMs / 1000);
+  const sv = asView.servers || [];
+  $("asMcp").innerHTML = sv.length ? sv.map((s) => {
+    const own = s.own || {};
+    const durum = own.enabled === undefined ? "genel" : own.enabled ? "acik" : "kapali";
+    return `<div class="as-ek" data-ad="${esc(s.name)}">
+      <div class="as-ek-ust"><b>${esc(s.name)}</b><small>${s.globalDisabled ? "ajanlar için kapalı" : "ajanlar için açık"}</small>
+        <select data-is="durum" aria-label="${esc(s.name)} asistan için">
+          <option value="genel"${durum === "genel" ? " selected" : ""}>genel ayar (${s.globalDisabled ? "kapalı" : "açık"})</option>
+          <option value="acik"${durum === "acik" ? " selected" : ""}>asistana açık</option>
+          <option value="kapali"${durum === "kapali" ? " selected" : ""}>asistana kapalı</option>
+        </select></div>
+      <div class="as-ek-alt"${s.enabled ? "" : " hidden"}>
+        <label><input type="checkbox" data-is="ro"${own.readOnly ? " checked" : ""}> yalnızca okuyan araçlar</label>
+        <details data-is="araclar"><summary>Araçlar${own.tools ? ` (${own.tools.length} seçili)` : " (hepsi)"}</summary><div class="as-araclar">yükleniyor…</div></details>
+      </div></div>`;
+  }).join("") : '<div class="fhint">Tanımlı eklenti yok (eklentiler ayar dosyasındaki “mcpServers”ta).</div>';
+}
+function asEkAyar(ad){ const s = (asView.servers || []).find((x) => x.name === ad); return { ...((s && s.own) || {}) }; }
+async function asEkKaydet(ad, own, not){
+  const bos = own.enabled === undefined && !own.readOnly && !own.tools;
+  const r = await asPost({ mcp: { [ad]: bos ? null : own } });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return false; }
+  fillAssistant(); asMsg("✓ " + not, "teal"); return true;
+}
+$("asMcp").addEventListener("change", async (ev) => {
+  const kutu = ev.target.closest(".as-ek"); if (!kutu) return;
+  const ad = kutu.dataset.ad, own = asEkAyar(ad), is = ev.target.dataset.is;
+  if (is === "durum") {
+    const v = ev.target.value;
+    if (v === "genel") delete own.enabled; else own.enabled = v === "acik";
+    await asEkKaydet(ad, own, v === "acik" ? `${ad} asistana açık (ajanlar etkilenmez)` : v === "kapali" ? `${ad} asistana kapalı` : `${ad} genel ayarı izliyor`);
+  } else if (is === "ro") {
+    if (ev.target.checked) own.readOnly = true; else delete own.readOnly;
+    await asEkKaydet(ad, own, ev.target.checked ? `${ad}: asistan yalnızca okuyan araçları kullanır` : `${ad}: bütün araçlar`);
+  } else if (ev.target.dataset.arac !== undefined) {
+    const secili = [...kutu.querySelectorAll("[data-arac]")].filter((x) => x.checked).map((x) => x.dataset.arac);
+    const hepsi = secili.length === kutu.querySelectorAll("[data-arac]").length;
+    if (hepsi) delete own.tools; else own.tools = secili;
+    const acik = kutu.querySelector("details")?.open;
+    if (await asEkKaydet(ad, own, hepsi ? `${ad}: bütün araçlar` : `${ad}: ${secili.length} araç seçili`) && acik) {
+      const d = $("asMcp").querySelector(`.as-ek[data-ad="${CSS.escape(ad)}"] details`); if (d) d.open = true;
+    }
+  }
+});
+$("asMcp").addEventListener("toggle", async (ev) => {
+  const d = ev.target; if (!(d instanceof HTMLDetailsElement) || !d.open) return;
+  const kutu = d.closest(".as-ek"), ad = kutu.dataset.ad, own = asEkAyar(ad);
+  const yer = d.querySelector(".as-araclar");
+  try {
+    const r = await (await fetch("/mcp-tools?name=" + encodeURIComponent(ad))).json();
+    if (!r.ok) { yer.textContent = "Araçlar alınamadı: " + (r.error || ""); return; }
+    yer.innerHTML = r.tools.map((t) => `<label title="${esc(t.description || "")}"><input type="checkbox" data-arac="${esc(t.name)}"${!own.tools || own.tools.includes(t.name) ? " checked" : ""}> <code>${esc(t.name)}</code>${t.readOnly ? " <small>salt okunur</small>" : ""}</label>`).join("") || "Araç yok.";
+  } catch { yer.textContent = "Araçlar alınamadı."; }
+}, true);
+const asPerm = (v) => v === "true" ? true : v === "false" ? false : "ask";
+for (const id of ["asRead", "asWrite", "asDelete", "asRun"]) $(id).addEventListener("change", async () => {
+  const computer = { read: asPerm($("asRead").value), write: asPerm($("asWrite").value), delete: asPerm($("asDelete").value), run: asPerm($("asRun").value) };
+  const r = await asPost({ computer });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return; }
+  asMsg("✓ Bilgisayar izinleri kaydedildi", "teal");
+});
+$("asConfirm").addEventListener("change", async () => {
+  const r = await asPost({ confirm: $("asConfirm").value === "degisiklik" ? null : $("asConfirm").value });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); fillAssistant(); return; }
+  asMsg("✓ Kaydedildi", "teal");
+});
+$("asUygula").addEventListener("click", async () => {
+  const n = (id) => Number($(id).value);
+  const steps = n("asSteps"), m = n("asMcpSn") * 1000, c = n("asCmdSn") * 1000;
+  const r = await asPost({ maxSteps: steps === 8 ? null : steps,
+    timeouts: m === 120000 && c === 60000 ? null : { ...(m !== 120000 ? { mcpMs: m } : {}), ...(c !== 60000 ? { commandMs: c } : {}) } });
+  if (!r.ok) { asMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  fillAssistant(); asMsg("✓ Sınırlar kaydedildi", "teal");
+});
+// Sesle görev yazma kartı: GET/POST /speech, POST /speech/test. Adres ve anahtar genel bağlantıdan (Bağlantı bölümü).
+let spSaved = null;
+async function loadSpeechCard(){
+  try { spSaved = await (await fetch("/speech")).json(); } catch { spSaved = null; }
+  fillSpeech();
+  spModelOnerileri();
+}
+function fillSpeech(){
+  const t = spSaved || {};
+  $("spSw").checked = !!t.enabled;
+  $("spModel").value = t.model || "";
+  $("spLang").value = t.language || "tr";
+  if (!$("spLang").value) $("spLang").value = "tr";
+  spCmdSecenek(t.commandModel || "");
+  $("spFix").checked = !!t.fixDictation;
+  $("spTerms").value = t.terms || "";
+  spTtsSecenek(t.ttsModel || "");
+  $("spVoice").value = t.ttsVoice || "";
+  renderSpeechCard();
+}
+const spForm = ()=> ({ model: $("spModel").value.trim(), language: $("spLang").value, commandModel: $("spCmd").value,
+  ttsModel: $("spTts").value, ttsVoice: $("spVoice").value.trim(), terms: $("spTerms").value.trim() });
+/** Okuma modeli seçicisi: ses tanıma modelleri hariç sunucudaki modeller; adı ses üretmeyi andıranlar önde */
+function spTtsSecenek(secili){
+  const sesli = (m)=> /tts|speech|voice|audio|sound|kokoro|piper|xtts|orpheus|vits/i.test(m);
+  const ms = [...new Set([...spModelListe, ...(secili ? [secili] : [])])].filter((m)=> !/whisper|asr/i.test(m) || m === secili)
+    .sort((a, b)=> Number(sesli(b)) - Number(sesli(a)));
+  $("spTts").innerHTML = `<option value="">tarayıcının sesi — bilgisayardaki Türkçe ses</option>` +
+    ms.map((m)=> `<option value="${esc(m)}">${esc(m)}${spModelListe.includes(m) ? "" : " (sunucuda görünmüyor)"}</option>`).join("");
+  $("spTts").value = secili;
+}
+let spModelListe = [];
+/** Komut modeli seçicisi: sunucudaki modeller; kayıtlı model listede yoksa da görünür */
+function spCmdSecenek(secili){
+  const ms = [...new Set([...spModelListe, ...(secili ? [secili] : [])])].filter((m)=> !/whisper|speech|asr|audio/i.test(m) || m === secili);
+  $("spCmd").innerHTML = `<option value="">kapalı — yalnızca sabit komut listesi</option>` +
+    ms.map((m)=> `<option value="${esc(m)}">${esc(m)}${spModelListe.includes(m) ? "" : " (sunucuda görünmüyor)"}</option>`).join("");
+  $("spCmd").value = secili;
+}
+function renderSpeechCard(){
+  const t = spSaved || {}, f = spForm();
+  $("spState").textContent = t.enabled ? (t.ready ? "açık" : "açık · adres yok") : "kapalı";
+  $("spState").className = "secc-st" + (t.ready ? " on" : "");
+  $("spConn").innerHTML = t.generalUrl
+    ? `Sunucu: <code>${esc(t.generalUrl)}</code> (Bağlantı bölümündeki adres ve anahtar)`
+    : `<span style="color:var(--red)">Bağlantı bölümünde sunucu adresi yok — önce onu gir.</span>`;
+  $("spSave").disabled = f.model === (t.model || "") && f.language === (t.language || "tr") && f.commandModel === (t.commandModel || "")
+    && f.ttsModel === (t.ttsModel || "") && f.ttsVoice === (t.ttsVoice || "") && f.terms === (t.terms || "");
+  $("spDinle").disabled = !t.generalUrl;
+}
+const spMsg = (html, renk)=> { $("spMsg").innerHTML = html ? `<span style="color:var(--${renk || "muted"})">${html}</span>` : ""; };
+for (const id of ["spModel"]){
+  $(id).addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
+  $(id).addEventListener("keydown", (e)=>{ if (e.key === "Enter" && !$("spSave").disabled){ e.preventDefault(); $("spSave").click(); } });
+}
+$("spLang").addEventListener("change", ()=>{ spMsg(""); renderSpeechCard(); });
+$("spCmd").addEventListener("change", ()=>{ spMsg(""); renderSpeechCard(); });
+$("spTts").addEventListener("change", ()=>{ spMsg(""); $("spDinleMsg").textContent = ""; renderSpeechCard(); });
+$("spVoice").addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
+$("spTerms").addEventListener("input", ()=>{ spMsg(""); renderSpeechCard(); });
+let spCalan = null;
+/** Seçili modeli (ya da tarayıcı sesini) kaydetmeden dener */
+$("spDinle").addEventListener("click", async ()=>{
+  const ornek = "Merhaba, ben Kurmay. Bana atanan üç iş var; ikincisi sipariş toplamındaki hata. Okumamı ister misin?";
+  const m = $("spDinleMsg");
+  if (spCalan){ spCalan.pause(); spCalan = null; }
+  window.speechSynthesis?.cancel();
+  if (!$("spTts").value){
+    const v = (window.speechSynthesis?.getVoices() || []).filter((x)=> /^tr([-_]|$)/i.test(x.lang));
+    const ses = v.find((x)=> x.localService) || v[0];
+    if (!ses){ m.innerHTML = `<span style="color:var(--red)">Bu bilgisayarda tarayıcının kullanabileceği Türkçe ses yok. Windows'ta Ayarlar → Saat ve dil → Konuşma bölümünden Türkçe ses ekle ya da yukarıdan sunucudaki bir modeli seç.</span>`; return; }
+    const u = new SpeechSynthesisUtterance(ornek); u.voice = ses; u.lang = ses.lang;
+    speechSynthesis.speak(u);
+    m.textContent = `Tarayıcının sesi: ${ses.name}${ses.localService ? "" : " (internet ister)"}`;
+    return;
+  }
+  m.textContent = "⏳ Ses üretiliyor…";
+  $("spDinle").disabled = true;
+  try {
+    const r = await fetch("/speech/say", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ text: ornek, model: $("spTts").value, voice: $("spVoice").value.trim() }) });
+    if (!r.ok){ const j = await r.json().catch(()=>({})); m.innerHTML = `<span style="color:var(--red)">✗ ${esc(j.error || "ses üretilemedi")}</span>`; return; }
+    const sure = r.headers.get("x-sure");
+    const url = URL.createObjectURL(await r.blob());
+    spCalan = new Audio(url);
+    spCalan.onended = ()=> URL.revokeObjectURL(url);
+    await spCalan.play().catch((e)=>{ throw new Error("ses çalınamadı (" + e.message + ")"); });
+    m.textContent = `▶ Çalıyor${sure ? ` — ${Number(sure).toFixed(1).replace(".", ",")} sn'de üretildi` : ""}. Türkçe düzgün okuyorsa kaydet.`;
+  } catch (e) {
+    m.innerHTML = `<span style="color:var(--red)">✗ ${esc(e.message || "sunucuya ulaşılamadı")}</span>`;
+  } finally { renderSpeechCard(); }
+});
+async function spPost(url, body){
+  const res = await fetch(url, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+  return res.json().catch(()=>({ ok:false, error:"sunucu yanıtı okunamadı" }));
+}
+/** Kaydedilen ayarı sayfadaki kopyaya da yaz — sonradan üstteki Kaydet'e basılırsa geri dönmesin */
+function spCfgEsitle(){
+  if (!cfg || !spSaved) return;
+  const t = spSaved, dil = t.language && t.language !== "tr";
+  if (t.enabled || t.model || dil || t.commandModel || t.ttsModel || t.ttsVoice || t.computer || t.terms || t.fixDictation)
+    cfg.speech = { enabled: !!t.enabled, ...(t.model ? { model: t.model } : {}), ...(dil ? { language: t.language } : {}), ...(t.commandModel ? { commandModel: t.commandModel } : {}),
+      ...(t.ttsModel ? { ttsModel: t.ttsModel } : {}), ...(t.ttsVoice ? { ttsVoice: t.ttsVoice } : {}), ...(t.computer ? { computer: true } : {}),
+      ...(t.terms ? { terms: t.terms } : {}), ...(t.fixDictation ? { fixDictation: true } : {}) };
+  else delete cfg.speech;
+}
+/** Anahtar kutuları (modelle düzelt, bilgisayarda iş) yalnızca kendi alanını kaydeder; ikisi de komut modeline
+ *  bağlı olduğu için yukarıda seçilip henüz kaydedilmemiş model de birlikte kaydedilir. Formdaki öteki
+ *  kaydedilmemiş değişiklikler silinmez (eskiden fillSpeech hepsini kayıtlı değere döndürüyordu — seçilen model "kapalı"ya dönüyordu). */
+async function spToggle(alan, ac){
+  const f = spForm(), body = { [alan]: ac };
+  if (f.commandModel !== ((spSaved && spSaved.commandModel) || "")) body.commandModel = f.commandModel;
+  const r = await spPost("/speech", body);
+  if (!r.ok) return r;
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  $("spModel").value = f.model; $("spLang").value = f.language || "tr";
+  if ([...$("spTts").options].some((o)=> o.value === f.ttsModel)) $("spTts").value = f.ttsModel;
+  $("spVoice").value = f.ttsVoice; $("spTerms").value = f.terms;
+  renderSpeechCard();
+  return r;
+}
+$("spFix").addEventListener("change", async ()=>{
+  const ac = $("spFix").checked;
+  spMsg("");
+  const r = await spToggle("fixDictation", ac);
+  if (!r.ok){ $("spFix").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spMsg(ac ? (spSaved.commandModel ? "✓ Sesle yazılan görev metni modelle düzeltilecek" : "✓ Açık — çalışması için yukarıdan bir model seç") : "✓ Kapatıldı", "teal");
+});
+
+$("spSw").addEventListener("change", async ()=>{
+  const ac = $("spSw").checked;
+  spMsg("");
+  const r = await spPost("/speech", { enabled: ac, ...spForm() });
+  if (!r.ok){ $("spSw").checked = !ac; spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg(ac ? (spSaved.model ? "✓ Açık — panelde 🎙 düğmeleri çıkar" : "✓ Açık — ses tanıma modelinin adını yazıp kaydet") : "✓ Kapatıldı", "teal");
+});
+$("spSave").addEventListener("click", async ()=>{
+  $("spSave").disabled = true;
+  const r = await spPost("/speech", spForm());
+  if (!r.ok){ spMsg("✗ " + esc(r.error || "kaydedilemedi"), "red"); renderSpeechCard(); return; }
+  spSaved = r.view; spCfgEsitle(); fillSpeech();
+  spMsg("✓ Kaydedildi", "teal");
+});
+/** Model önerileri: genel sunucudaki modeller sessizce alınır (başarısızsa öneri yok, kart yine çalışır) */
+async function spModelOnerileri(){
+  try {
+    const r = await spPost("/speech/test", {});
+    const ms = (r.ok && r.models) || [];
+    $("spModels").innerHTML = ms.map((m)=> `<option value="${esc(m)}">`).join("");
+    spModelListe = ms;
+    const once = $("spCmd").value; spCmdSecenek((spSaved && spSaved.commandModel) || ""); $("spCmd").value = once;
+    const onceT = $("spTts").value; spTtsSecenek((spSaved && spSaved.ttsModel) || ""); $("spTts").value = onceT; renderSpeechCard();
+    // Ses modeli adı genelde "whisper" içerir — tek aday varsa ve alan boşsa kendiliğinden yaz
+    const ses = ms.filter((m)=> /whisper|speech|asr|audio/i.test(m));
+    if (!$("spModel").value && ses.length === 1){ $("spModel").value = ses[0]; renderSpeechCard(); }
+  } catch { /* öneri yok */ }
+}
+
 // TFS modu kartı: GET/POST /tfs, POST /tfs/dene. Erişim anahtarı sunucuda .gizli/'de durur — sayfa
 // yalnızca "kayıtlı mı" ve son 4 karakterini bilir; boş bırakılan anahtar alanı kayıtlıyı değiştirmez.
 let tfsSaved = null; // son GET /tfs (ya da kaydın döndürdüğü görünüm)
@@ -958,7 +1329,7 @@ function renderTfsCard(){
     ? `Anahtar ${t.tokenEnv} ortam değişkeninden geliyor (sonu …${t.tokenHint}) — buradan değiştirilemez.`
     : t.hasToken
       ? `Kayıtlı anahtar: …${t.tokenHint}. Ayar dosyasına ve tarayıcıya gitmez (çalışma klasöründe .gizli/ altında). Değiştirmek için yenisini yaz. Panelde giriş olmadığı için panele erişen herkes bu anahtarla TFS'te okuyup yazabilir.`
-      : "Anahtar yok — TFS'te sağ üstteki profil → Güvenlik → Kişisel erişim anahtarları'ndan oluştur (kapsam: İş öğeleri ve Kod — okuma ve yazma).";
+      : "Anahtar yok — TFS'te sağ üstteki profil → Güvenlik → Kişisel erişim anahtarları'ndan oluştur (kapsam: Work item'lar ve Kod — okuma ve yazma).";
   $("tfsSave").disabled = !tfsDirty();
 }
 /** Tarayıcıdan kopyalanan TFS adresini koleksiyon + projeye ayırır (…/Koleksiyon/Proje/_workitems/…) */
@@ -1025,7 +1396,7 @@ $("tfsSw").addEventListener("change", async ()=>{
   $("tfsSw").disabled = false;
   if (!r.ok){ $("tfsSw").checked = !want; tfsMsg(`✗ ${esc(r.error || "uygulanamadı")}`, "red"); return; }
   tfsSaved = r.view; syncTfsCfg(r.config); fillTfs();
-  tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde iş öğesi seçici çıkar" : "TFS modu kapatıldı", "teal");
+  tfsMsg(want ? "✓ TFS modu açıldı — panelde görev kutusunun üstünde work item seçici çıkar" : "TFS modu kapatıldı", "teal");
 });
 
 function render(){
@@ -1529,6 +1900,8 @@ async function load(){
   fillUserPrompt();
   fillPar();
   fillPlanWebhook();
+  loadSpeechCard();
+  loadAssistantCard();
   loadTfsCard();
   fillResilience();
   fillContext();

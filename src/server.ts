@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AssistantReply, AssistantRequest } from "./assistant.js";
 import { parseRunAt } from "./approval.js";
 import { parseFiles, resolveAttachment, type FileInput } from "./attachments.js";
 import { attachmentHeader, BROWSER_ENV, findBrowser, pdfFileName, printPdf } from "./reportPdf.js";
@@ -10,6 +11,9 @@ import { buildEml, renderReportEmail } from "./reportEmail.js";
 import type { SecurityReport } from "./securityReport.js";
 import { findPlan, planFileName, planMarkdown, planPayload, sendPlan } from "./planExport.js";
 import { SEARCH_KINDS, type SearchKind } from "./search.js";
+import { SPEECH_MAX_BYTES } from "./speech.js";
+import { metindekiAdlar } from "./okunus.js";
+import { projeAdlari } from "./projeAdlari.js";
 import { parseWorkItemRef } from "./tfs.js";
 import { parsePrRef } from "./tfsPr.js";
 import type { ModelInfo } from "./models.js";
@@ -108,6 +112,7 @@ export interface TfsApi {
   dismiss(session: string): { ok: boolean; error?: string };
   prPreview(id: number, dir?: string): Promise<unknown>;
   prMine(): Promise<unknown>;
+  prStatus(since: Record<string, string>, fallbackSince: string): Promise<unknown>;
   prCheckout(id: number, dir?: string): Promise<unknown>;
   prWrite(
     session: string,
@@ -150,6 +155,12 @@ export interface UiServerOptions {
   openSession: (id: string) => SessionRuntime | undefined;
   /** Bir oturumu katalogdan siler (POST /session-delete); silindiyse true */
   deleteSession?: (id: string) => boolean;
+  /** Oturumu elle yeniden adlandırır (POST /session-rename); boş ad ya da bilinmeyen oturum → false */
+  renameSession?: (id: string, name: string) => boolean;
+  /** Oturumu bir gruba koyar, "" = gruptan çıkarır (POST /session-group) */
+  setSessionGroup?: (id: string, group: string) => boolean;
+  /** Grubu yeniden adlandırır ya da dağıtır (to = ""); değişen oturum sayısı (POST /session-group-rename) */
+  renameGroup?: (from: string, to: string) => number;
   /** Config editörü verisi: ham config.json + kullanılabilir kural/beceri/ajan-md adları */
   getConfigData?: () => { raw: string; rules: string[]; skills: string[]; agents: string[] };
   /** Config'i doğrulayıp kaydeder; hata varsa mesaj döner, başarılıysa null */
@@ -206,6 +217,9 @@ export interface UiServerOptions {
   getMcpStatus?: () => McpStatusView;
   /** Eklentileri şimdi yoklar (model çağrısı yok), bitince güncel durumu döner (POST /mcp-probe) */
   probeMcp?: () => Promise<McpStatusView>;
+  /** Ayarlar → Asistan: sınırlar ve eklentiler (GET/POST /assistant) */
+  getAssistantSettings?: () => unknown;
+  setAssistantSettings?: (patch: Record<string, unknown>) => { ok: boolean; error?: string };
   /** Eklentinin araçları açıklama + parametreleriyle (GET /mcp-tools?name=) — eklentiye doğrudan sorulur */
   getMcpTools?: (name: string) => Promise<{ ok: boolean; tools?: McpToolInfo[]; error?: string }>;
   /** Akışın ana yolu + düğümlerin açık/kapalı durumu (GET /workflow) — görev kartı çipleri */
@@ -248,6 +262,42 @@ export interface UiServerOptions {
   cancelAudit?: (id: string) => boolean;
   /** TFS modu: ayarlar, iş öğesi önizleme/arama, eklerin önizlemesi, sonucu yazma */
   tfs?: TfsApi;
+  /** Sesle görev yazma (src/speech.ts): ayarlar, bağlantı denemesi, kaydı metne çevirme */
+  speech?: SpeechApi;
+  /** Git işleri (src/gitOps.ts): depoların durumu, işi planla, onaylanınca uygula */
+  git?: GitApi;
+}
+
+/** Git uçları (src/index.ts kurar); dir verilmezse genel hedef dizin */
+export interface GitApi {
+  status(dir?: string): Promise<{ ok: boolean; dir?: string; repos?: unknown; error?: string }>;
+  plan(req: Record<string, unknown>): Promise<unknown>;
+  apply(id: string): Promise<unknown>;
+}
+
+/** Sesle görev yazma uçları (src/index.ts kurar) */
+export interface SpeechApi {
+  view(): unknown;
+  save(input: Record<string, unknown>): { ok: boolean; error?: string; view?: unknown };
+  probe(): Promise<{ ok: boolean; models?: string[]; error?: string }>;
+  transcribe(
+    audio: Buffer,
+    mime: string,
+    previous?: string,
+    terms?: string,
+  ): Promise<{ ok: boolean; text?: string; error?: string; seconds?: number }>;
+  fix(text: string, terms?: string): Promise<{ ok: boolean; text?: string; changed?: boolean; error?: string }>;
+  understand(
+    text: string,
+    patterns: string[],
+  ): Promise<{ ok: boolean; command?: string; reply?: string; error?: string; seconds?: number }>;
+  say(
+    text: string,
+    model?: string,
+    voice?: string,
+  ): Promise<{ ok: true; audio: Buffer; mime: string; seconds: number } | { ok: false; error: string }>;
+  /** Sesli asistan: yeni cümle (answer yok) ya da bekleyen soruya cevap; local = panel aynı bilgisayardan */
+  assistant(req: AssistantRequest, local: boolean, answer?: { id: string; yes: boolean }): Promise<AssistantReply>;
 }
 
 /**
@@ -283,6 +333,16 @@ export interface UiServerOptions {
  *   GET  /plan-export?session=&format=md|json  oturumun son onay planını dosya olarak indirir (başka ajana vermek için)
  *   POST /plan-send     { session } — o planı planWebhook adresine JSON olarak POST eder; sonuç plan_sent olayıyla sohbete düşer
  *   POST /plan-webhook  { url, apiKey } — uzak ajan adresi/anahtarı (canlı + config.json; boş adres = kaldır)
+ *   GET  /speech        sesle görev yazma ayarları (adres/anahtar genel bağlantıdan) — panel + Ayarlar
+ *   POST /session-rename       { id, name } — oturumu elle yeniden adlandırır (sonra kendiliğinden değişmez)
+ *   POST /session-group        { id, group } — oturumu gruba koyar ("" = gruptan çıkar)
+ *   POST /session-group-rename { from, to } — grubu yeniden adlandırır ya da dağıtır (to = "")
+ *   POST /speech        { enabled?, model?, language?, prompt? } — kaydeder (canlı)
+ *   POST /speech/test   genel sunucuya bağlanır, yüklü modelleri döner
+ *   POST /speech/say    { text, model?, voice? } → ses (audio/wav…) — sesli yanıtı sunucudaki okuma modeli okur
+ *   POST /speech/intent { text, patterns[] } → { ok, command } — sabit listede olmayan sesli komutu modelle anlar
+ *   POST /speech/transcribe  gövde: ses kaydı (audio/wav…) → { ok, text, seconds } — mikrofon düğmesi;
+ *                   panel uzun kaydı ≤28 sn parçalara böler, önceki parçanın metni x-onceki-metin başlığında
  *   POST /security-audit  güvenlik denetçisini açar; akışta yoksa ekler → { ok, key, node, attachedTo? }
  *   GET  /security-audits         { jobs[], dirs[], defaultDir, model } — bağımsız denetimler (bellekte) + dizin önerileri
  *   POST /security-audits/start   { dir } — dizindeki kod tabanının tamamını denetler → { ok, job }
@@ -308,6 +368,7 @@ export interface UiServerOptions {
  *   POST /tfs/yazma     { session } — bu sonucu yazma (kart kapanır)
  *   GET  /tfs/pr?id=&dizin=     çekme isteği kartı: PR, açık yorum dizileri, değişen dosyalar, yerel deponun durumu
  *   GET  /tfs/pr-benim          açık PR'larım (açtıklarım + inceleyeni olduklarım)
+ *   POST /tfs/pr-durum          { since: {no: tarih}, fallback } → açık PR'larımın oyları, açık / yeni yorumları
  *   POST /tfs/pr-dal    { id, dizin? } — yerel depoyu PR'ın dalına geçirir (çalışma ağacı temizse)
  *   POST /tfs/pr-yaz    { session, push, message?, replies[], comments[], general? } — PR'a yazar (tfs_pr_written)
  *   POST /tfs/pr-yazma  { session } — PR'a yazma (kart kapanır)
@@ -819,6 +880,178 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       return;
     }
 
+    if (req.url === "/speech" && req.method === "GET") {
+      if (!options.speech) return json(res, 404, { ok: false, error: "kapalı" });
+      return json(res, 200, options.speech.view());
+    }
+    if (req.url === "/speech" && req.method === "POST") {
+      readJson(req, (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = options.speech.save(parsed);
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+    if (req.url === "/speech/test" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        json(res, 200, await options.speech.probe());
+      });
+      return;
+    }
+    if (req.url === "/speech/say" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const s = (k: string) => (typeof parsed?.[k] === "string" ? (parsed[k] as string).trim() : undefined);
+        if (!options.speech || !text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.say(text, s("model"), s("voice"));
+        if (!r.ok) return json(res, 502, r);
+        res.writeHead(200, { "content-type": r.mime, "cache-control": "no-store", "x-sure": String(r.seconds) });
+        res.end(r.audio);
+      });
+      return;
+    }
+    if (req.url === "/speech/intent" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const patterns = Array.isArray(parsed?.patterns)
+          ? (parsed.patterns as unknown[]).filter((p): p is string => typeof p === "string")
+          : [];
+        if (!options.speech || !text.trim() || !patterns.length)
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.understand(text, patterns);
+        json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+    if (req.url === "/speech/adaylar" && req.method === "POST") {
+      // Sesle yazılan metinde okunuşla geçen sınıf/dosya adları (projedeki kod dosyalarından) — ekranda
+      // gösterilmez, ses tanıma sözlüğüne ve metin düzeltmeye aday olarak gider
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text.slice(-2000) : "";
+        const dir = typeof parsed?.dir === "string" && parsed.dir ? parsed.dir : "";
+        if (!text.trim() || !dir) return json(res, 200, { ok: true, adlar: [] });
+        try {
+          json(res, 200, { ok: true, adlar: metindekiAdlar(text, await projeAdlari(dir)) });
+        } catch {
+          json(res, 200, { ok: true, adlar: [] });
+        }
+      });
+      return;
+    }
+    if (req.url === "/speech/duzelt" && req.method === "POST") {
+      readJson(req, async (parsed) => {
+        const text = typeof parsed?.text === "string" ? parsed.text : "";
+        const terms = typeof parsed?.terms === "string" ? parsed.terms.slice(0, 1500) : undefined;
+        if (!options.speech || !text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = await options.speech.fix(text, terms);
+        json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+    if (url.pathname === "/git/durum" && req.method === "GET") {
+      if (!options.git) return json(res, 404, { ok: false, error: "kapalı" });
+      const dir = url.searchParams.get("dir") || undefined;
+      void options.git.status(dir).then((r) => json(res, 200, r));
+      return;
+    }
+    if ((req.url === "/git/plan" || req.url === "/git/uygula") && req.method === "POST") {
+      // Depolarda değişiklik yapar: yalnızca JSON ve aynı kökenden (başka site tetikleyemesin)
+      const origin = req.headers.origin;
+      if (
+        !/^application\/json/i.test(req.headers["content-type"] ?? "") ||
+        (origin && new URL(origin).host !== req.headers.host)
+      )
+        return json(res, 403, { ok: false, error: "izin yok" });
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.git) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        if (req.url === "/git/uygula") {
+          if (typeof parsed.id !== "string") return json(res, 400, { ok: false, error: "geçersiz istek" });
+          return json(res, 200, await options.git.apply(parsed.id));
+        }
+        json(res, 200, await options.git.plan(parsed));
+      });
+      return;
+    }
+    if ((req.url === "/speech/asistan" || req.url === "/speech/asistan/onay") && req.method === "POST") {
+      // Bilgisayarda iş yapabildiği için: yalnızca JSON (başka sitenin formu ön sorgusuz gönderemesin)
+      // ve başka bir kökenden gelen istek reddedilir
+      const origin = req.headers.origin;
+      if (
+        !/^application\/json/i.test(req.headers["content-type"] ?? "") ||
+        (origin && new URL(origin).host !== req.headers.host)
+      )
+        return json(res, 403, { ok: false, error: "izin yok" });
+      const ra = req.socket.remoteAddress ?? "";
+      const local = ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+      readJson(req, async (parsed) => {
+        if (!parsed || !options.speech) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        if (req.url === "/speech/asistan/onay") {
+          if (typeof parsed.id !== "string" || typeof parsed.yes !== "boolean")
+            return json(res, 400, { ok: false, error: "geçersiz istek" });
+          return json(
+            res,
+            200,
+            await options.speech.assistant({ text: "", patterns: [] }, local, { id: parsed.id, yes: parsed.yes }),
+          );
+        }
+        const text = typeof parsed.text === "string" ? parsed.text : "";
+        const patterns = Array.isArray(parsed.patterns)
+          ? (parsed.patterns as unknown[]).filter((p): p is string => typeof p === "string")
+          : [];
+        const history = Array.isArray(parsed.history)
+          ? (parsed.history as unknown[]).filter(
+              (h): h is { rol: string; metin: string } =>
+                !!h &&
+                typeof (h as { rol?: unknown }).rol === "string" &&
+                typeof (h as { metin?: unknown }).metin === "string",
+            )
+          : [];
+        if (!text.trim()) return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const dir = typeof parsed.dir === "string" ? parsed.dir : undefined;
+        json(res, 200, await options.speech.assistant({ text, patterns, history, dir }, local));
+      });
+      return;
+    }
+    if (req.url === "/speech/transcribe" && req.method === "POST") {
+      const api = options.speech;
+      if (!api) return json(res, 404, { ok: false, error: "kapalı" });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      let tooBig = false;
+      req.on("data", (c: Buffer) => {
+        size += c.length;
+        if (size > SPEECH_MAX_BYTES) tooBig = true;
+        else chunks.push(c);
+      });
+      req.on("end", async () => {
+        if (tooBig) {
+          return json(res, 413, {
+            ok: false,
+            error: `Kayıt çok uzun (en fazla ${SPEECH_MAX_BYTES / 1024 / 1024} MB).`,
+          });
+        }
+        if (!size) return json(res, 400, { ok: false, error: "Kayıt boş geldi." });
+        const mime = String(req.headers["content-type"] ?? "audio/wav").split(";")[0];
+        // Uzun kayıt parça parça gelir; önceki parçanın metni başlıkta (URI kodlu)
+        let previous: string | undefined;
+        try {
+          previous = decodeURIComponent(String(req.headers["x-onceki-metin"] ?? "")) || undefined;
+        } catch {
+          previous = undefined;
+        }
+        let terms: string | undefined;
+        try {
+          terms = decodeURIComponent(String(req.headers["x-terimler"] ?? "")).slice(0, 600) || undefined;
+        } catch {
+          terms = undefined;
+        }
+        const r = await api.transcribe(Buffer.concat(chunks), mime, previous, terms);
+        json(res, r.ok ? 200 : 502, r);
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/plan-webhook") {
       readJson(req, (parsed) => {
         if (
@@ -830,6 +1063,21 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         }
         const r = options.setPlanWebhook
           ? options.setPlanWebhook(parsed.url, parsed.apiKey ?? "")
+          : { ok: false, error: "kapalı" };
+        json(res, r.ok ? 200 : 400, r);
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/assistant") {
+      return json(res, 200, options.getAssistantSettings?.() ?? { ok: false, error: "kapalı" });
+    }
+    if (req.method === "POST" && req.url === "/assistant") {
+      readJson(req, (parsed) => {
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        const r = options.setAssistantSettings
+          ? options.setAssistantSettings(parsed as Record<string, unknown>)
           : { ok: false, error: "kapalı" };
         json(res, r.ok ? 200 : 400, r);
       });
@@ -1041,6 +1289,37 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       return;
     }
 
+    if (req.method === "POST" && req.url === "/session-rename") {
+      readJson(req, (p) => {
+        if (!p || typeof p.id !== "string" || typeof p.name !== "string" || !options.renameSession) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        if (!p.name.trim()) return json(res, 400, { ok: false, error: "Ad boş olamaz." });
+        const ok = options.renameSession(p.id, p.name);
+        json(res, ok ? 200 : 404, ok ? { ok } : { ok, error: "Oturum bulunamadı." });
+      });
+      return;
+    }
+    if (req.method === "POST" && req.url === "/session-group") {
+      readJson(req, (p) => {
+        if (!p || typeof p.id !== "string" || typeof p.group !== "string" || !options.setSessionGroup) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        const ok = options.setSessionGroup(p.id, p.group);
+        json(res, ok ? 200 : 404, ok ? { ok } : { ok, error: "Oturum bulunamadı." });
+      });
+      return;
+    }
+    if (req.method === "POST" && req.url === "/session-group-rename") {
+      readJson(req, (p) => {
+        if (!p || typeof p.from !== "string" || typeof p.to !== "string" || !p.from || !options.renameGroup) {
+          return json(res, 400, { ok: false, error: "geçersiz istek" });
+        }
+        json(res, 200, { ok: true, count: options.renameGroup(p.from, p.to) });
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/session-delete") {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
@@ -1083,7 +1362,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         if (parsed.workItem !== undefined && parsed.workItem !== null && parsed.workItem !== "") {
           workItem = typeof parsed.workItem === "number" ? parsed.workItem : parseWorkItemRef(String(parsed.workItem));
           if (!workItem || !Number.isInteger(workItem) || workItem < 1)
-            return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "work item numarası anlaşılamadı" });
         }
         // TFS: çekme isteği numarası ("!45", PR adresi) + kip
         let pr: number | undefined;
@@ -1094,11 +1373,11 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
               : (parsePrRef(String(parsed.pr)) ??
                 (/^\d+$/.test(String(parsed.pr).trim()) ? Number(parsed.pr) : undefined));
           if (!pr || !Number.isInteger(pr) || pr < 1)
-            return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
         }
         const prMode = parsed.prMode === "incele" ? "incele" : "yorum";
         if (workItem !== undefined && pr !== undefined)
-          return json(res, 400, { ok: false, error: "aynı görevde hem iş öğesi hem çekme isteği seçilemez" });
+          return json(res, 400, { ok: false, error: "aynı görevde hem work item hem pull request seçilemez" });
         if (!task && workItem === undefined && pr === undefined)
           return json(res, 400, { ok: false, error: "görev boş olamaz" });
         const session = typeof parsed.session === "string" && parsed.session ? parsed.session : undefined;
@@ -1155,7 +1434,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       }
       if (req.method === "GET" && p === "/tfs/is-ogesi") {
         const id = parseWorkItemRef(url.searchParams.get("id") ?? "");
-        if (!id) return json(res, 400, { ok: false, error: "iş öğesi numarası anlaşılamadı" });
+        if (!id) return json(res, 400, { ok: false, error: "work item numarası anlaşılamadı" });
         tfs.preview(id).then((item) => json(res, 200, { ok: true, item }), fail);
         return;
       }
@@ -1214,7 +1493,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       if (req.method === "GET" && p === "/tfs/pr") {
         const raw = url.searchParams.get("id") ?? "";
         const id = parsePrRef(raw) ?? (/^\d+$/.test(raw.trim()) ? Number(raw.trim()) : undefined);
-        if (!id) return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+        if (!id) return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
         tfs
           .prPreview(id, url.searchParams.get("dizin") || undefined)
           .then((pr) => json(res, 200, { ok: true, pr }), fail);
@@ -1224,11 +1503,27 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         tfs.prMine().then((items) => json(res, 200, { ok: true, items }), fail);
         return;
       }
+      if (req.method === "POST" && p === "/tfs/pr-durum") {
+        readJson(req, (b) => {
+          const since: Record<string, string> = {};
+          const raw = b?.since;
+          if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+            for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+              if (/^\d{1,9}$/.test(k) && typeof v === "string" && !Number.isNaN(Date.parse(v))) since[k] = v;
+          }
+          const fb =
+            typeof b?.fallback === "string" && !Number.isNaN(Date.parse(b.fallback))
+              ? b.fallback
+              : new Date(Date.now() - 86_400_000).toISOString();
+          tfs.prStatus(since, fb).then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);
+        });
+        return;
+      }
       if (req.method === "POST" && p === "/tfs/pr-dal") {
         readJson(req, (b) => {
           const id = typeof b?.id === "number" ? b.id : Number(b?.id);
           if (!Number.isInteger(id) || id < 1)
-            return json(res, 400, { ok: false, error: "çekme isteği numarası anlaşılamadı" });
+            return json(res, 400, { ok: false, error: "pull request numarası anlaşılamadı" });
           tfs
             .prCheckout(id, typeof b?.dizin === "string" ? b.dizin : undefined)
             .then((r) => json(res, 200, { ok: true, ...(r as object) }), fail);

@@ -397,6 +397,57 @@ export interface AppConfig extends ProviderConfig {
    *  "Uzak ajana gönder" düğmesi planı bu adrese JSON olarak POST eder. apiKey
    *  verilirse "Authorization: Bearer" başlığıyla gider. Akışı etkilemez. */
   planWebhook?: { url: string; apiKey?: string };
+  /** Sesle görev yazma (Ayarlar): panelde mikrofon düğmesi kaydı ses tanıma modeline gönderir,
+   *  metin görev kutusuna yazılır. Bağlantı varsayılan olarak genel bağlantıdır (baseUrl + apiKey). */
+  speech?: SpeechConfig;
+  /** Sesli asistanın sınırları: hangi eklenti/araçlar, bilgisayarda ne yapabilir, ne zaman sorar */
+  assistant?: AssistantLimitsConfig;
+}
+
+/** İzin: kapalı (false), açık (true) ya da önce sor ("ask") */
+export type AssistantPerm = boolean | "ask";
+/** Sesli asistanın sınırları (config.json "assistant"). Yoksa eski davranış: genel açık eklentiler,
+ *  bilgisayar işleri `speech.computer`'a göre. */
+export interface AssistantLimitsConfig {
+  /** Eklenti başına: enabled (yoksa genel Aç/Kapat ayarı geçerli; true = ajanlar için kapalı olsa da
+   *  asistan kullanır), tools (yalnızca bu araçlar), readOnly (yalnızca okuyan araçlar) */
+  mcp?: Record<string, { enabled?: boolean; tools?: string[]; readOnly?: boolean }>;
+  /** Bilgisayar işleri: okuma (klasör aç, listele, oku), yazma (yaz, klasör oluştur, taşı),
+   *  silme ve komut çalıştırma (çalıştırılabilir dosya açma dahil) — silme ve komut yalnızca kapalı/sor */
+  computer?: { read?: AssistantPerm; write?: AssistantPerm; delete?: false | "ask"; run?: false | "ask" };
+  /** Eklenti araçlarında ne zaman sorsun: degisiklik (salt okunur olmayan; varsayılan), hep, hic */
+  confirm?: "degisiklik" | "hep" | "hic";
+  /** Bir cümlede en fazla kaç adım (1-20, varsayılan 8) */
+  maxSteps?: number;
+  /** Süre sınırları (ms): eklenti aracı (varsayılan 2 dk), komut (varsayılan 60 sn) */
+  timeouts?: { mcpMs?: number; commandMs?: number };
+}
+
+/** Ses tanıma (OpenAI uyumlu /v1/audio/transcriptions — ör. vLLM) */
+export interface SpeechConfig {
+  /** Açık mı. Adres ve anahtar genel bağlantıdan (`baseUrl`/`apiKey`) */
+  enabled?: boolean;
+  /** Eski sürümlerin ayrı ses sunucusu adresi — artık kullanılmaz; yalnızca `enabled` yokken "açıktı" demek */
+  url?: string;
+  /** Model adı (ör. openai/whisper-large-v3) — sunucuda tek model varsa boş kalabilir */
+  model?: string;
+  /** Konuşma dili (ISO kodu, varsayılan "tr"); "auto" = model kendisi bulsun */
+  language?: string;
+  /** Eski sürümlerin ipucu alanı — artık kullanılmaz */
+  prompt?: string;
+  /** Sesli komutta sabit liste yetmeyince cümleyi anlayan model (aynı sunucuda, ör. küçük bir Gemma); boş = kapalı */
+  commandModel?: string;
+  /** Sesli yanıtı okuyan model (aynı sunucuda, metinden ses: /v1/audio/speech); boş = tarayıcının sesi */
+  ttsModel?: string;
+  /** Okuma modelinin ses adı (modele göre; boş = modelin varsayılanı) */
+  ttsVoice?: string;
+  /** Sesli asistan bilgisayarda iş yapabilsin (komut modeliyle): klasör açma, dosya okuma/yazma,
+   *  silme ve komut çalıştırma (bu ikisi önce sorulur). Yalnızca panel aynı bilgisayardan açıldıysa. */
+  computer?: boolean;
+  /** Sözlük: ses tanımaya ipucu olarak giden terimler (sınıf, ürün, kısaltma…; virgül ya da satırla) */
+  terms?: string;
+  /** Görev yazdırırken metni komut modeliyle düzelt (yanlış duyulan terimler, noktalama) */
+  fixDictation?: boolean;
 }
 
 export interface AgentDefinition {
