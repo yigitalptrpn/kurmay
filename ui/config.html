@@ -2035,6 +2035,9 @@ const RES_MODES = [
     v:{ enabled:true, jitter:true, initialDelayMs:15000, maxDelayMs:300000, maxAttempts:0, permanentMaxAttempts:5, stallTimeoutMs:600000, apiTimeoutMs:1800000, apiMaxRetries:3 } },
   { id:"cabuk", ad:"Çabuk vazgeç", alt:"Birkaç denemeden sonra durur, hatayı hemen gösterir.",
     v:{ enabled:true, jitter:true, initialDelayMs:3000, maxDelayMs:15000, maxAttempts:3, permanentMaxAttempts:1, stallTimeoutMs:300000, apiTimeoutMs:300000, apiMaxRetries:2 } },
+  // Teşhis için: hiç yeniden denemez — sunucunun ilk hatası olduğu gibi görünür, görev durur
+  { id:"dur", ad:"Hatada dur", alt:"Hiç yeniden denemez. İlk hatada görev durur, sunucunun hata metni olduğu gibi görünür. Hatayı görmek için; sonra Dengeli'ye dön.",
+    v:{ enabled:true, jitter:true, initialDelayMs:3000, maxDelayMs:15000, maxAttempts:1, permanentMaxAttempts:1, stallTimeoutMs:300000, apiTimeoutMs:600000, apiMaxRetries:0 } },
   { id:"ozel", ad:"Özel", alt:"Bekleme, sınır ve zaman aşımı ayarlarını tek tek ver.", v:null },
 ];
 const RES_KEYS = Object.keys(RES_DEFAULTS);
