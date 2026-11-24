@@ -426,6 +426,7 @@ async function compactWithRetry(
       !f ||
       f.kind === "context_full" ||
       f.kind === "lost_session" ||
+      f.kind === "settings" ||
       (!f.infra && ++suspect >= SUSPECT_SWITCH) ||
       !s.enabled ||
       (s.maxAttempts > 0 && attempt >= s.maxAttempts);
@@ -1032,6 +1033,8 @@ async function executeWithRetry(
       permanentRun = info.kind === "permanent" ? permanentRun + 1 : 0;
       if (info.kind === "permanent" || (info.kind === "transient" && !info.infra)) suspect++;
       const error = err instanceof Error ? err.message : String(err);
+      if (info.kind === "settings")
+        throw new Error(effortFailure(agent.config.effort ?? cfg.effort, info, error), { cause: err });
       if (!s.enabled || (s.maxAttempts > 0 && attempt >= s.maxAttempts)) throw err;
 
       // Sıradaki denemenin oturumu ve mesajı
@@ -1367,4 +1370,26 @@ async function runAgentInner(
     sessionId: result.sessionId,
   });
   return result;
+}
+
+const EFFORT_TR: Record<string, string> = {
+  off: "kapalı",
+  low: "düşük",
+  medium: "orta",
+  high: "yüksek",
+  xhigh: "çok yüksek",
+  max: "en yüksek",
+};
+
+/** Modelin kabul etmediği akıl yürütme düzeyi için kullanıcıya gidecek açık hata metni */
+function effortFailure(effort: string | undefined, info: ClassifiedError, raw: string): string {
+  const sent = effort ? `“${EFFORT_TR[effort] ?? effort}”` : "varsayılan (yüksek)";
+  const ok = info.expected?.length
+    ? ` Sunucunun kabul ettiği: ${info.expected.map((v) => (EFFORT_TR[v] ? `${EFFORT_TR[v]} (${v})` : v)).join(", ")}.`
+    : "";
+  return (
+    `Model bu akıl yürütme düzeyini kabul etmiyor (gönderilen: ${sent}).${ok} ` +
+    `Sağ sütundaki "Akıl yürütme"yi değiştirip görevi yeniden başlat; yeniden denemek düzeltmez. ` +
+    `Sunucunun hata metni: ${raw}`
+  );
 }
