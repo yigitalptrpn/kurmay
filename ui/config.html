@@ -1986,7 +1986,21 @@ for (const [id, alan] of [["cBaseUrl","baseUrl"],["cApiKey","apiKey"],["cModel",
 }
 $("cProvider").addEventListener("change", ()=>{ cfg.provider = $("cProvider").value; markDirty(); });
 $("cEffort").innerHTML = ["", ...EFFORT_LEVELS].map((v)=>`<option value="${v}">${v ? EFFORT_NAMES[v] : "varsayılan"}</option>`).join("");
-$("cEffort").addEventListener("change", ()=>{ cfg.effort = $("cEffort").value; markDirty(); });
+// Akıl yürütme: Kaydet'i beklemeden POST /effort ile yazılır — servis bellekteki genel
+// değeri de günceller (eskiden yalnızca dosyaya yazılıyordu, yeniden başlatmadan geçmiyordu)
+$("cEffort").addEventListener("change", async ()=>{
+  const sel = $("cEffort"), onceki = cfg.effort || "", effort = sel.value;
+  try {
+    const res = await fetch("/effort", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ effort }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "kaydedilemedi");
+    if (effort) cfg.effort = effort; else delete cfg.effort; // sonradan Kaydet geri almasın
+    $("msg").innerHTML = `<span style="color:var(--teal)">✓ akıl yürütme: ${effort ? EFFORT_NAMES[effort] : "varsayılan"} — yeni oturumlarda hemen geçerli</span>`;
+  } catch (e) {
+    sel.value = onceki;
+    $("msg").innerHTML = `<span style="color:var(--red)">akıl yürütme kaydedilemedi: ${e.message}</span>`;
+  }
+});
 $("cKeyShow").addEventListener("click", ()=>{ const k = $("cApiKey"); k.type = k.type === "password" ? "text" : "password"; });
 function fillConn(){
   $("cProvider").value = cfg.provider || "anthropic";
