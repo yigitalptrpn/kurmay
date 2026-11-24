@@ -114,7 +114,9 @@ export class StallError extends Error {
  * - lost_session: sürdürülecek konuşma bulunamadı — yeni konuşmayla denenir
  * - context_full: modelin bağlam penceresi doldu — konuşma özetlenir, olmazsa yeni konuşma
  */
-export type ErrorKind = "transient" | "permanent" | "lost_session" | "context_full";
+/** settings: ayardan kaynaklanan, yeniden denemeyle düzelmeyecek hata (ör. modelin kabul
+ *  etmediği akıl yürütme düzeyi) — ajan hiç beklemeden durur */
+export type ErrorKind = "transient" | "permanent" | "lost_session" | "context_full" | "settings";
 
 export interface ClassifiedError {
   kind: ErrorKind;
@@ -125,6 +127,8 @@ export interface ClassifiedError {
    *  yok, beklemek yeter. Yoksa hata bu isteğe/konuşmaya özgü olabilir (500, 400,
    *  tanınmayan) — tekrarlıyorsa konuşma bozuk sayılır (runAgent) */
   infra?: boolean;
+  /** settings: sunucunun hata metninden okunan kabul edilen değerler (varsa) */
+  expected?: string[];
 }
 
 /** Sunucunun "meşgulüm / zaman aşımı" kodları — metinleri bağlam hatası sayılmaz
@@ -185,6 +189,31 @@ export function apiErrorReason(status: number | null | undefined, apiError?: str
  * her biri üretilip doğrulandı. Tanınmayan her şey GEÇİCİ sayılır: amaç işin
  * devam etmesi — yanlışlıkla kalıcı saymak akışı düşürür.
  */
+/** Hata metni akıl yürütme düzeyinin (effort / reasoning_effort) reddedildiğini mi söylüyor */
+export function isEffortError(msg: string): boolean {
+  if (/reasoning[_ ]effort|output_config\.effort/i.test(msg)) return true;
+  return (
+    /\beffort\b.{0,60}\b(must|invalid|not supported|unsupported|should be|expected|allowed|one of)/i.test(msg) ||
+    /\b(invalid|unsupported|unknown|not supported)\b.{0,40}\beffort\b/i.test(msg)
+  );
+}
+
+/** Hata metninden kabul edilen düzeyleri okur ("must be one of: 'low', 'high'" vb.); bulamazsa boş */
+export function effortExpected(msg: string): string[] {
+  const m =
+    /(?:must be|one of|expected|allowed(?: values)?(?: are)?|supported(?: values)?(?: are)?|should be)\s*:?\s*([^\n]{0,160})/i.exec(
+      msg,
+    );
+  if (!m) return [];
+  const known = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max", "auto", "off", "disabled"]);
+  const out: string[] = [];
+  for (const w of m[1].match(/[A-Za-z_]+/g) ?? []) {
+    const k = w.toLowerCase();
+    if (known.has(k) && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
 export function classifyError(err: unknown, apiError?: string): ClassifiedError {
   if (err instanceof StallError) {
     return { kind: "transient", infra: true, reason: `akış takıldı (${Math.round(err.ms / 1000)} sn veri gelmedi)` };
@@ -198,7 +227,24 @@ export function classifyError(err: unknown, apiError?: string): ClassifiedError 
   // Durum kodu: "API Error: 503 …", "Request rejected (429)", "API Error: 401 …"
   const m = /API Error:\s*(\d{3})\b/.exec(msg) ?? /\((\d{3})\)/.exec(msg);
   const code = m ? Number(m[1]) : undefined;
-  const status = code && code >= 100 && code < 600 ? code : undefined;
+  let status = code && code >= 100 && code < 600 ? code : undefined;
+  // Ara sunucu, model sunucusunun 4xx reddini 5xx olarak iletebiliyor:
+  // 'API Error: 500 {"provider_status":400,…}'. Asıl kod içerideki — 500 sanılırsa
+  // geçici hata gibi sonsuza kadar denenir
+  const inner = /"?provider_status"?\s*[:=]\s*(\d{3})/i.exec(msg);
+  if (status && status >= 500 && inner && Number(inner[1]) >= 400 && Number(inner[1]) < 500) status = Number(inner[1]);
+
+  // Modelin kabul etmediği akıl yürütme düzeyi: aynı istek hep reddedilir, beklemek ya da
+  // yeni konuşma bir şey değiştirmez — kullanıcının ayarı değiştirmesi gerekir
+  if ((!status || (status >= 400 && status < 500)) && isEffortError(msg)) {
+    const expected = effortExpected(msg);
+    return {
+      kind: "settings",
+      reason: "model bu akıl yürütme düzeyini kabul etmiyor",
+      ...(status ? { status } : {}),
+      ...(expected.length ? { expected } : {}),
+    };
+  }
 
   // vLLM "This model's maximum context length is …" (400) — Claude Code bunu tanımıyor,
   // sıradan 400 sanıyor; aynı konuşmayı tekrar göndermek hep aynı hatayı verir.

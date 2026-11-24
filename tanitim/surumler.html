@@ -303,6 +303,18 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
     </div>
   </article>
 -->
+        <article class="surum" id="v0.1.38">
+          <div class="sol"><a class="no" href="#v0.1.38">0.1.38</a><time datetime="2026-11-24">24 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Akıl yürütme ayarı ve hata görünürlüğü</h2>
+            <ul class="maddeler">
+              <li data-tur="duz">Ayarlar'da seçilen genel akıl yürütme düzeyi artık hemen geçerli. Eskiden Kurmay yeniden başlatılana kadar yeni oturumlar eski düzeyle açılıyordu.</li>
+              <li data-tur="duz">Model seçilen akıl yürütme düzeyini kabul etmezse Kurmay artık sonsuza kadar yeniden denemiyor. Görev hemen durur, sunucunun kabul ettiği düzeyler ve ne yapman gerektiği yazar. Ara sunucunun reddi sunucu hatası olarak ilettiği durum da tanınır.</li>
+              <li data-tur="yeni">Bağlantı dayanıklılığında “Hatada dur” modu: hiç yeniden denemez, sunucunun ilk hatası olduğu gibi görünür. Bir hatanın asıl sebebini görmek için.</li>
+              <li data-tur="iyi">Sohbetteki yeniden deneme satırında sunucunun hata metni tıklanınca açılır; eskiden yalnızca fareyle üstüne gelince görünüyordu.</li>
+            </ul>
+          </div>
+        </article>
         <article class="surum" id="v0.1.37">
           <div class="sol"><a class="no" href="#v0.1.37">0.1.37</a><time datetime="2026-11-19">19 Kasım 2026</time></div>
           <div class="sag">

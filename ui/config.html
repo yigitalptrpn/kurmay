@@ -1986,7 +1986,21 @@ for (const [id, alan] of [["cBaseUrl","baseUrl"],["cApiKey","apiKey"],["cModel",
 }
 $("cProvider").addEventListener("change", ()=>{ cfg.provider = $("cProvider").value; markDirty(); });
 $("cEffort").innerHTML = ["", ...EFFORT_LEVELS].map((v)=>`<option value="${v}">${v ? EFFORT_NAMES[v] : "varsayılan"}</option>`).join("");
-$("cEffort").addEventListener("change", ()=>{ cfg.effort = $("cEffort").value; markDirty(); });
+// Akıl yürütme: Kaydet'i beklemeden POST /effort ile yazılır — servis bellekteki genel
+// değeri de günceller (eskiden yalnızca dosyaya yazılıyordu, yeniden başlatmadan geçmiyordu)
+$("cEffort").addEventListener("change", async ()=>{
+  const sel = $("cEffort"), onceki = cfg.effort || "", effort = sel.value;
+  try {
+    const res = await fetch("/effort", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ effort }) });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error || "kaydedilemedi");
+    if (effort) cfg.effort = effort; else delete cfg.effort; // sonradan Kaydet geri almasın
+    $("msg").innerHTML = `<span style="color:var(--teal)">✓ akıl yürütme: ${effort ? EFFORT_NAMES[effort] : "varsayılan"} — yeni oturumlarda hemen geçerli</span>`;
+  } catch (e) {
+    sel.value = onceki;
+    $("msg").innerHTML = `<span style="color:var(--red)">akıl yürütme kaydedilemedi: ${e.message}</span>`;
+  }
+});
 $("cKeyShow").addEventListener("click", ()=>{ const k = $("cApiKey"); k.type = k.type === "password" ? "text" : "password"; });
 function fillConn(){
   $("cProvider").value = cfg.provider || "anthropic";
@@ -2021,6 +2035,9 @@ const RES_MODES = [
     v:{ enabled:true, jitter:true, initialDelayMs:15000, maxDelayMs:300000, maxAttempts:0, permanentMaxAttempts:5, stallTimeoutMs:600000, apiTimeoutMs:1800000, apiMaxRetries:3 } },
   { id:"cabuk", ad:"Çabuk vazgeç", alt:"Birkaç denemeden sonra durur, hatayı hemen gösterir.",
     v:{ enabled:true, jitter:true, initialDelayMs:3000, maxDelayMs:15000, maxAttempts:3, permanentMaxAttempts:1, stallTimeoutMs:300000, apiTimeoutMs:300000, apiMaxRetries:2 } },
+  // Teşhis için: hiç yeniden denemez — sunucunun ilk hatası olduğu gibi görünür, görev durur
+  { id:"dur", ad:"Hatada dur", alt:"Hiç yeniden denemez. İlk hatada görev durur, sunucunun hata metni olduğu gibi görünür. Hatayı görmek için; sonra Dengeli'ye dön.",
+    v:{ enabled:true, jitter:true, initialDelayMs:3000, maxDelayMs:15000, maxAttempts:1, permanentMaxAttempts:1, stallTimeoutMs:300000, apiTimeoutMs:600000, apiMaxRetries:0 } },
   { id:"ozel", ad:"Özel", alt:"Bekleme, sınır ve zaman aşımı ayarlarını tek tek ver.", v:null },
 ];
 const RES_KEYS = Object.keys(RES_DEFAULTS);
