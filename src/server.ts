@@ -287,8 +287,10 @@ export interface UiServerOptions {
 /** Git uçları (src/index.ts kurar); dir verilmezse genel hedef dizin */
 export interface GitApi {
   status(dir?: string): Promise<{ ok: boolean; dir?: string; repos?: unknown; error?: string }>;
+  stashes(dir?: string): Promise<{ ok: boolean; dir?: string; repos?: unknown; error?: string }>;
   plan(req: Record<string, unknown>): Promise<unknown>;
-  apply(id: string): Promise<unknown>;
+  /** body: { id, choices?: {depo: "gotur"|"birak"|"atla"}, select?: {depo: [branch…]} } */
+  apply(id: string, body: Record<string, unknown>): Promise<unknown>;
 }
 
 /** Sesle görev yazma uçları (src/index.ts kurar) */
@@ -396,6 +398,7 @@ export interface SpeechApi {
  *   POST /tfs/pr-yaz    { session, push, message?, replies[], comments[], general? } — PR'a yazar (tfs_pr_written)
  *   POST /tfs/pr-yazma  { session } — PR'a yazma (kart kapanır)
  *   GET  /toggles       Aç/Kapat sayfası (ui/toggles.html)
+ *   GET  /git           Git sayfası (ui/git.html); /git/durum, /git/stash: depolar ve stash'ler
  *   GET  /toggles-data  { entry, agents[], skills[], mcpServers[] } — açık/kapalı durumları
  *   POST /toggle        { kind: "agent"|"rule"|"skill"|"mcp", name, disabled } — açar/kapatır (canlı + config.json)
  */
@@ -405,6 +408,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
   const configUiPath = path.join(uiDir, "config.html");
   const togglesUiPath = path.join(uiDir, "toggles.html");
   const securityUiPath = path.join(uiDir, "guvenlik.html");
+  const gitUiPath = path.join(uiDir, "git.html");
   const securityPrintPath = path.join(uiDir, "guvenlik-rapor.html");
   const themeCssPath = path.join(uiDir, "theme.css");
   const themeJsPath = path.join(uiDir, "theme.js");
@@ -972,10 +976,16 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
       });
       return;
     }
-    if (url.pathname === "/git/durum" && req.method === "GET") {
+    if (url.pathname === "/git" && req.method === "GET") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(fs.readFileSync(gitUiPath));
+      return;
+    }
+    if ((url.pathname === "/git/durum" || url.pathname === "/git/stash") && req.method === "GET") {
       if (!options.git) return json(res, 404, { ok: false, error: "kapalı" });
       const dir = url.searchParams.get("dir") || undefined;
-      void options.git.status(dir).then((r) => json(res, 200, r));
+      const r = url.pathname === "/git/stash" ? options.git.stashes(dir) : options.git.status(dir);
+      void r.then((x) => json(res, 200, x));
       return;
     }
     if ((req.url === "/git/plan" || req.url === "/git/uygula") && req.method === "POST") {
@@ -990,7 +1000,7 @@ export function startUiServer(port: number, options: UiServerOptions): Promise<U
         if (!parsed || !options.git) return json(res, 400, { ok: false, error: "geçersiz istek" });
         if (req.url === "/git/uygula") {
           if (typeof parsed.id !== "string") return json(res, 400, { ok: false, error: "geçersiz istek" });
-          return json(res, 200, await options.git.apply(parsed.id));
+          return json(res, 200, await options.git.apply(parsed.id, parsed));
         }
         json(res, 200, await options.git.plan(parsed));
       });

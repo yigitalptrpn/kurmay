@@ -359,14 +359,18 @@ body.dinlemede .ses-not { top:60px; }
 .as-fab .rozet { position:absolute; top:2px; right:2px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--red); color:#fff; font:700 11px/18px var(--font-ui); }
 .as-fab .rozet:empty { display:none; }
 .as-fab.dinliyor { box-shadow:0 0 0 4px color-mix(in srgb, var(--red) 45%, transparent), var(--md-elev-3, 0 6px 20px rgba(0,0,0,.3)); }
-.asistan { position:fixed; z-index:68; right:20px; bottom:88px; width:380px; height:min(560px, calc(100vh - 110px)); display:flex; flex-direction:column; overflow:hidden;
+.asistan { position:fixed; z-index:68; right:20px; bottom:88px; width:min(440px, calc(100vw - 40px)); height:min(720px, calc(100vh - 110px)); display:flex; flex-direction:column; overflow:hidden;
   background:var(--md-surface-container-lowest, var(--card)); color:var(--text); border:1px solid var(--border); border-radius:var(--md-shape-lg, 14px);
   box-shadow:var(--md-elev-3, 0 10px 40px rgba(0,0,0,.3)); transform-origin:bottom right; animation:as-ac .16s ease-out; }
 @keyframes as-ac { from { opacity:0; transform:scale(.94) translateY(8px); } }
 @media (prefers-reduced-motion:reduce) { .asistan { animation:none; } }
 .asistan[hidden] { display:none; }
+/* Büyük mod (başlıktaki ⤢ ya da sesle “asistanı büyüt”): ekranın çoğunu kaplar, tercih localStorage'da */
+.asistan.buyuk { top:20px; bottom:88px; width:min(820px, calc(100vw - 40px)); height:auto; }
+.asistan.buyuk .as-g { max-width:72%; }
 @media (max-width:560px) {
-  .asistan { right:0; left:0; bottom:0; top:0; width:auto; height:auto; border-radius:0; border:none; }
+  .asistan, .asistan.buyuk { right:0; left:0; bottom:0; top:0; width:auto; height:auto; border-radius:0; border:none; }
+  #asBuyut { display:none; }
   .as-fab { right:16px; bottom:16px; }
   body.asistanda .as-fab { display:none; }
 }
@@ -560,12 +564,9 @@ body.dinlemede .ses-not { top:60px; }
 .git-repo code { font-family:var(--font-mono); font-size:11.5px; color:var(--md-primary, var(--text)); overflow-wrap:anywhere; }
 .git-repo small { color:var(--muted); font-size:11px; white-space:nowrap; }
 .git-repo small.kirli { color:var(--red); }
-.git-ctl { display:grid; gap:6px; margin-top:8px; }
-.git-ctl select, .git-ctl input { width:100%; min-width:0; font-size:12.5px; }
-.git-row { display:flex; gap:6px; flex-wrap:wrap; }
-.git-row input { flex:1 1 120px; }
-.git-row button { flex:0 1 auto; min-height:30px; padding:3px 10px; font-size:12px; text-transform:none; }
-.fhint-git { margin-top:6px; font-size:11.5px; color:var(--muted); }
+.git-bos { display:grid; gap:6px; justify-items:start; color:var(--muted); font-size:12.5px; }
+.git-bos button { min-height:30px; padding:3px 10px; font-size:12px; text-transform:none; }
+.git-ac { width:100%; margin-top:8px; min-height:34px; padding:4px 12px; font-size:12.5px; text-transform:none; }
 .ses-not .git-plan { display:grid; gap:3px; margin:6px 0 2px; }
 .ses-not .git-plan div { font-size:12.5px; }
 .ses-not .git-plan .atla { color:var(--muted); }
@@ -919,6 +920,7 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
 <section class="asistan" id="asistanEkran" role="dialog" aria-label="Kurmay Asistan" hidden>
   <div class="as-bas"><span class="as-av" aria-hidden="true">◎</span><div class="as-ad"><b>Kurmay Asistan</b><small id="asDurum">hazır</small></div>
     <button type="button" id="asYardimBtn" aria-pressed="false" title="Komut listesi — sesle: “komutları göster”" aria-label="Komut listesi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <button type="button" id="asBuyut" aria-pressed="false" title="Büyüt — sesle: “asistanı büyüt”" aria-label="Büyüt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg></button>
     <button type="button" id="asTemizle" title="Konuşmayı sil" aria-label="Konuşmayı sil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
     <button type="button" id="asKapat" title="Kapat — sesle: “asistanı kapat”" aria-label="Kapat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="as-yardim" id="asYardim" hidden></div>
@@ -1150,17 +1152,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <div class="kv"><span>Süre</span><b id="elapsed">—</b></div>
     <div class="kv"><span>Jeton (girdi/çıktı)</span><b id="tokens">—</b></div>
   </div>
-  <div class="rbox hidden" id="gitBox">
-    <h4>Git <span><span id="gitSum"></span> <button type="button" id="gitRefresh" title="Depoları yeniden oku">↻</button></span></h4>
+  <div class="rbox" id="gitBox">
+    <h4>Git <span><span id="gitSum"></span> <button type="button" id="gitRefresh" title="Depoları oku">↻</button></span></h4>
     <div id="gitList"></div>
-    <div class="git-ctl">
-      <select id="gitScope" aria-label="Hangi depolarda"></select>
-      <div class="git-row"><input type="text" id="gitBranch" list="gitBranches" placeholder="branch" spellcheck="false" autocomplete="off" aria-label="Branch adı"><datalist id="gitBranches"></datalist>
-        <button type="button" data-git="dal" title="Bu branch'e checkout yap">Checkout</button><button type="button" data-git="yeniDal" title="Bu adla yeni branch aç ve ona checkout yap">New branch</button></div>
-      <div class="git-row"><button type="button" data-git="guncelle" title="Pull (yalnızca fast-forward)">Pull</button><button type="button" data-git="sakla" title="Commit edilmemiş değişiklikleri stash'le">Stash</button><button type="button" data-git="geriGetir" title="Son stash'i geri getir">Stash pop</button></div>
-      <div class="git-row"><input type="text" id="gitMsg" placeholder="commit mesajı" aria-label="Commit mesajı"><button type="button" data-git="kaydet" title="Değişiklikleri commit et ve push yap">Commit + Push</button></div>
-    </div>
-    <div class="fhint-git">Her iş önce ne olacağını gösterir, onaylayınca yapılır.</div>
+    <button type="button" class="git-ac" id="gitAc" title="Checkout, pull, fetch, merge, stash, commit + push ve temizlik — her iş önce planı gösterir">Git'i aç →</button>
   </div>
 </aside>
 </div>
@@ -3510,7 +3505,7 @@ function viewDir() {
 }
 function applyViewDir() {
   const v = viewDir();
-  if (v.dir !== currentDir) setTimeout(gitYukle, 0);
+  if (v.dir !== currentDir) setTimeout(gitSifirla, 0);
   currentDir = v.dir;
   dirMissing = v.missing;
   applyDirState();
@@ -4974,12 +4969,13 @@ const KOMUTLAR = [
   { re: /^(tekrarla|tekrar (oku|soyle|et)|bir daha (oku|soyle)|ne dedin)$/, yap: () => sonSoz && konusabilir() ? konus(sonSoz) : sesNot("Tekrarlanacak bir şey yok.") },
   { re: /^(sus|sessiz ol|okumayi (birak|kes|durdur)|yeter)$/, yap: () => { sus(); sesNotKapat(); } },
   { ornek: "uyandırma kelimesini kapat · aç (dinlemede “Kurmay” şartı)", re: /^(uyandirma( kelimesi(ni)?)?|kurmay (sarti|sartini|kelimesi(ni)?))\s+(?<is>ac|kapat)$/, yap: (m) => uyandirmaAyarla(m.groups.is === "ac") },
-  { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · commit and push message … · stash · start nightly audit · morning summary · read · stop talking" },
+  { ornek: "İngilizce de: help · open assistant · new session · approve · reject because … · stop · open settings · search … in all sessions · checkout develop · pull · fetch · merge develop · open git · commit and push message … · stash · start nightly audit · morning summary · read · stop talking" },
   { ornek: "araya girmeyi kapat · aç (ben konuşurken sözümü kesebilirsin)", re: /^(konusurken |ben konusurken )?(araya girme(yi)?|soz kesme(yi)?|sozumu kesme(yi)?) (?<is>ac|kapat)$/, yap: (m) => sozKesmeAyarla(m.groups.is === "ac") },
   { ornek: "sesli yanıtı kapat · aç", re: /^(sesli (yanit|yanitlari|yaniti|cevap|cevaplari|okuma|okumayi)|seslendirme(yi)?|konusmani) (?<is>ac|kapat)$/, yap: (m) => sesliYanitAyarla(m.groups.is === "ac") },
   { ornek: "sözlüğe … ekle (ses tanıma bu kelimeyi doğru yazsın)", re: /^(sozluge|terimlere|sozlukte) (?<ter>.+?) (ekle|kaydet)$|^(?<ter2>.+?) (kelimesini|terimini|sozcugunu) sozluge ekle$/d, yap: (m, ham) => {
     const ix = m.indices.groups.ter || m.indices.groups.ter2; sozlugeEkle(ham.slice(ix[0], ix[1]).trim()); } },
   { ornek: "metin düzeltmeyi aç · kapat", re: /^(metin |gorev metni |metni )?(duzeltmeyi|duzeltme(yi)?|modelle duzeltmeyi) (?<is>ac|kapat)$/, yap: (m) => duzeltmeAyarla(m.groups.is === "ac") },
+  { ornek: "asistanı büyüt · küçült", re: /^asistan(?:i|in)?(?: ekrani(?:ni)?| penceresi(?:ni)?)? (?<is>buyut|genislet|tam ekran yap|kucult|daralt)$/, yap: (m) => asBuyut(!/^(kucult|daralt)$/.test(m.groups.is), true) },
   { ornek: "asistan ekranını aç · kapat (konuşmalar, eklenti sonuçları)", re: /^(asistani|asistan( ekrani(ni)?| penceresi(ni)?| konusmalari(ni)?)?|konusmalari|konusma gecmisini) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => asAc(/^(ac|goster)$/.test(m.groups.is), true) },
   { ornek: "komutları göster · gizle", re: /^(komutlari|komut listesini|yardimi) (?<is>ac|kapat|goster|gizle)$/, yap: (m) => { const ac = /^(ac|goster)$/.test(m.groups.is); if (ac) asAc(true); asYardimAyarla(ac); tamam(ac ? "Komut listesi asistan ekranında" : "Komut listesi gizlendi"); } },
   { ornek: "asistan ayarlarını aç", re: /^asistan(in)? (ayarlari(ni)?|izinleri(ni)?|sinirlari(ni)?)( ac| goster)?$/, yap: () => sayfaAc("/config#asCard", "Asistan ayarları") },
@@ -5030,6 +5026,11 @@ const KOMUTLAR = [
   { ornek: "commit ve push yap, mesaj …", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:kaydet ve gonder|kaydet gonder|commit\w*(?: (?:et|yap))?(?: ve)? (?:push|pus|gonder)\w*(?: (?:et|yap))?|push\w*(?: (?:et|yap))?)(?: (?:mesaj|mesaji|aciklama|aciklamasi|mesajla|commit mesaji)(?: ile)? (?<msg>.+))?$/d, yap: (m, ham) => gitSesle("kaydet", m, ham) },
   { ornek: "değişiklikleri stash'le · stash pop", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:tum |butun )?degisiklikleri )?(?:sakla|stash\w*(?: (?:et|yap|le))?|kenara (?:al|koy))$/d, yap: (m, ham) => gitSesle("sakla", m, ham) },
   { re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:saklananlari|sakladiklarimi|saklanan degisiklikleri|stash\w*) (?:geri (?:getir|al|yukle)|pop\w*)|stash pop\w*|pop (?:et|yap))(?: (?:et|yap))?$/d, yap: (m, ham) => gitSesle("geriGetir", m, ham) },
+  { ornek: "git sayfasını aç · stash listesini göster", re: /^git(?: i| sayfa\w*| ekran\w*| pencere\w*)? (?:ac|goster)$/, yap: () => gitSayfasi() },
+  { re: /^(?:stash\w*|saklananlar\w*)(?: (?:listesi\w*|liste))? (?:goster|ac|listele)$/, yap: () => gitSayfasi("#stash") },
+  { ornek: "tüm repolarda fetch yap · c reposunda fetch yap", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:git )?(?:fetch|fetc|fec|fec)\w*(?: (?:yap|et|cek|al))?$/d, yap: (m, ham) => gitSesle("fetch", m, ham) },
+  { ornek: "develop'ı branch'ime merge et · c reposunda develop'ı merge et", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?<dal>.+?)(?: (?:i|u|yi|yu|ı))?(?: (?:benim )?(?:branch|dal|brans)\w*(?: (?:ime|ima|e|a|ine|ina|im))?)? (?:merge|merc|mers|birlestir)\w*(?: (?:et|yap))?$/d, yap: (m, ham) => gitSesle("merge", m, ham) },
+  { ornek: "merge edilmiş branch'leri temizle", re: /^(?:(?:(?:tum|butun|her) )?(?:repo|depo)\w*(?: icin)? |(?<repo>.+?) (?:repo|depo)\w* )?(?:(?:(?:eski|merge edilmis|birlestirilmis|kullanilmayan|bitmis) )+(?:branch|dal|brans)\w*(?: (?:leri|lari|ler|lar))? (?:temizle|sil)\w*|(?:branch|dal) temizligi(?: yap)?)$/d, yap: (m, ham) => gitSesle("temizle", m, ham) },
   { grup: "Gece denetimi" },
   { ornek: "gece denetimini başlat · durdur", re: /^(gece (guvenlik )?denetimini|gece taramasini) (simdi )?(baslat|calistir)$/, yap: () => geceBaslatSesle() },
   { re: /^(gece (guvenlik )?denetimini|gece taramasini) (durdur|iptal et)$/, yap: () => geceDurdurSesle() },
@@ -5115,6 +5116,8 @@ const EN_KOMUT = [
   [/^(open|show) (the )?assistant settings$/i, "asistan ayarlarını aç"],
   [/^(open|show) (the )?assistant( screen| panel)?$/i, "asistan ekranını aç"],
   [/^(close|hide) (the )?assistant( screen| panel)?$/i, "asistan ekranını kapat"],
+  [/^(?:maximi[sz]e|enlarge|expand) (?:the )?assistant(?: window)?$/i, "asistanı büyüt"],
+  [/^(?:minimi[sz]e|shrink|restore) (?:the )?assistant(?: window)?$/i, "asistanı küçült"],
   [/^(show|open) (the )?(commands|help)$/i, "komutları göster"],
   [/^(hide|close) (the )?(commands|help)$/i, "komutları gizle"],
   [/^(help|commands|what can (i|you) (say|do))$/i, "yardım"],
@@ -5162,6 +5165,12 @@ const EN_KOMUT = [
   [/^commit and push(?: (?:in|on) (?:the )?(.+?) repo(?:sitory)?)?(?:,? (?:with )?(?:the )?message (.+))?$/i, (m) => (m[1] ? m[1] + " reposunda " : "") + "commit ve push yap" + (m[2] ? " mesaj " + m[2] : "")],
   [/^(stash pop|pop (the )?stash|unstash|apply (the )?stash)$/i, "stash pop"],
   [/^stash( (my|the|all) changes)?$/i, "değişiklikleri stash'le"],
+  [/^open (?:the )?git(?: page| window| screen)?$/i, "git sayfasını aç"],
+  [/^(?:show|list|open) (?:the |my )?stash(?:es| list)$/i, "stash listesini göster"],
+  [/^fetch(?: all(?: repos(?:itories)?)?| everything)?$/i, "tüm repolarda fetch yap"],
+  [/^fetch (?:in |on )?(?:the )?(.+?)(?: repo(?:sitory)?)$/i, (m) => `${m[1]} reposunda fetch yap`],
+  [/^(?:clean ?up|delete|prune|remove) (?:the )?(?:old |merged |stale )+branches$/i, "merge edilmiş branch'leri temizle"],
+  [/^merge (.+?)(?: branch)?(?: into (?:my|the current|this) branch)?$/i, (m) => `${m[1]} merge et`],
 ];
 function ingilizceKomut(ham) {
   const t = ham.replace(/\b(hey\s+|hi\s+)?kur\s?ma[yi]\b[,:]?/gi, " ").replace(/\bplease\b/gi, " ").replace(/\s+/g, " ")
@@ -5232,7 +5241,7 @@ function komutUygula(ham, { dinleme: dinlemede = false, modelden = false } = {})
 // Görev yazımı ("görev …") listede YOK: odadaki konuşma modelle göreve dönüşmesin.
 let sonAnlama = null; // { ham, komut, t } — notta "… olarak anlaşıldı" izi
 const KALIPLAR = [
-  "yardım", "asistan ekranını aç", "asistan ekranını kapat", "komutları göster", "komutları gizle",
+  "yardım", "asistan ekranını aç", "asistan ekranını kapat", "asistanı büyüt", "asistanı küçült", "komutları göster", "komutları gizle",
   "araya girmeyi kapat", "araya girmeyi aç", "asistan ayarlarını aç", "asistan için <eklenti adı> eklentisini aç", "asistan için <eklenti adı> eklentisini kapat",
   "asistanın <okuma|yazma|silme|komut> iznini kapat", "asistanın <okuma|yazma|silme|komut> iznini aç",
   "asistan her işte sorsun", "asistan değişiklikte sorsun", "yeni oturum aç", "TFS ayarlarını aç", "TFS modunu aç", "TFS modunu kapat",
@@ -5254,6 +5263,8 @@ const KALIPLAR = [
   "git durumu", "tüm repolarda <branch> branch'ine geç", "<repo> reposunda <branch> branch'ine geç", "tüm repoları pull et", "<repo> reposunu pull et",
   "<repo> reposunda <branch> branch'i aç", "commit ve push yap mesaj <mesaj>", "<repo> reposunda commit ve push yap mesaj <mesaj>",
   "değişiklikleri stash'le", "<repo> reposundaki değişiklikleri stash'le", "stash pop",
+  "git sayfasını aç", "stash listesini göster", "tüm repolarda fetch yap", "<repo> reposunda fetch yap",
+  "develop'ı branch'ime merge et", "<repo> reposunda <branch>'i merge et", "merge edilmiş branch'leri temizle",
   "gece denetimini başlat", "gece denetimini durdur", "gece denetimi ne durumda", "sabah özetini aç",
   "gece denetimi ayarlarını aç", "gece denetimini aç", "gece denetimini kapat",
 ];
@@ -5288,47 +5299,61 @@ for (const k of document.querySelectorAll(".rail .rbox")) {
 // Sağ sütunda Git kutusu (elle) ve sesli komutlar aynı yoldan gider: önce plan (ne olacağı depo depo,
 // hiçbir şey değişmez) → onay (sesle evet/hayır ya da düğme) → uygula. Kaydedilmemiş değişikliği olan
 // depoda dal değiştirilmez (atlanır); güncelleme yalnızca hızlı ileri; dal yoksa kendiliğinden açılmaz.
+// Depolar KENDİLİĞİNDEN OKUNMAZ (kullanıcı isteği): her depo için birkaç git süreci açılıyor, çok depolu
+// dizinde yeni oturum açılırken ajanın başlangıcını yavaşlatıyordu. Yalnızca "Depoları oku" / ↻ /
+// sesle "git durumu" ve bir git işi uygulandıktan sonra okunur; dizin değişince liste boşalır.
 let gitRepolar = [], gitYukleniyor = false;
-async function gitYukle() {
-  if (gitYukleniyor) return;
+/** Listenin okunduğu dizin (null = bu dizin için henüz okunmadı) */
+let gitOkunanDizin = null, gitOkuma = null;
+/** Sürmekte olan okuma varsa onu bekler (sesle "git durumu" boş listeyle cevap vermesin) */
+function gitYukle() {
+  if (!gitOkuma) gitOkuma = gitOku().finally(() => { gitOkuma = null; });
+  return gitOkuma;
+}
+async function gitOku() {
   gitYukleniyor = true;
+  const dir = viewDir().dir || "";
+  renderGit();
+  let repolar = [];
   try {
-    const r = await (await fetch("/git/durum?dir=" + encodeURIComponent(viewDir().dir || ""))).json();
-    gitRepolar = r.ok ? r.repos || [] : [];
-  } catch { gitRepolar = []; }
+    const r = await (await fetch("/git/durum?dir=" + encodeURIComponent(dir))).json();
+    repolar = r.ok ? r.repos || [] : [];
+  } catch {}
   gitYukleniyor = false;
+  // Okuma sürerken başka dizine geçildiyse sonuç o dizine ait değil
+  if (dir === (viewDir().dir || "")) { gitRepolar = repolar; gitOkunanDizin = dir; }
+  renderGit();
+}
+/** Görüntülenen dizin değişti: eski liste geçersiz, yeniden okunmaz (kullanıcı ↻ ile okur) */
+function gitSifirla() {
+  gitRepolar = []; gitOkunanDizin = null;
   renderGit();
 }
 function renderGit() {
-  $("gitBox").classList.toggle("hidden", !gitRepolar.length);
-  if (!gitRepolar.length) return;
+  const okundu = gitOkunanDizin !== null;
+  if (gitYukleniyor || !gitRepolar.length) {
+    $("gitSum").textContent = "";
+    $("gitList").innerHTML = gitYukleniyor
+      ? `<div class="git-bos">⏳ Depolar okunuyor…</div>`
+      : `<div class="git-bos">${okundu ? "Bu dizinde git deposu yok." : "Depolar kendiliğinden okunmaz."}` +
+        `<button type="button" id="gitOku">${okundu ? "Yeniden oku" : "Depoları oku"}</button></div>`;
+    return;
+  }
   const kirli = gitRepolar.filter((r) => r.dirty).length;
   $("gitSum").textContent = `${gitRepolar.length} depo${kirli ? ` · ${kirli} değişmiş` : ""}`;
-  const sec = $("gitScope").value;
-  $("gitList").innerHTML = gitRepolar.map((r) => `<button type="button" class="git-repo${sec === r.name ? " sec" : ""}" data-repo="${esc(r.name)}" title="${esc(r.dir)} — tıkla: işler yalnızca bu depoda">
+  $("gitList").innerHTML = gitRepolar.map((r) => `<button type="button" class="git-repo" data-repo="${esc(r.name)}" title="${esc(r.dir)} — tıkla: Git sayfasını aç">
     <b>${esc(r.name)}</b><code>${esc(r.error ? "okunamadı" : r.branch)}</code>
     ${r.dirty ? `<small class="kirli">● ${r.dirty} değişiklik</small>` : ""}${r.ahead ? `<small>↑${r.ahead}</small>` : ""}${r.behind ? `<small>↓${r.behind}</small>` : ""}${r.stash ? `<small>saklı ${r.stash}</small>` : ""}</button>`).join("");
-  $("gitScope").innerHTML = `<option value="">Tüm depolar (${gitRepolar.length})</option>` +
-    gitRepolar.map((r) => `<option value="${esc(r.name)}">${esc(r.name)}</option>`).join("");
-  $("gitScope").value = gitRepolar.some((r) => r.name === sec) ? sec : "";
-  const dallar = new Set();
-  for (const r of gitRepolar) if (!sec || r.name === sec) for (const b of r.branches || []) dallar.add(b);
-  $("gitBranches").innerHTML = [...dallar].map((b) => `<option value="${esc(b)}">`).join("");
 }
+/** Git sayfası (ui/git.html) panelin içinde katmanda açılır */
+function gitSayfasi(hash = "") { sayfaAc("/git?dir=" + encodeURIComponent(viewDir().dir || "") + hash, "Git"); }
 $("gitList").addEventListener("click", (ev) => {
-  const b = ev.target.closest(".git-repo");
-  if (!b) return;
-  $("gitScope").value = $("gitScope").value === b.dataset.repo ? "" : b.dataset.repo;
-  renderGit();
+  if (ev.target.closest("#gitOku")) return gitYukle();
+  if (ev.target.closest(".git-repo")) gitSayfasi();
 });
-$("gitScope").addEventListener("change", renderGit);
+$("gitAc").addEventListener("click", () => gitSayfasi());
 $("gitRefresh").addEventListener("click", gitYukle);
-document.querySelector(".git-ctl").addEventListener("click", (ev) => {
-  const b = ev.target.closest("[data-git]");
-  if (!b) return;
-  gitPlanla({ op: b.dataset.git, repo: $("gitScope").value || undefined, branch: $("gitBranch").value.trim(), message: $("gitMsg").value.trim() });
-});
-const GIT_SOZ = { dal: "Checkout", guncelle: "Pull", yeniDal: "New branch", kaydet: "Commit + Push", sakla: "Stash", geriGetir: "Stash pop" };
+const GIT_SOZ = { dal: "Checkout", guncelle: "Pull", fetch: "Fetch", merge: "Merge", yeniDal: "New branch", kaydet: "Commit + Push", sakla: "Stash", geriGetir: "Stash pop", temizle: "Temizlik" };
 /** Planı ister, ne olacağını gösterip sorar; onaylanırsa uygular */
 async function gitPlanla(istek) {
   sesNot("⏳ Git depoları okunuyor…", "bilgi", true, false);
@@ -5341,22 +5366,38 @@ async function gitPlanla(istek) {
   const satirlar = r.items.map((i) => `<div class="${i.run ? "" : "atla"}">${i.run ? "▸" : "·"} <b>${esc(i.repo)}</b>: ${esc(i.text)}</div>`).join("");
   if (!r.runs) return sesNot(`<b>${esc(r.title)}</b> — yapılacak bir şey yok<span class="git-plan">${satirlar}</span>`, "bilgi", false,
     `${r.title}: yapılacak bir şey yok. ` + r.items.map((i) => `${i.repo}, ${i.text}`).join(". "));
-  const soz = `${r.title}. ` + r.items.map((i) => `${i.repo}: ${i.text}`).join(". ") + ". Onaylıyor musun?";
-  onayIste(`<b>${esc(r.title)}</b> — ${r.runs} depoda yapılacak<span class="git-plan">${satirlar}</span>`, () => gitUygula(r.id, istek.op),
+  const temizlik = r.op === "temizle" ? " Listelenen branch'lerin hepsi silinecek; seçerek silmek için Git sayfasını kullan." : "";
+  const soz = `${r.title}. ` + r.items.map((i) => `${i.repo}: ${i.text}`).join(". ") + `.${temizlik} Onaylıyor musun?`;
+  // Checkout'ta commit edilmemiş değişikliği olan depolar: onaydan sonra ne olacakları ayrıca sorulur
+  const kirli = r.items.filter((i) => i.choices);
+  onayIste(`<b>${esc(r.title)}</b> — ${r.runs} depoda yapılacak<span class="git-plan">${satirlar}</span>${temizlik ? `<small>${esc(temizlik.trim())}</small>` : ""}`,
+    () => (kirli.length ? gitKirliSor(r, kirli, istek.op) : gitUygula(r.id, istek.op)),
     { evetAd: "Uygula", hayirAd: "Vazgeç", soz, hayir: () => sesNot("Vazgeçildi, depolara dokunulmadı.") });
 }
-async function gitUygula(id, op) {
+/** Değişikliği olan depolar için sesle iki evet/hayır sorusu: yanında götür? → stash'te bırak? → (hayır) atla.
+ *  Cevap gelmezse (20 sn) "hayır" sayılır — en sonunda atla: değişikliğe dokunulmaz. Depo depo seçim Git sayfasında. */
+function gitKirliSor(r, kirli, op) {
+  const hepsi = (v) => Object.fromEntries(kirli.map((i) => [i.repo, v]));
+  const adlar = kirli.map((i) => `${i.repo} (${i.dirty})`).join(", ");
+  onayIste(`<b>${kirli.length} depoda commit edilmemiş değişiklik var:</b> ${esc(adlar)}<small>Değişiklikler yeni branch'e taşınsın mı? (stash → checkout → geri uygula; çakışırsa stash'te kalır)</small>`,
+    () => gitUygula(r.id, op, hepsi("gotur")),
+    { evetAd: "Yanında götür", hayirAd: "Hayır", soz: `${kirli.length} depoda commit edilmemiş değişiklik var: ${adlar}. Değişiklikleri yanında götüreyim mi?`,
+      hayir: () => onayIste(`Değişiklikler stash'te bırakılsın mı?<small>Hayır dersen bu depolar atlanır, onlara hiç dokunulmaz.</small>`,
+        () => gitUygula(r.id, op, hepsi("birak")),
+        { evetAd: "Stash'te bırak", hayirAd: "Atla", soz: "Stash'te bırakayım mı? Hayır dersen bu depoları atlarım.",
+          hayir: () => gitUygula(r.id, op, hepsi("atla")) }) });
+}
+async function gitUygula(id, op, choices) {
   sesNot("⏳ Uygulanıyor…", "bilgi", true, false);
   let r;
   try {
-    const res = await fetch("/git/uygula", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+    const res = await fetch("/git/uygula", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, choices }) });
     r = await res.json();
   } catch { r = { ok: false, error: "sunucuya ulaşılamadı", results: [] }; }
   gitYukle();
   if (!r.ok) return olmaz(esc(r.error || "uygulanamadı"));
   const hata = r.results.filter((x) => !x.ok);
-  const satirlar = r.results.map((x) => `<div class="${x.ok ? "" : "hata"}">${x.ok ? "✓" : "✗"} <b>${esc(x.repo)}</b>: ${esc(x.text)}</div>`).join("");
-  if (op === "kaydet" && !hata.length) $("gitMsg").value = "";
+  const satirlar = r.results.map((x) => `<div class="${x.skipped ? "atla" : x.ok ? "" : "hata"}">${x.skipped ? "–" : x.ok ? "✓" : "✗"} <b>${esc(x.repo)}</b>: ${esc(x.text)}</div>`).join("");
   sesNot(`${hata.length ? "⚠" : "✓"} <b>${esc(GIT_SOZ[op] || "Git")}</b>${hata.length ? ` — ${hata.length} depoda olmadı` : " tamam"}<span class="git-plan">${satirlar}</span>` +
     `<span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, hata.length ? "hata" : "tamam", true,
     hata.length ? `${hata.length} depoda olmadı. ` + hata.map((x) => `${x.repo}: ${x.text}`).join(". ") : `${GIT_SOZ[op] || "İş"} tamam.`);
@@ -5374,7 +5415,7 @@ async function gitDurumSesle() {
   const soz = `${gitRepolar.length} depo. ` + gitRepolar.slice(0, 8).map((r) => `${r.name}, ${r.branch} branch'inde${r.dirty ? `, ${r.dirty} commit edilmemiş değişiklik` : ""}`).join(". ") + ".";
   sesNot(`<b>Git durumu</b><span class="git-plan">${satir}</span><span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz);
 }
-window.addEventListener("focus", () => gitYukle());
+renderGit();
 
 // ── Oturumları toplu silme (elle: “Tümünü sil”; sesle: “tüm oturumları sil”, “… oturumunu sil”) ──
 // Çalışan / onay bekleyen oturum silinmez (atlanır). Konuşma, koşu kayıtları ve ekler diskten de silinir.
@@ -6158,6 +6199,17 @@ $("asMic").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("asM
 for (const t of ["pointerup", "pointercancel"]) $("asMic").addEventListener(t, () => basBirak());
 $("asMic").addEventListener("click", (ev) => ev.preventDefault());
 $("asKapat").addEventListener("click", () => asAc(false));
+/** Asistan penceresini büyüt / küçült (tercih kalır) */
+function asBuyut(acik, sesle) {
+  $("asistanEkran").classList.toggle("buyuk", acik);
+  $("asBuyut").setAttribute("aria-pressed", String(acik));
+  $("asBuyut").title = acik ? "Küçült — sesle: “asistanı küçült”" : "Büyüt — sesle: “asistanı büyüt”";
+  $("asBuyut").setAttribute("aria-label", acik ? "Küçült" : "Büyüt");
+  try { localStorage.setItem("kurmay-asistan-buyuk", acik ? "1" : ""); } catch {}
+  if (sesle) { if ($("asistanEkran").hidden) asAc(true, true); tamam(acik ? "Asistan büyütüldü" : "Asistan küçültüldü"); }
+}
+$("asBuyut").addEventListener("click", () => asBuyut(!$("asistanEkran").classList.contains("buyuk")));
+try { if (localStorage.getItem("kurmay-asistan-buyuk") === "1") asBuyut(true); } catch {}
 $("asYardimBtn").addEventListener("click", () => asYardimAyarla($("asYardim").hidden));
 $("asTemizle").addEventListener("click", () => asTemizle(false));
 $("asForm").addEventListener("submit", (ev) => {

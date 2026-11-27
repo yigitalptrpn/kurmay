@@ -303,6 +303,20 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
     </div>
   </article>
 -->
+        <article class="surum" id="v0.1.39">
+          <div class="sol"><a class="no" href="#v0.1.39">0.1.39</a><time datetime="2026-11-27">27 Kasım 2026</time></div>
+          <div class="sag">
+            <h2>Git sayfası ve daha hızlı oturum açılışı</h2>
+            <ul class="maddeler">
+              <li data-tur="yeni">Git işleri için ayrı bir sayfa: üstte işlem seçimi, solda seçilebilir depo listesi (branch, sunucuya göre geride/ileride, değişiklik ve stash sayısı), sağda plan ve stash'ler. Her iş önce ne olacağını gösterir, “Uygula”ya basınca yapılır. Panelde sağdaki Git kutusundan ya da sesle “git sayfasını aç” ile açılır.</li>
+              <li data-tur="yeni">Checkout artık sunucudaki son hâli alır: önce fetch yapar, sonra branch'i sunucudakiyle aynı yere getirir (yalnızca fast-forward; local commit'lerin varsa dokunmaz).</li>
+              <li data-tur="yeni">Checkout'ta commit edilmemiş değişikliği olan repo artık sessizce atlanmıyor: her biri için sen seçersin — değişiklikleri yanında götür, stash'te bırak ya da atla. Çakışma çıkarsa değişiklik stash'te güvende kalır. Sesle kullanırken bu da sorulur.</li>
+              <li data-tur="yeni">Fetch, develop'ı bulunduğun branch'e merge (çakışma çıkarsa geri alınır), stash listesi (istediğin stash'i geri getir ya da sil) ve develop'a merge edilmiş eski local branch'lerin temizliği (silinecekleri sen seçersin). Hepsi sesle de söylenebilir, İngilizce de.</li>
+              <li data-tur="iyi">Yeni oturum açarken ve tarayıcıya dönerken depolar artık kendiliğinden okunmuyor; çok depolu dizinde yeni görevin başlangıcını yavaşlatıyordu. Git kutusundaki “Depoları oku” ya da sesle “git durumu” ile okunur.</li>
+              <li data-tur="iyi">Asistan penceresi büyüdü; başlıktaki düğmeyle ya da sesle “asistanı büyüt” deyince ekranın çoğunu kaplar, seçimin hatırlanır.</li>
+            </ul>
+          </div>
+        </article>
         <article class="surum" id="v0.1.38">
           <div class="sol"><a class="no" href="#v0.1.38">0.1.38</a><time datetime="2026-11-24">24 Kasım 2026</time></div>
           <div class="sag">

@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kurmay</title>
+<link rel="icon" href="data:,"><!-- logo yok: tarayıcı /favicon.ico istemesin -->
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script><!-- tema: stil hesaplanmadan önce uygulanır -->
+<style>
+/* Git sayfası: hedef dizindeki depolar (solda), işlem seçimi (üstte), plan ve stash'ler (sağda).
+   Her iş önce plan gösterir; "Uygula"ya basınca yapılır. Sunucu: src/gitOps.ts */
+body { padding:20px 16px 40px; }
+a { color:var(--blue); }
+.wrap { max-width:1240px; margin-inline:auto; display:grid; gap:14px; }
+code, .mono { font-family:var(--font-mono); }
+
+.hdr { display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; background:var(--md-surface-container-high);
+  box-shadow:var(--md-elev-2); border-radius:var(--md-shape-lg); padding:12px 18px; }
+.hdr .sp { flex:1; }
+.hdr h1 { margin:0; font:var(--md-type-title-lg); font-family:var(--font-display); }
+.dir { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; padding:4px 6px 4px 12px; border-radius:var(--md-shape-full);
+  background:var(--md-surface-container-lowest); border:1px solid var(--md-outline-variant); }
+.dir code { flex:1; min-width:0; font-size:12.5px; overflow-wrap:anywhere; text-transform:none; }
+.dir button { flex:none; min-height:28px; padding:2px 10px; font-size:12px; white-space:nowrap; }
+
+.card { background:var(--md-surface-container-lowest); border-radius:var(--md-shape-md); box-shadow:var(--md-elev-1); min-width:0; }
+:is([data-theme="radar"], [data-theme="karargah"], [data-theme="gece"], [data-theme="harita"], [data-theme="sade"]) .card { box-shadow:none; border:1px solid var(--md-outline-variant); }
+.card-h { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--md-outline-variant); }
+.card-h h2 { margin:0; font:var(--md-type-title-md); }
+.card-h .sp { flex:1; }
+.card-h small { color:var(--muted); font-size:12.5px; }
+.btn-s { min-height:32px; padding:4px 12px; font-size:12.5px; text-transform:none; }
+
+/* İşlem seçimi: sekme gibi çipler + seçilen işin küçük formu */
+.ops { display:flex; flex-wrap:wrap; gap:6px; padding:12px 14px 0; }
+.op { min-height:34px; padding:5px 14px; font-size:13px; text-transform:none; border-color:var(--md-outline-variant); }
+.op[aria-selected="true"] { background:var(--md-primary); border-color:var(--md-primary); color:var(--md-on-primary); }
+.op .ic { opacity:.75; margin-right:2px; }
+.form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 12px; padding:12px 14px 14px; }
+.form .desc { flex:1 1 100%; margin:0; color:var(--muted); font-size:13px; line-height:1.45; }
+.form label.f { display:grid; gap:4px; font-size:12px; color:var(--muted); flex:1 1 220px; max-width:420px; }
+.form label.f.wide { max-width:none; flex-basis:100%; }
+.form input[type=text], .form textarea { width:100%; box-sizing:border-box; min-height:38px; padding:7px 12px; font-size:13.5px; text-transform:none; }
+.form textarea { resize:vertical; min-height:60px; }
+.form label.cb { display:inline-flex; align-items:center; gap:7px; font-size:13px; min-height:38px; cursor:pointer; }
+.form .go { min-height:38px; padding:6px 18px; }
+
+.grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); gap:14px; align-items:start; }
+@media (max-width:980px) { .grid { grid-template-columns:minmax(0,1fr); } }
+
+/* Depo tablosu */
+.tbl { width:100%; border-collapse:collapse; font-size:13.5px; }
+.tbl th { text-align:left; font:var(--md-type-label-sm); letter-spacing:.05em; text-transform:uppercase; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--md-outline-variant); white-space:nowrap; }
+.tbl td { padding:9px 10px; border-bottom:1px solid var(--md-outline-variant); vertical-align:top; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tbody tr { cursor:pointer; }
+.tbl tbody tr:hover td { background:var(--md-surface-container-low); }
+.tbl tbody tr.off td:not(:first-child) { opacity:.5; }
+.tbl td.c, .tbl th.c { width:28px; padding-right:0; }
+.tbl input[type=checkbox] { width:16px; height:16px; accent-color:var(--md-primary); cursor:pointer; margin:2px 0 0; }
+.repo b { font-weight:600; overflow-wrap:anywhere; }
+.repo small { display:block; color:var(--muted); font-size:11.5px; overflow-wrap:anywhere; }
+.br { font-family:var(--font-mono); font-size:12.5px; color:var(--md-primary); overflow-wrap:anywhere; text-transform:none; }
+.tag { display:inline-block; font:var(--md-type-label-sm); padding:1px 8px; border-radius:var(--md-shape-full); white-space:nowrap; }
+.tag.ok { background:var(--tealBg); color:var(--teal); }
+.tag.warn { background:var(--amberBg); color:var(--amber); }
+.tag.bad { background:var(--redBg); color:var(--red); }
+.tag.mute { color:var(--muted); border:1px solid var(--md-outline-variant); }
+.stashbtn { min-height:0; padding:1px 9px; font-size:12px; border-color:var(--md-outline-variant); text-transform:none; }
+.empty { padding:22px 16px; color:var(--muted); font-size:13.5px; line-height:1.5; }
+.empty b { color:var(--text); }
+
+/* Sağ panel: Plan / Stash'ler sekmeleri */
+.tabs { display:flex; gap:4px; padding:8px 10px 0; border-bottom:1px solid var(--md-outline-variant); }
+.tab { min-height:34px; padding:5px 14px; font-size:13px; border:none; border-radius:var(--md-shape-sm) var(--md-shape-sm) 0 0; text-transform:none; color:var(--muted); }
+.tab[aria-selected="true"] { color:var(--text); box-shadow:inset 0 -2px 0 var(--md-primary); }
+.pane { padding:14px 16px; display:grid; gap:10px; }
+.pane[hidden] { display:none; }
+.plan-t { font:var(--md-type-title-md); margin:0; overflow-wrap:anywhere; }
+.plan-s { color:var(--muted); font-size:12.5px; margin:-4px 0 0; }
+.it { border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-sm); padding:9px 11px; display:grid; gap:7px; font-size:13px; line-height:1.45; }
+.it .h { display:flex; gap:8px; align-items:baseline; }
+.it .h b { font-weight:600; }
+.it .h .mk { flex:none; width:16px; text-align:center; }
+.it.skip { color:var(--muted); border-style:dashed; }
+.it.dirty { border-color:var(--amber); background:color-mix(in srgb, var(--amberBg) 45%, transparent); }
+.it.ok { border-color:var(--teal); }
+.it.bad { border-color:var(--red); background:color-mix(in srgb, var(--redBg) 45%, transparent); }
+.it .tx { overflow-wrap:anywhere; }
+/* Değişikliği olan depo: üç seçenekli seçim */
+.seg { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+.seg label { display:grid; gap:2px; padding:7px 9px; border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-sm); cursor:pointer;
+  background:var(--md-surface-container-lowest); font-size:12.5px; }
+.seg label small { color:var(--muted); font-size:11px; line-height:1.35; }
+.seg input { position:absolute; opacity:0; pointer-events:none; }
+.seg label:has(input:checked) { border-color:var(--md-primary); box-shadow:inset 0 0 0 1px var(--md-primary); }
+.seg label:has(input:focus-visible) { outline:2px solid var(--md-primary); outline-offset:1px; }
+@media (max-width:520px) { .seg { grid-template-columns:minmax(0,1fr); } }
+.hepsi { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12.5px; color:var(--muted); }
+.hepsi button { min-height:28px; padding:2px 10px; font-size:12px; text-transform:none; }
+.brs { display:flex; flex-wrap:wrap; gap:4px 12px; }
+.brs label { display:inline-flex; gap:6px; align-items:center; font-family:var(--font-mono); font-size:12.5px; cursor:pointer; text-transform:none; }
+.acts { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; padding-top:4px; }
+.acts button { min-height:38px; padding:6px 18px; }
+button.dangerfill { background:var(--md-error); border-color:var(--md-error); color:var(--md-on-error); }
+.note { font-size:12.5px; color:var(--muted); line-height:1.45; }
+
+/* Stash listesi */
+.sgrp { display:grid; gap:6px; }
+.sgrp h3 { margin:0; font:var(--md-type-label-lg); }
+.st { border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-sm); padding:8px 10px; display:grid; gap:5px; font-size:13px; }
+.st .h { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.st .h code { font-size:12px; color:var(--muted); }
+.st .h .sp { flex:1; }
+.st .h small { color:var(--muted); font-size:11.5px; }
+.st details summary { cursor:pointer; font-size:12px; color:var(--muted); }
+.st details div { font-family:var(--font-mono); font-size:12px; overflow-wrap:anywhere; padding:4px 0 0 12px; text-transform:none; }
+.st .bt { display:flex; gap:6px; }
+
+.spin { display:inline-block; animation:sp 1s linear infinite; }
+@keyframes sp { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .spin { animation:none; } }
+#toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); max-width:min(560px, calc(100% - 32px));
+  background:var(--md-error-container); color:var(--md-on-error-container); padding:10px 16px; border-radius:var(--md-shape-md);
+  box-shadow:var(--md-elev-3); font-size:13px; line-height:1.4; display:none; z-index:5; }
+#toast.show { display:block; }
+@media (max-width:520px) { body { padding:10px 8px 30px; } .hdr { padding:10px 12px; } .tbl .hide-s { display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hdr">
+  <span class="brand">Kurmay</span>
+  <h1>Git</h1>
+  <span class="dir" title="Depoların arandığı dizin (kendisi ve bir alt düzeydeki klasörler)">
+    <code id="dir">—</code><button type="button" id="dirBtn" title="Başka bir dizin seç">📁 Değiştir</button>
+  </span>
+  <span class="sp"></span>
+  <div class="tswitch" role="radiogroup" aria-label="Tema"></div>
+  <a href="/">← izleme paneli</a>
+</header>
+
+<section class="card" aria-label="İşlem">
+  <div class="ops" role="tablist" aria-label="Git işlemi" id="ops"></div>
+  <div class="form" id="form"></div>
+</section>
+
+<div class="grid">
+  <section class="card" aria-labelledby="repoH">
+    <div class="card-h">
+      <h2 id="repoH">Depolar</h2><small id="sum"></small><span class="sp"></span>
+      <button type="button" class="btn-s" id="oku" title="Depoların durumunu yeniden oku">↻ Yeniden oku</button>
+    </div>
+    <div id="repos"></div>
+  </section>
+
+  <aside class="card" aria-label="Plan ve stash'ler">
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tabPlan" aria-selected="true">Plan</button>
+      <button type="button" class="tab" role="tab" id="tabStash" aria-selected="false">Stash'ler <span id="stashN"></span></button>
+    </div>
+    <div class="pane" id="planPane"></div>
+    <div class="pane" id="stashPane" hidden></div>
+  </aside>
+</div>
+</div>
+<div id="toast" role="alert"></div>
+<script src="/dirpicker.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 6000);
+}
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+// ── İşlemler ──────────────────────────────────────────────────────────────
+// form: alanlar; desc: ne yapar (sade dil, git terimleri İngilizce)
+const OPS = [
+  { op: "dal", ad: "Checkout", ic: "⇄", desc: "Seçili depoları bu branch'e geçirir. Branch yerelde yoksa sunucudakinden açılır. Commit edilmemiş değişikliği olan depoda ne yapılacağını planda sen seçersin.",
+    alanlar: [{ id: "branch", etiket: "Branch", ph: "develop", dl: true }, { id: "pull", cb: "Sunucudaki son hâline çek (fetch + fast-forward)", varsayilan: true }] },
+  { op: "guncelle", ad: "Pull", ic: "↓", desc: "Bulunduğun branch'e sunucudaki yeni commit'leri çeker. Yalnızca fast-forward: local commit'lerle ayrışmışsa dokunmaz." },
+  { op: "fetch", ad: "Fetch", ic: "⟳", desc: "Sunucudaki son durumu alır, branch'ler ve dosyalar değişmez. Ardından ↑↓ sayıları güncel görünür." },
+  { op: "merge", ad: "Merge", ic: "⤵", desc: "Önce fetch yapar, sonra sunucudaki kaynak branch'i (origin/develop) bulunduğun branch'e merge eder. Çakışma çıkarsa merge geri alınır, branch'e dokunulmaz. Commit edilmemiş değişikliği olan depo atlanır.",
+    alanlar: [{ id: "branch", etiket: "Kaynak branch", ph: "develop", varsayilan: "develop", dl: true }] },
+  { op: "yeniDal", ad: "New branch", ic: "＋", desc: "Seçili depolarda bulunduğun yerden yeni bir branch açar ve ona geçer.",
+    alanlar: [{ id: "branch", etiket: "Yeni branch adı", ph: "feature/132" }] },
+  { op: "kaydet", ad: "Commit + Push", ic: "✓", desc: "Değişen tüm dosyaları commit eder ve sunucuya push yapar. Planda hangi dosyaların gideceği görünür.",
+    alanlar: [{ id: "message", etiket: "Commit mesajı", ph: "Sipariş iptalinde yetki kontrolü", wide: true, ta: true }] },
+  { op: "sakla", ad: "Stash", ic: "⇣", desc: "Commit edilmemiş değişiklikleri (yeni dosyalar dahil) stash'e kaldırır, çalışma alanı temizlenir." },
+  { op: "geriGetir", ad: "Stash pop", ic: "⇡", desc: "Son stash'i geri getirir. Belirli bir stash için sağdaki Stash'ler sekmesini kullan." },
+  { op: "temizle", ad: "Temizlik", ic: "✂", desc: "Önce fetch yapar, sonra taban branch'e (origin/develop) tamamen merge edilmiş local branch'leri listeler. Hangilerinin silineceğini planda seçersin. main, master, develop ve bulunduğun branch hiç listelenmez.",
+    alanlar: [{ id: "branch", etiket: "Taban branch", ph: "develop", varsayilan: "develop", dl: true }] },
+];
+const CHOICES = [
+  { v: "gotur", ad: "Yanında götür", acik: "stash → checkout → geri uygula; çakışırsa stash'te kalır" },
+  { v: "birak", ad: "Stash'te bırak", acik: "temiz geçer; değişiklik Stash'ler sekmesinde durur" },
+  { v: "atla", ad: "Atla", acik: "bu depoya hiç dokunulmaz" },
+];
+
+const params = new URLSearchParams(location.search);
+let dir = params.get("dir") || "";
+let repos = [];          // /git/durum
+let secili = null;       // seçili depo adları (Set); null = hepsi
+let opSec = params.get("op") && OPS.some((o) => o.op === params.get("op")) ? params.get("op") : "dal";
+let plan = null;         // son plan (sunucunun yanıtı)
+let sonuc = null;        // son uygulama sonucu
+let stashes = [];        // /git/stash
+let yukleniyor = false;
+const formDeger = {};    // işlem değiştirince yazılanlar kaybolmasın
+
+// ── Depolar ────────────────────────────────────────────────────────────────
+async function oku() {
+  yukleniyor = true; renderRepos();
+  try {
+    const [d, s] = await Promise.all([
+      fetch("/git/durum?dir=" + encodeURIComponent(dir)).then((r) => r.json()),
+      fetch("/git/stash?dir=" + encodeURIComponent(dir)).then((r) => r.json()),
+    ]);
+    if (!d.ok) throw new Error(d.error || "okunamadı");
+    if (!dir && d.dir) dir = d.dir;
+    repos = d.repos || [];
+    stashes = s.ok ? s.repos || [] : [];
+    if (secili) secili = new Set([...secili].filter((n) => repos.some((r) => r.name === n)));
+  } catch (e) { repos = []; stashes = []; toast("Depolar okunamadı: " + e.message); }
+  yukleniyor = false;
+  $("dir").textContent = dir || "—";
+  renderRepos(); renderForm(); renderStash();
+}
+const seciliMi = (n) => !secili || secili.has(n);
+function renderRepos() {
+  const box = $("repos");
+  if (yukleniyor && !repos.length) { box.innerHTML = `<div class="empty"><span class="spin">⟳</span> Depolar okunuyor…</div>`; $("sum").textContent = ""; return; }
+  if (!repos.length) {
+    box.innerHTML = `<div class="empty">Bu dizinde git deposu yok.<br>Depolar, seçilen dizinin <b>kendisinde</b> ve <b>bir alt düzeyindeki</b> klasörlerde aranır. Yukarıdan başka bir dizin seçebilirsin.</div>`;
+    $("sum").textContent = ""; return;
+  }
+  const n = repos.filter((r) => seciliMi(r.name)).length;
+  const kirli = repos.filter((r) => r.dirty).length;
+  $("sum").textContent = `${repos.length} depo · ${n} seçili${kirli ? ` · ${kirli} değişmiş` : ""}${yukleniyor ? " · okunuyor…" : ""}`;
+  const hepsi = n === repos.length;
+  box.innerHTML = `<table class="tbl"><thead><tr>
+      <th class="c"><input type="checkbox" id="hepsi" aria-label="Hepsini seç" ${hepsi ? "checked" : ""}></th>
+      <th>Depo</th><th>Branch</th><th>Sunucu</th><th>Değişiklik</th><th class="hide-s">Stash</th></tr></thead><tbody>` +
+    repos.map((r) => {
+      const on = seciliMi(r.name);
+      const sunucu = r.error ? `<span class="tag bad">okunamadı</span>`
+        : !r.remote ? `<span class="tag mute">uzak depo yok</span>`
+        : !r.upstream ? `<span class="tag mute">karşılığı yok</span>`
+        : !r.ahead && !r.behind ? `<span class="tag ok">güncel</span>`
+        : `${r.behind ? `<span class="tag warn" title="Sunucuda ${r.behind} yeni commit var">↓${r.behind}</span> ` : ""}${r.ahead ? `<span class="tag warn" title="${r.ahead} commit push edilmedi">↑${r.ahead}</span>` : ""}`;
+      return `<tr data-repo="${esc(r.name)}" class="${on ? "" : "off"}" title="${esc(r.dir)}">
+        <td class="c"><input type="checkbox" ${on ? "checked" : ""} aria-label="${esc(r.name)} seç"></td>
+        <td class="repo"><b>${esc(r.name)}</b>${r.error ? `<small>${esc(r.error)}</small>` : ""}</td>
+        <td><span class="br">${esc(r.branch || "—")}</span></td>
+        <td>${sunucu}</td>
+        <td>${r.dirty ? `<span class="tag bad" title="commit edilmemiş değişiklik">● ${r.dirty}</span>` : `<span class="tag mute">temiz</span>`}</td>
+        <td class="hide-s">${r.stash ? `<button type="button" class="stashbtn" data-stash="${esc(r.name)}" title="Stash'leri göster">${r.stash}</button>` : `<span class="note">—</span>`}</td>
+      </tr>`;
+    }).join("") + `</tbody></table>`;
+}
+$("repos").addEventListener("click", (ev) => {
+  const sb = ev.target.closest("[data-stash]");
+  if (sb) { sekme("stash"); document.querySelector(`[data-sgrp="${CSS.escape(sb.dataset.stash)}"]`)?.scrollIntoView({ block: "nearest" }); return; }
+  if (ev.target.id === "hepsi") { secili = ev.target.checked ? null : new Set(); plan = null; renderRepos(); renderPlan(); renderForm(); return; }
+  const tr = ev.target.closest("tr[data-repo]");
+  if (!tr) return;
+  const n = tr.dataset.repo;
+  const s = secili ?? new Set(repos.map((r) => r.name));
+  s.has(n) ? s.delete(n) : s.add(n);
+  secili = s.size === repos.length ? null : s;
+  plan = null; sonuc = null;
+  renderRepos(); renderPlan(); renderForm();
+});
+$("oku").addEventListener("click", oku);
+$("dirBtn").addEventListener("click", async () => {
+  const yeni = await window.openDirPicker?.(dir);
+  if (!yeni || yeni === dir) return;
+  dir = yeni; secili = null; plan = null; sonuc = null;
+  const p = new URLSearchParams(location.search); p.set("dir", dir);
+  history.replaceState(null, "", "?" + p + location.hash);
+  renderPlan(); oku();
+});
+
+// ── İşlem formu ────────────────────────────────────────────────────────────
+function renderOps() {
+  $("ops").innerHTML = OPS.map((o) => `<button type="button" class="op" role="tab" data-op="${o.op}" aria-selected="${o.op === opSec}"><span class="ic" aria-hidden="true">${o.ic}</span> ${esc(o.ad)}</button>`).join("");
+}
+$("ops").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-op]");
+  if (!b) return;
+  kaydetForm();
+  opSec = b.dataset.op; plan = null; sonuc = null;
+  renderOps(); renderForm(); renderPlan();
+});
+function dallar() {
+  const s = new Set();
+  for (const r of repos) if (seciliMi(r.name)) for (const b of r.branches || []) s.add(b);
+  return [...s].sort();
+}
+function kaydetForm() {
+  for (const el of $("form").querySelectorAll("[data-f]")) formDeger[opSec + "." + el.dataset.f] = el.type === "checkbox" ? el.checked : el.value;
+}
+function deger(a) {
+  const k = opSec + "." + a.id;
+  return k in formDeger ? formDeger[k] : a.varsayilan ?? (a.cb ? false : "");
+}
+function renderForm() {
+  const o = OPS.find((x) => x.op === opSec);
+  const n = repos.filter((r) => seciliMi(r.name)).length;
+  const alan = (o.alanlar || []).map((a) => a.cb
+    ? `<label class="cb"><input type="checkbox" data-f="${a.id}" ${deger(a) ? "checked" : ""}> ${esc(a.cb)}</label>`
+    : `<label class="f${a.wide ? " wide" : ""}">${esc(a.etiket)}${a.ta
+        ? `<textarea data-f="${a.id}" placeholder="${esc(a.ph)}" rows="2">${esc(deger(a))}</textarea>`
+        : `<input type="text" data-f="${a.id}" placeholder="${esc(a.ph)}" value="${esc(deger(a))}" spellcheck="false" autocomplete="off"${a.dl ? ` list="dallar"` : ""}>`}</label>`).join("");
+  $("form").innerHTML = `<p class="desc">${esc(o.desc)}</p>${alan}
+    <datalist id="dallar">${dallar().map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
+    <button type="button" class="primary go" id="planla" ${n && !yukleniyor ? "" : "disabled"}>Planı göster${n ? ` · ${n} depo` : ""}</button>`;
+}
+$("form").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && (ev.target.tagName === "INPUT" || ev.ctrlKey)) { ev.preventDefault(); $("planla")?.click(); }
+});
+$("form").addEventListener("click", (ev) => { if (ev.target.closest("#planla")) planla(); });
+
+async function planla(extra = {}) {
+  kaydetForm();
+  // Stash'ler sekmesinden gelen tek stash işi (stashAl / stashSil) üstteki listede yok
+  const o = OPS.find((x) => x.op === (extra.op || opSec)) ?? { op: extra.op, ad: extra.op === "stashSil" ? "Stash sil" : "Stash geri getir" };
+  const body = { dir, op: o.op, ...extra };
+  if (!extra.op) {
+    for (const a of o.alanlar || []) body[a.id] = deger(a);
+    if (body.branch !== undefined) body.branch = String(body.branch).trim();
+    if (secili) body.repos = [...secili];
+  }
+  sekme("plan");
+  plan = { yukleniyor: true, title: o.ad }; sonuc = null; renderPlan();
+  try { plan = await post("/git/plan", body); } catch (e) { plan = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  renderPlan();
+}
+
+// ── Plan ve sonuç ──────────────────────────────────────────────────────────
+const secimler = {};   // depo → gotur/birak/atla
+const dalSecim = {};   // depo → Set(silinecek branch'ler)
+function renderPlan() {
+  const p = $("planPane");
+  if (sonuc) {
+    const hata = sonuc.results.filter((x) => !x.ok).length;
+    p.innerHTML = `<p class="plan-t">${hata ? "⚠" : "✓"} ${esc(sonuc.title)}</p>
+      <p class="plan-s">${hata ? `${hata} depoda olmadı` : "tamamlandı"}</p>` +
+      sonuc.results.map((x) => `<div class="it ${x.skipped ? "skip" : x.ok ? "ok" : "bad"}"><div class="h"><span class="mk">${x.skipped ? "–" : x.ok ? "✓" : "✗"}</span><div><b>${esc(x.repo)}</b> <span class="tx">${esc(x.text)}</span></div></div></div>`).join("") +
+      `<div class="acts"><button type="button" id="kapat">Tamam</button></div>`;
+    return;
+  }
+  if (!plan) {
+    p.innerHTML = `<div class="empty">Soldan depoları seç, üstten bir işlem seç ve <b>Planı göster</b>'e bas.<br>Plan yalnızca ne olacağını gösterir; hiçbir şey sen <b>Uygula</b>'ya basmadan değişmez.</div>`;
+    return;
+  }
+  if (plan.yukleniyor) { p.innerHTML = `<div class="empty"><span class="spin">⟳</span> ${esc(plan.title)} planı hazırlanıyor…<br><span class="note">Gerekirse önce sunucudan fetch yapılır.</span></div>`; return; }
+  if (!plan.ok) {
+    p.innerHTML = `<div class="it bad"><div class="h"><span class="mk">✗</span><div class="tx">${esc(plan.error || "plan hazırlanamadı")}${plan.candidates?.length ? `<br><span class="note">Şunlardan biri mi: ${plan.candidates.map(esc).join(", ")}</span>` : ""}</div></div></div>`;
+    return;
+  }
+  const kirliler = plan.items.filter((i) => i.choices);
+  for (const i of kirliler) secimler[i.repo] ??= "gotur";
+  for (const i of plan.items) if (i.branches && !dalSecim[i.repo]) dalSecim[i.repo] = new Set(i.branches);
+  const sil = plan.op === "stashSil";
+  p.innerHTML = `<p class="plan-t">${esc(plan.title)}</p>
+    <p class="plan-s">${plan.runs ? `${plan.runs} depoda yapılacak` : "yapılacak bir şey yok"}${plan.items.length > plan.runs ? ` · ${plan.items.length - plan.runs} depo atlanacak` : ""}</p>` +
+    (kirliler.length > 1 ? `<div class="hepsi">Değişikliği olan ${kirliler.length} depo için hepsine: ${CHOICES.map((c) => `<button type="button" data-hepsi="${c.v}">${esc(c.ad)}</button>`).join("")}</div>` : "") +
+    plan.items.map((i) => {
+      if (!i.run) return `<div class="it skip"><div class="h"><span class="mk">·</span><div><b>${esc(i.repo)}</b> <span class="tx">${esc(i.text)}</span></div></div></div>`;
+      let ek = "";
+      if (i.choices) ek = `<div class="seg" role="radiogroup" aria-label="${esc(i.repo)}: değişiklikler ne olsun">${CHOICES.map((c) =>
+        `<label><input type="radio" name="ch-${esc(i.repo)}" value="${c.v}" data-ch="${esc(i.repo)}" ${secimler[i.repo] === c.v ? "checked" : ""}><b>${esc(c.ad)}</b><small>${esc(c.acik)}</small></label>`).join("")}</div>`;
+      if (i.branches) ek = `<div class="brs">${i.branches.map((b) =>
+        `<label><input type="checkbox" data-br="${esc(i.repo)}" value="${esc(b)}" ${dalSecim[i.repo].has(b) ? "checked" : ""}> ${esc(b)}</label>`).join("")}</div>`;
+      return `<div class="it${i.choices ? " dirty" : ""}"><div class="h"><span class="mk">▸</span><div><b>${esc(i.repo)}</b> <span class="tx">${esc(i.text)}</span></div></div>${ek}</div>`;
+    }).join("") +
+    `<div class="acts"><button type="button" id="vazgec">Vazgeç</button>${plan.runs ? `<button type="button" class="${sil ? "dangerfill" : "primary"}" id="uygula">${sil ? "Kalıcı olarak sil" : "Uygula"}</button>` : ""}</div>`;
+}
+$("planPane").addEventListener("change", (ev) => {
+  const t = ev.target;
+  if (t.dataset.ch) secimler[t.dataset.ch] = t.value;
+  if (t.dataset.br) t.checked ? dalSecim[t.dataset.br].add(t.value) : dalSecim[t.dataset.br].delete(t.value);
+});
+$("planPane").addEventListener("click", async (ev) => {
+  const h = ev.target.closest("[data-hepsi]");
+  if (h) { for (const i of plan.items) if (i.choices) secimler[i.repo] = h.dataset.hepsi; renderPlan(); return; }
+  if (ev.target.closest("#vazgec")) { plan = null; renderPlan(); return; }
+  if (ev.target.closest("#kapat")) { sonuc = null; renderPlan(); return; }
+  if (!ev.target.closest("#uygula")) return;
+  const b = ev.target.closest("#uygula");
+  b.disabled = true; b.innerHTML = `<span class="spin">⟳</span> Uygulanıyor…`;
+  const choices = {}, select = {};
+  for (const i of plan.items) {
+    if (i.choices) choices[i.repo] = secimler[i.repo] || "atla";
+    if (i.branches) select[i.repo] = [...(dalSecim[i.repo] || [])];
+  }
+  let r;
+  try { r = await post("/git/uygula", { id: plan.id, choices, select }); } catch { r = { ok: false, error: "sunucuya ulaşılamadı" }; }
+  if (!r.ok) { toast(r.error || "uygulanamadı"); plan = null; renderPlan(); return; }
+  sonuc = { title: plan.title, results: r.results };
+  plan = null;
+  for (const k of Object.keys(secimler)) delete secimler[k];
+  for (const k of Object.keys(dalSecim)) delete dalSecim[k];
+  renderPlan();
+  oku();
+});
+
+// ── Stash'ler ──────────────────────────────────────────────────────────────
+/** "az önce", "12 dk önce", "3 saat önce", "2 gün önce", sonra tarih */
+function once(ms) {
+  if (!ms) return "";
+  const sn = Math.max(0, (Date.now() - ms) / 1000);
+  if (sn < 60) return "az önce";
+  if (sn < 3600) return `${Math.floor(sn / 60)} dk önce`;
+  if (sn < 86400) return `${Math.floor(sn / 3600)} saat önce`;
+  if (sn < 86400 * 30) return `${Math.floor(sn / 86400)} gün önce`;
+  return new Date(ms).toLocaleDateString("tr-TR");
+}
+function renderStash() {
+  const toplam = stashes.reduce((n, r) => n + r.stashes.length, 0);
+  $("stashN").textContent = toplam ? `(${toplam})` : "";
+  const p = $("stashPane");
+  const dolu = stashes.filter((r) => r.stashes.length);
+  if (!dolu.length) { p.innerHTML = `<div class="empty">Hiçbir depoda stash yok.</div>`; return; }
+  p.innerHTML = dolu.map((r) => `<div class="sgrp" data-sgrp="${esc(r.name)}"><h3>${esc(r.name)}</h3>` +
+    r.stashes.map((s) => `<div class="st">
+      <div class="h"><b>${esc(s.message || "(mesajsız)")}</b><span class="sp"></span><small title="${s.at ? esc(new Date(s.at).toLocaleString("tr-TR")) : ""}">${esc(once(s.at))}</small><code>${esc(s.ref)}</code></div>
+      ${s.files.length ? `<details><summary>${s.files.length} dosya</summary><div>${s.files.slice(0, 60).map(esc).join("<br>")}${s.files.length > 60 ? `<br>+${s.files.length - 60}` : ""}</div></details>` : ""}
+      <div class="bt"><button type="button" class="btn-s" data-sal="${esc(r.name)}" data-ref="${esc(s.ref)}">Geri getir</button><button type="button" class="btn-s danger" data-ssil="${esc(r.name)}" data-ref="${esc(s.ref)}">Sil</button></div>
+    </div>`).join("") + `</div>`).join("");
+}
+$("stashPane").addEventListener("click", (ev) => {
+  const a = ev.target.closest("[data-sal]"), s = ev.target.closest("[data-ssil]");
+  if (a) planla({ op: "stashAl", repos: [a.dataset.sal], stash: a.dataset.ref });
+  if (s) planla({ op: "stashSil", repos: [s.dataset.ssil], stash: s.dataset.ref });
+});
+
+function sekme(ad) {
+  $("tabPlan").setAttribute("aria-selected", String(ad === "plan"));
+  $("tabStash").setAttribute("aria-selected", String(ad === "stash"));
+  $("planPane").hidden = ad !== "plan";
+  $("stashPane").hidden = ad !== "stash";
+}
+$("tabPlan").addEventListener("click", () => sekme("plan"));
+$("tabStash").addEventListener("click", () => sekme("stash"));
+
+renderOps(); renderForm(); renderPlan(); renderStash();
+if (location.hash === "#stash") sekme("stash");
+oku();
+</script>
+</body>
+</html>
