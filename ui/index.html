@@ -561,6 +561,9 @@ body.dinlemede .ses-not { top:60px; }
 .git-repo small { color:var(--muted); font-size:11px; white-space:nowrap; }
 .git-repo small.kirli { color:var(--red); }
 .git-ctl { display:grid; gap:6px; margin-top:8px; }
+.git-ctl.hidden { display:none; }
+.git-bos { display:grid; gap:6px; justify-items:start; color:var(--muted); font-size:12.5px; }
+.git-bos button { min-height:30px; padding:3px 10px; font-size:12px; text-transform:none; }
 .git-ctl select, .git-ctl input { width:100%; min-width:0; font-size:12.5px; }
 .git-row { display:flex; gap:6px; flex-wrap:wrap; }
 .git-row input { flex:1 1 120px; }
@@ -1150,10 +1153,10 @@ textarea { resize:none; overflow-y:auto; line-height:1.45; max-height:clamp(120p
     <div class="kv"><span>Süre</span><b id="elapsed">—</b></div>
     <div class="kv"><span>Jeton (girdi/çıktı)</span><b id="tokens">—</b></div>
   </div>
-  <div class="rbox hidden" id="gitBox">
-    <h4>Git <span><span id="gitSum"></span> <button type="button" id="gitRefresh" title="Depoları yeniden oku">↻</button></span></h4>
+  <div class="rbox" id="gitBox">
+    <h4>Git <span><span id="gitSum"></span> <button type="button" id="gitRefresh" title="Depoları oku">↻</button></span></h4>
     <div id="gitList"></div>
-    <div class="git-ctl">
+    <div class="git-ctl hidden">
       <select id="gitScope" aria-label="Hangi depolarda"></select>
       <div class="git-row"><input type="text" id="gitBranch" list="gitBranches" placeholder="branch" spellcheck="false" autocomplete="off" aria-label="Branch adı"><datalist id="gitBranches"></datalist>
         <button type="button" data-git="dal" title="Bu branch'e checkout yap">Checkout</button><button type="button" data-git="yeniDal" title="Bu adla yeni branch aç ve ona checkout yap">New branch</button></div>
@@ -3510,7 +3513,7 @@ function viewDir() {
 }
 function applyViewDir() {
   const v = viewDir();
-  if (v.dir !== currentDir) setTimeout(gitYukle, 0);
+  if (v.dir !== currentDir) setTimeout(gitSifirla, 0);
   currentDir = v.dir;
   dirMissing = v.missing;
   applyDirState();
@@ -5288,20 +5291,48 @@ for (const k of document.querySelectorAll(".rail .rbox")) {
 // Sağ sütunda Git kutusu (elle) ve sesli komutlar aynı yoldan gider: önce plan (ne olacağı depo depo,
 // hiçbir şey değişmez) → onay (sesle evet/hayır ya da düğme) → uygula. Kaydedilmemiş değişikliği olan
 // depoda dal değiştirilmez (atlanır); güncelleme yalnızca hızlı ileri; dal yoksa kendiliğinden açılmaz.
+// Depolar KENDİLİĞİNDEN OKUNMAZ (kullanıcı isteği): her depo için birkaç git süreci açılıyor, çok depolu
+// dizinde yeni oturum açılırken ajanın başlangıcını yavaşlatıyordu. Yalnızca "Depoları oku" / ↻ /
+// sesle "git durumu" ve bir git işi uygulandıktan sonra okunur; dizin değişince liste boşalır.
 let gitRepolar = [], gitYukleniyor = false;
-async function gitYukle() {
-  if (gitYukleniyor) return;
+/** Listenin okunduğu dizin (null = bu dizin için henüz okunmadı) */
+let gitOkunanDizin = null, gitOkuma = null;
+/** Sürmekte olan okuma varsa onu bekler (sesle "git durumu" boş listeyle cevap vermesin) */
+function gitYukle() {
+  if (!gitOkuma) gitOkuma = gitOku().finally(() => { gitOkuma = null; });
+  return gitOkuma;
+}
+async function gitOku() {
   gitYukleniyor = true;
+  const dir = viewDir().dir || "";
+  renderGit();
+  let repolar = [];
   try {
-    const r = await (await fetch("/git/durum?dir=" + encodeURIComponent(viewDir().dir || ""))).json();
-    gitRepolar = r.ok ? r.repos || [] : [];
-  } catch { gitRepolar = []; }
+    const r = await (await fetch("/git/durum?dir=" + encodeURIComponent(dir))).json();
+    repolar = r.ok ? r.repos || [] : [];
+  } catch {}
   gitYukleniyor = false;
+  // Okuma sürerken başka dizine geçildiyse sonuç o dizine ait değil
+  if (dir === (viewDir().dir || "")) { gitRepolar = repolar; gitOkunanDizin = dir; }
+  renderGit();
+}
+/** Görüntülenen dizin değişti: eski liste geçersiz, yeniden okunmaz (kullanıcı ↻ ile okur) */
+function gitSifirla() {
+  gitRepolar = []; gitOkunanDizin = null;
   renderGit();
 }
 function renderGit() {
-  $("gitBox").classList.toggle("hidden", !gitRepolar.length);
-  if (!gitRepolar.length) return;
+  const okundu = gitOkunanDizin !== null;
+  for (const s of [".git-ctl", ".fhint-git"]) $("gitBox").querySelector(s).classList.toggle("hidden", !gitRepolar.length);
+  if (gitYukleniyor || !gitRepolar.length) {
+    $("gitSum").textContent = "";
+    $("gitScope").innerHTML = ""; $("gitBranches").innerHTML = "";
+    $("gitList").innerHTML = gitYukleniyor
+      ? `<div class="git-bos">⏳ Depolar okunuyor…</div>`
+      : `<div class="git-bos">${okundu ? "Bu dizinde git deposu yok." : "Depolar kendiliğinden okunmaz."}` +
+        `<button type="button" id="gitOku">${okundu ? "Yeniden oku" : "Depoları oku"}</button></div>`;
+    return;
+  }
   const kirli = gitRepolar.filter((r) => r.dirty).length;
   $("gitSum").textContent = `${gitRepolar.length} depo${kirli ? ` · ${kirli} değişmiş` : ""}`;
   const sec = $("gitScope").value;
@@ -5316,6 +5347,7 @@ function renderGit() {
   $("gitBranches").innerHTML = [...dallar].map((b) => `<option value="${esc(b)}">`).join("");
 }
 $("gitList").addEventListener("click", (ev) => {
+  if (ev.target.closest("#gitOku")) return gitYukle();
   const b = ev.target.closest(".git-repo");
   if (!b) return;
   $("gitScope").value = $("gitScope").value === b.dataset.repo ? "" : b.dataset.repo;
@@ -5374,7 +5406,7 @@ async function gitDurumSesle() {
   const soz = `${gitRepolar.length} depo. ` + gitRepolar.slice(0, 8).map((r) => `${r.name}, ${r.branch} branch'inde${r.dirty ? `, ${r.dirty} commit edilmemiş değişiklik` : ""}`).join(". ") + ".";
   sesNot(`<b>Git durumu</b><span class="git-plan">${satir}</span><span class="ses-dugmeler"><button type="button" data-ses="kapat">Kapat</button></span>`, "bilgi", true, soz);
 }
-window.addEventListener("focus", () => gitYukle());
+renderGit();
 
 // ── Oturumları toplu silme (elle: “Tümünü sil”; sesle: “tüm oturumları sil”, “… oturumunu sil”) ──
 // Çalışan / onay bekleyen oturum silinmez (atlanır). Konuşma, koşu kayıtları ve ekler diskten de silinir.
