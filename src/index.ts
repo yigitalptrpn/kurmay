@@ -1274,12 +1274,37 @@ async function main() {
     }
     return authEnv(c, remoteUrl);
   });
-  const GIT_OPS = new Set(["dal", "guncelle", "yeniDal", "kaydet", "sakla", "geriGetir"]);
+  const GIT_OPS = new Set([
+    "dal",
+    "guncelle",
+    "fetch",
+    "merge",
+    "yeniDal",
+    "kaydet",
+    "sakla",
+    "geriGetir",
+    "stashAl",
+    "stashSil",
+    "temizle",
+  ]);
+  /** Sayfadan gelen { depo: değer } nesnesi — yalnızca metin (ya da metin dizisi) değerler alınır */
+  const strMap = <T>(v: unknown, ok: (x: unknown) => x is T): Record<string, T> | undefined => {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+    return Object.fromEntries(Object.entries(v).filter(([, x]) => ok(x))) as Record<string, T>;
+  };
   const gitApi = {
     status: async (dir?: string) => {
       const d = dir && fs.existsSync(dir) ? dir : cwd;
       try {
         return { ok: true, dir: d, repos: await gitOps.status(d) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    stashes: async (dir?: string) => {
+      const d = dir && fs.existsSync(dir) ? dir : cwd;
+      try {
+        return { ok: true, dir: d, repos: await gitOps.stashes(d) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -1293,14 +1318,21 @@ async function main() {
           dir: s("dir") || cwd,
           op: op as GitOpKind,
           repo: s("repo"),
+          repos: Array.isArray(r.repos) ? r.repos.filter((x): x is string => typeof x === "string") : undefined,
           branch: s("branch"),
           message: s("message"),
+          stash: s("stash"),
+          pull: typeof r.pull === "boolean" ? r.pull : undefined,
         });
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     },
-    apply: (id: string) => gitOps.apply(id),
+    apply: (id: string, r: Record<string, unknown>) =>
+      gitOps.apply(id, {
+        choices: strMap(r.choices, (x): x is string => typeof x === "string"),
+        select: strMap(r.select, (x): x is string[] => Array.isArray(x) && x.every((y) => typeof y === "string")),
+      }),
   };
   const speechApi = {
     view: () => speechView(cfg.speech, cfg),
